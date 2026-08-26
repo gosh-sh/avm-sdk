@@ -6,8 +6,7 @@ archive is accepted only after both exact commits pass:
 
 - focused formatting, check, and clippy gates;
 - SDK and contract-builder tests;
-- the release deploy/upgrade lifecycle E2E;
-- the release standard-contract stand E2E;
+- the standard-contract developer stand E2E;
 - a black-box CLI smoke test against the packaged files.
 
 Each archive contains `BUILD-MANIFEST.json` with the full Acki Nacki source

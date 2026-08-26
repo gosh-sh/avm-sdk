@@ -107,13 +107,11 @@ jobs:
           cargo +1.93.0 test -p avm-economics
           cargo +1.93.0 test -p avm-config
 
-      - name: Run release developer lifecycle E2E
+      - name: Run developer stand E2E
         if: steps.release.outputs.exists != 'true'
         working-directory: ackinacki
         shell: bash
-        run: |
-          cargo +1.93.0 test -p avm-test-harness --test e2e_deploy_upgrade_and_code_lifecycle --release -- --nocapture
-          cargo +1.93.0 test -p avm-test-harness --test e2e_standard_contract_stand --release -- --nocapture
+        run: cargo +1.93.0 test -p avm-test-harness --test e2e_standard_contract_stand --release -- --nocapture
 
       - name: Build release commands
         if: steps.release.outputs.exists != 'true'

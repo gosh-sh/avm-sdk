@@ -149,6 +149,7 @@ avm-local-stand replay \
   --wasmtime-profile "$AVM_PROFILE"
 ```
 
-The complete production-shaped lifecycle remains a release gate in the private
-Acki Nacki source repository. Released binaries are published only after both
-release E2E suites pass.
+The SDK release gate builds real Rust contracts and runs the standard-contract
+developer stand E2E before testing the packaged commands. The source-level
+`Wallet10K` workload belongs to the AVM block-performance gate; SDK packaging
+does not repeat it as a sequential stand loop.
