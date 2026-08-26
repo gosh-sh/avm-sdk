@@ -1,0 +1,36 @@
+[descriptor]
+execution_mode = "account_batch"
+state_schema_id = "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+
+[descriptor.batch]
+max_batch_messages = 4
+max_batch_state_bytes = 131072
+max_batch_input_bytes = 262144
+max_batch_output_bytes = 262144
+batch_min_fuel_fee_shells = 1
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "bytes"
+name = "causal_batch_patch_state"
+
+[[abi.methods]]
+name = "causal.batch.patch"
+
+[[abi.errors]]
+status_code = 1400
+name = "invalid_init_mode"
+message = "deployment initialization requires FullReplace output"
+
+[[abi.errors]]
+status_code = 1401
+name = "isolated_internal_forbidden"
+message = "internal delivery must use the AccountBatch export"
+
+[[abi.errors]]
+status_code = 1402
+name = "invalid_batch_patch"
+message = "batch input or retained state does not match the patch fixture"

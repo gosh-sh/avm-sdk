@@ -1,0 +1,69 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "causal_a_state"
+len = 72
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "causal_a_forward_args"
+len = 80
+
+[[abi.types]]
+id = 6
+kind = "fixed_bytes"
+name = "causal_a_callback_body"
+len = 16
+
+[[abi.types]]
+id = 7
+kind = "bytes"
+name = "causal_a_deploy_args"
+
+[[abi.methods]]
+name = "causal.a.callback"
+input_type_id = 6
+
+[[abi.methods]]
+name = "causal.a.forward"
+input_type_id = 2
+
+[[abi.methods]]
+name = "causal.a.deploy"
+input_type_id = 7
+
+[[abi.methods]]
+name = "causal.a.version"
+
+[[abi.errors]]
+status_code = 1000
+name = "invalid_forward_args"
+message = "forward arguments must contain one destination and method id"
+
+[[abi.errors]]
+status_code = 1001
+name = "invalid_a_state"
+message = "contract A state is malformed or exhausted"
+
+[[abi.errors]]
+status_code = 1002
+name = "invalid_callback"
+message = "contract A callback context or result body is malformed"
+
+[[abi.errors]]
+status_code = 1003
+name = "invalid_version_probe"
+message = "contract A version probe requires one external empty-body call"
+
+[[abi.errors]]
+status_code = 1004
+name = "invalid_code_upgrade"
+message = "contract A code upgrade authorization or migration payload is invalid"

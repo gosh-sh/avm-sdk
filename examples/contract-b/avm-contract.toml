@@ -1,0 +1,108 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "causal_b_state"
+len = 128
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "causal_b_receive_args"
+len = 16
+
+[[abi.types]]
+id = 3
+kind = "u64"
+name = "event_count"
+
+[[abi.types]]
+id = 4
+kind = "u128"
+name = "event_value_main"
+
+[[abi.types]]
+id = 5
+kind = "address"
+name = "event_destination"
+
+[[abi.types]]
+id = 6
+kind = "fixed_bytes"
+name = "causal_a_state"
+len = 72
+
+[[abi.methods]]
+name = "causal.b.receive"
+input_type_id = 2
+
+[[abi.methods]]
+name = "causal.b.drain"
+input_type_id = 2
+
+[[abi.events]]
+name = "causal.a.forwarded"
+
+[[abi.events.fields]]
+id = 1
+type_id = 3
+name = "count"
+
+[[abi.events.fields]]
+id = 2
+type_id = 5
+name = "destination"
+
+[[abi.events.fields]]
+id = 3
+type_id = 4
+name = "value_main"
+
+[[abi.events]]
+name = "causal.a.state"
+
+[[abi.events.fields]]
+id = 1
+type_id = 3
+name = "count"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "state"
+
+[[abi.errors]]
+status_code = 1100
+name = "external_receive_forbidden"
+message = "contract B accepts only canonical internal delivery"
+
+[[abi.errors]]
+status_code = 1101
+name = "invalid_b_state"
+message = "contract B state is malformed or exhausted"
+
+[[abi.errors]]
+status_code = 1102
+name = "invalid_receive_value"
+message = "contract B received the wrong main or extra value"
+
+[[abi.errors]]
+status_code = 1103
+name = "invalid_receive_body"
+message = "contract B received the wrong ordinary method body"
+
+[[abi.errors]]
+status_code = 1104
+name = "callback_request_required"
+message = "contract B requires one canonical callback request"
+
+[[abi.errors]]
+status_code = 1105
+name = "invalid_event"
+message = "contract B event fields could not be encoded"

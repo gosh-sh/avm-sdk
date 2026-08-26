@@ -1,0 +1,167 @@
+name: Build AVM SDK release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ackinacki_ref:
+        description: Acki Nacki branch, tag, or commit
+        required: true
+        default: avm-dev
+  schedule:
+    - cron: "17 2 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: avm-sdk-release
+  cancel-in-progress: false
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_BUILD_JOBS: 2
+      ACKINACKI_REF: ${{ github.event.inputs.ackinacki_ref || 'avm-dev' }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out SDK distribution
+        uses: actions/checkout@v4
+        with:
+          path: sdk
+          persist-credentials: false
+
+      - name: Check out private Acki Nacki source
+        uses: actions/checkout@v4
+        with:
+          repository: gosh-sh/ackinacki
+          ref: ${{ env.ACKINACKI_REF }}
+          path: ackinacki
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ secrets.ACKINACKI_READ_TOKEN }}
+
+      - name: Resolve immutable release identity
+        id: release
+        shell: bash
+        run: |
+          source_sha="$(git -C ackinacki rev-parse HEAD)"
+          sdk_sha="$(git -C sdk rev-parse HEAD)"
+          tag="avm-dev-${source_sha:0:12}-sdk-${sdk_sha:0:12}"
+          echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
+          echo "sdk_sha=${sdk_sha}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" --repo gosh-sh/avm-sdk >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Rust toolchain
+        if: steps.release.outputs.exists != 'true'
+        shell: bash
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal --component clippy --component rustfmt
+          rustup target add wasm32-unknown-unknown --toolchain 1.93.0
+
+      - name: Verify distributed SDK source matches avm-dev
+        if: steps.release.outputs.exists != 'true'
+        shell: bash
+        run: |
+          diff -ru sdk/crates/avm-contract-sdk ackinacki/node/libs/avm-contract-sdk
+          cmp sdk/profiles/wasmtime-release-profile.v1 ackinacki/specs/avm-vm/wasmtime-release-profile.v1
+
+      - name: Check SDK and examples
+        if: steps.release.outputs.exists != 'true'
+        shell: bash
+        run: |
+          cargo +1.93.0 fmt --manifest-path sdk/Cargo.toml -- --check
+          cargo +1.93.0 clippy --manifest-path sdk/Cargo.toml --all-targets -- -D warnings
+          cargo +1.93.0 test --manifest-path sdk/Cargo.toml
+          for manifest in sdk/examples/*/Cargo.toml; do
+            cargo +1.93.0 fmt --manifest-path "$manifest" -- --check
+            cargo +1.93.0 clippy --manifest-path "$manifest" --target wasm32-unknown-unknown -- -D warnings
+          done
+
+      - name: Check focused AVM source targets
+        if: steps.release.outputs.exists != 'true'
+        working-directory: ackinacki
+        shell: bash
+        run: |
+          cargo +1.93.0 fmt --package avm-contract-sdk --package avm-contract-build --package avm-test-harness -- --check
+          cargo +1.93.0 check --all-targets -p avm-config -p avm-contract-sdk -p avm-contract-build -p avm-code-registry -p avm-deploy-upgrade -p avm-economics -p avm-effect-materializer -p avm-test-harness
+          cargo +1.93.0 clippy --all-targets -p avm-config -p avm-contract-sdk -p avm-contract-build -p avm-code-registry -p avm-deploy-upgrade -p avm-economics -p avm-effect-materializer -p avm-test-harness -- -D warnings
+
+      - name: Run focused AVM tests
+        if: steps.release.outputs.exists != 'true'
+        working-directory: ackinacki
+        shell: bash
+        run: |
+          cargo +1.93.0 test -p avm-test-harness --lib
+          cargo +1.93.0 test -p avm-contract-sdk -p avm-contract-build --lib
+          cargo +1.93.0 test -p avm-code-registry
+          cargo +1.93.0 test -p avm-deploy-upgrade
+          cargo +1.93.0 test -p avm-effect-materializer --test zero_intent_checkpoint
+          cargo +1.93.0 test -p avm-economics
+          cargo +1.93.0 test -p avm-config
+
+      - name: Run release developer lifecycle E2E
+        if: steps.release.outputs.exists != 'true'
+        working-directory: ackinacki
+        shell: bash
+        run: |
+          cargo +1.93.0 test -p avm-test-harness --test e2e_deploy_upgrade_and_code_lifecycle --release -- --nocapture
+          cargo +1.93.0 test -p avm-test-harness --test e2e_standard_contract_stand --release -- --nocapture
+
+      - name: Build release commands
+        if: steps.release.outputs.exists != 'true'
+        working-directory: ackinacki
+        shell: bash
+        run: cargo +1.93.0 build --release -p avm-test-harness --bin avm-local-stand -p avm-contract-build
+
+      - name: Package release
+        if: steps.release.outputs.exists != 'true'
+        shell: bash
+        run: |
+          sdk/scripts/package-release.sh \
+            ackinacki sdk "$RUNNER_TEMP/dist" \
+            "${{ steps.release.outputs.source_sha }}" \
+            "${{ steps.release.outputs.sdk_sha }}"
+
+      - name: Run packaged CLI smoke test
+        if: steps.release.outputs.exists != 'true'
+        shell: bash
+        run: |
+          AVM_LOCAL_STAND="$RUNNER_TEMP/dist/avm-sdk-linux-x86_64/bin/avm-local-stand" \
+          AVM_WASMTIME_PROFILE="$RUNNER_TEMP/dist/avm-sdk-linux-x86_64/profiles/wasmtime-release-profile.v1" \
+          sdk/scripts/smoke.sh
+
+      - name: Upload immutable workflow artifact
+        if: steps.release.outputs.exists != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.release.outputs.tag }}
+          path: |
+            ${{ runner.temp }}/dist/avm-sdk-linux-x86_64.tar.gz
+            ${{ runner.temp }}/dist/avm-sdk-linux-x86_64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish private GitHub release
+        if: steps.release.outputs.exists != 'true'
+        shell: bash
+        run: |
+          gh release create "${{ steps.release.outputs.tag }}" \
+            "$RUNNER_TEMP/dist/avm-sdk-linux-x86_64.tar.gz" \
+            "$RUNNER_TEMP/dist/avm-sdk-linux-x86_64.tar.gz.sha256" \
+            --repo gosh-sh/avm-sdk \
+            --target "${{ steps.release.outputs.sdk_sha }}" \
+            --title "AVM SDK from avm-dev ${{ steps.release.outputs.source_sha }}" \
+            --notes "Private Linux x86-64 AVM developer distribution built and release-tested from gosh-sh/ackinacki commit ${{ steps.release.outputs.source_sha }}."
+
+      - name: Report existing immutable release
+        if: steps.release.outputs.exists == 'true'
+        shell: bash
+        run: echo "Release ${{ steps.release.outputs.tag }} already exists; no rebuild required."
