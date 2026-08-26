@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   build-test-publish:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, avm-sdk]
     env:
       CARGO_BUILD_JOBS: 2
       ACKINACKI_REF: ${{ github.event.inputs.ackinacki_ref || 'avm-dev' }}
@@ -165,3 +165,17 @@ jobs:
         if: steps.release.outputs.exists == 'true'
         shell: bash
         run: echo "Release ${{ steps.release.outputs.tag }} already exists; no rebuild required."
+
+      - name: Remove Rust build artifacts
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f ackinacki/Cargo.toml ]]; then
+            cargo +1.93.0 clean --manifest-path ackinacki/Cargo.toml || true
+          fi
+          if [[ -f sdk/Cargo.toml ]]; then
+            cargo +1.93.0 clean --manifest-path sdk/Cargo.toml || true
+          fi
+          for manifest in sdk/examples/*/Cargo.toml; do
+            cargo +1.93.0 clean --manifest-path "$manifest" || true
+          done
