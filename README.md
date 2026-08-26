@@ -32,6 +32,7 @@ Continue with [Getting Started](docs/getting-started.md) and the
 
 ## Release Model
 
-`avm-dev-<commit>` releases are immutable snapshots of Acki Nacki `avm-dev`.
+`avm-dev-<source-commit>-sdk-<sdk-commit>` releases are immutable snapshots of
+Acki Nacki `avm-dev` and this distribution repository.
 The release archive contains the two binaries, the Wasmtime profile, SDK
 source, examples, documentation, checksums, and provenance metadata.

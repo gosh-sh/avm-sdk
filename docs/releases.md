@@ -1,7 +1,8 @@
 # Releases And Provenance
 
-Release tags use `avm-dev-<12-character-source-commit>`. A release archive is
-accepted only after the exact Acki Nacki source commit passes:
+Release tags use
+`avm-dev-<12-character-source-commit>-sdk-<12-character-sdk-commit>`. A release
+archive is accepted only after both exact commits pass:
 
 - focused formatting, check, and clippy gates;
 - SDK and contract-builder tests;
