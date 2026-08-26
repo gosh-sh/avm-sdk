@@ -36,7 +36,7 @@ jobs:
       - name: Check out private Acki Nacki source
         uses: actions/checkout@v4
         with:
-          repository: gosh-sh/ackinacki
+          repository: gosh-sh/acki-nacki
           ref: ${{ env.ACKINACKI_REF }}
           path: ackinacki
           fetch-depth: 0
@@ -159,7 +159,7 @@ jobs:
             --repo gosh-sh/avm-sdk \
             --target "${{ steps.release.outputs.sdk_sha }}" \
             --title "AVM SDK from avm-dev ${{ steps.release.outputs.source_sha }}" \
-            --notes "Private Linux x86-64 AVM developer distribution built and release-tested from gosh-sh/ackinacki commit ${{ steps.release.outputs.source_sha }}."
+            --notes "Private Linux x86-64 AVM developer distribution built and release-tested from gosh-sh/acki-nacki commit ${{ steps.release.outputs.source_sha }}."
 
       - name: Report existing immutable release
         if: steps.release.outputs.exists == 'true'
