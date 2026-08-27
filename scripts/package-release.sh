@@ -53,4 +53,7 @@ EOF
 
 mkdir -p "$output_dir"
 tar -C "$output_dir" -czf "${output_dir}/${bundle_name}.tar.gz" "$bundle_name"
-sha256sum "${output_dir}/${bundle_name}.tar.gz" > "${output_dir}/${bundle_name}.tar.gz.sha256"
+(
+    cd "$output_dir"
+    sha256sum "${bundle_name}.tar.gz" > "${bundle_name}.tar.gz.sha256"
+)
