@@ -30,7 +30,7 @@ export PATH="${HOME}/.local/bin:${PATH}"
 Continue with [Getting Started](docs/getting-started.md) and the
 [CLI Reference](docs/cli-reference.md).
 
-## Release Model
+## Release Process
 
 `avm-dev-<source-commit>-sdk-<sdk-commit>` releases are immutable snapshots of
 Acki Nacki `avm-dev` and this distribution repository.
