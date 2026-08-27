@@ -27,8 +27,13 @@ export PATH="${HOME}/.local/bin:${PATH}"
 ./scripts/smoke.sh
 ```
 
-Continue with [Getting Started](docs/getting-started.md) and the
-[CLI Reference](docs/cli-reference.md).
+## Documentation
+
+- [Getting Started](docs/getting-started.md)
+- [Command-Line Reference](docs/cli-reference.md)
+- [Contract Examples](examples/README.md)
+- [Releases And Provenance](docs/releases.md)
+- [MIT License](LICENSE.md)
 
 ## Release Process
 
