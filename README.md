@@ -30,6 +30,7 @@ export PATH="${HOME}/.local/bin:${PATH}"
 ## Documentation
 
 - [Getting Started](docs/getting-started.md)
+- [FUEL And SHELL](docs/fuel-and-fees.md)
 - [Command-Line Reference](docs/cli-reference.md)
 - [Contract Examples](examples/README.md)
 - [Releases And Provenance](docs/releases.md)

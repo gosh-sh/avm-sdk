@@ -134,6 +134,12 @@ avm-local-stand inspect \
 Method names and JSON arguments must match the selected contract ABI. See each
 example's `avm-contract.toml`.
 
+The `--fuel-fee-shells` value is a reserve of ordinary SHELL for chargeable
+execution, not a separate currency or account balance. Same-DApp messages can
+execute without a SHELL charge while their source and destination remain in the
+same active routing partition. See [FUEL And SHELL](fuel-and-fees.md) before
+choosing reserves for internal messages.
+
 ## Upgrade And Replay
 
 Build a new version, publish it with `publish-version`, then call `upgrade`
