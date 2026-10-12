@@ -1,0 +1,55 @@
+name: Bounty escrow regressions
+
+on:
+  push:
+    branches: [main, "examples/bounty-escrow*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out SDK source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal --component clippy --component rustfmt
+          rustup target add wasm32-unknown-unknown --toolchain 1.93.0
+
+      - name: Check SDK and example conventions
+        run: |
+          cargo +1.93.0 fmt -- --check
+          cargo +1.93.0 clippy --all-targets --locked --offline -- -D warnings
+          cargo +1.93.0 test --locked --offline
+          for manifest in examples/*/Cargo.toml; do
+            cargo +1.93.0 fmt --manifest-path "$manifest" --all -- --check
+            cargo +1.93.0 clippy --manifest-path "$manifest" --target wasm32-unknown-unknown --locked --offline -- -D warnings
+          done
+
+      - name: Download and verify immutable reference runtime
+        run: bash examples/bounty-escrow/scripts/install_runtime.sh
+
+      - name: Run SDK smoke and complete escrow gate
+        run: |
+          runtime="$GITHUB_WORKSPACE/examples/bounty-escrow/.runtime/avm-sdk-linux-x86_64"
+          AVM_LOCAL_STAND="$runtime/bin/avm-local-stand" \
+          AVM_WASMTIME_PROFILE="$runtime/profiles/wasmtime-release-profile.v1" \
+            bash scripts/smoke.sh
+          bash examples/bounty-escrow/scripts/check.sh "$runtime"
+
+      - name: Upload generated regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bounty-escrow-evidence
+          path: examples/bounty-escrow/evidence/
+          if-no-files-found: warn
+          retention-days: 30

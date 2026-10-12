@@ -62,6 +62,16 @@ message entry point intentionally fails.
 Use it to validate `AccountBatch`, bounded batch input, large retained state,
 and narrow state patches without replacing the complete state image.
 
+### `bounty-escrow`
+
+A separate workspace containing a milestone escrow, a bound accepting/rejecting
+receiver, and native regression tests against this repository's SDK crate. It
+exercises exact-hash approval, asynchronous callbacks, failed-delivery principal
+returns, expiry refunds, late approved payments, and replay/accounting checks.
+
+See [Bounty Escrow](bounty-escrow/README.md) for the full reproducible build and
+local-stand gate. The four standard fixtures above remain unchanged.
+
 ## Build An Example
 
 Install the SDK commands first, then build any example from the repository or
