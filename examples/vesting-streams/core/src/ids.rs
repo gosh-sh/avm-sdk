@@ -1,0 +1,20 @@
+// Generated from the official AVM builder's canonical ACAB files.
+pub const FUND: u64 = 0x21a7a770a198334c;
+pub const CLAIM: u64 = 0x670d5504a402c5a0;
+pub const CANCEL: u64 = 0x52a8b019669a89ed;
+pub const REFUND: u64 = 0x9b5d16b61097135d;
+pub const CALLBACK: u64 = 0xd71c9b61d009c1b2;
+pub const STATUS: u64 = 0xd47305678521c1bc;
+pub const TOPUP: u64 = 0xf0929ae1e1dda9f2;
+pub const RECEIVE: u64 = 0xf332e40c80382ec6;
+pub const BIND: u64 = 0x00b2b020c4a87d26;
+pub const REJECT: u64 = 0x6df484c38c9bb260;
+pub const RECEIVER_STATUS: u64 = 0x5ba55ef8f7d7c531;
+pub const EVENT_CREATED: u64 = 0x4e6ebdf86f685bc9;
+pub const EVENT_FUNDED: u64 = 0x33b5b198196b8278;
+pub const EVENT_CANCELLED: u64 = 0xfd284c3c5aa8193c;
+pub const EVENT_PENDING: u64 = 0x2b7a0dcb51315ea9;
+pub const EVENT_SETTLED: u64 = 0xc5dfb59bad943ad1;
+pub const EVENT_FAILED: u64 = 0x2df3fa69159644d7;
+pub const EVENT_STATUS: u64 = 0x957ae59607367bf5;
+pub const EVENT_FEES: u64 = 0x85dc9e806193f2df;

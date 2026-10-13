@@ -1,0 +1,78 @@
+name: Vesting streams regressions
+
+on:
+  push:
+    branches: [main, "examples/vesting-streams*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out SDK source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal --component clippy --component rustfmt
+          rustup target add wasm32-unknown-unknown --toolchain 1.93.0
+
+      - name: Check SDK and all example conventions
+        run: |
+          cargo +1.93.0 fmt -- --check
+          cargo +1.93.0 clippy --all-targets --locked --offline -- -D warnings
+          cargo +1.93.0 test --locked --offline
+          for manifest in examples/*/Cargo.toml; do
+            cargo +1.93.0 fmt --manifest-path "$manifest" --all -- --check
+            cargo +1.93.0 clippy --manifest-path "$manifest" --target wasm32-unknown-unknown --locked --offline -- -D warnings
+          done
+
+      - name: Download and verify immutable reference tools
+        run: |
+          bash examples/vesting-streams/scripts/install_runtime.sh
+          bash examples/vesting-streams/scripts/install_binaryen.sh
+
+      - name: Run smoke and complete vesting streams gate
+        run: |
+          runtime="$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/avm-sdk-linux-x86_64"
+          AVM_LOCAL_STAND="$runtime/bin/avm-local-stand" \
+          AVM_WASMTIME_PROFILE="$runtime/profiles/wasmtime-release-profile.v1" \
+            bash scripts/smoke.sh
+          bash examples/vesting-streams/scripts/check.sh "$runtime"
+
+      - name: Rehearse packaging with verified public binaries
+        run: |
+          runtime="$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/avm-sdk-linux-x86_64"
+          reference="$RUNNER_TEMP/reference-source"
+          dist="$RUNNER_TEMP/vesting-dist"
+          mkdir -p "$reference/target/release"
+          cp "$runtime/bin/avm-local-stand" "$runtime/bin/avm-contract-build" "$reference/target/release/"
+          bash scripts/package-release.sh "$reference" "$GITHUB_WORKSPACE" "$dist" \
+            335a0f09fdbc98eb7a1056c0f6b84cd4f39d889e "$(git rev-parse HEAD)"
+          (cd "$dist" && sha256sum -c avm-sdk-linux-x86_64.tar.gz.sha256)
+          mkdir "$dist/extracted"
+          tar -xzf "$dist/avm-sdk-linux-x86_64.tar.gz" -C "$dist/extracted"
+          packaged="$dist/extracted/avm-sdk-linux-x86_64"
+          (cd "$packaged" && sha256sum -c SHA256SUMS)
+          AVM_LOCAL_STAND="$packaged/bin/avm-local-stand" \
+          AVM_WASMTIME_PROFILE="$packaged/profiles/wasmtime-release-profile.v1" \
+            bash "$packaged/scripts/smoke.sh"
+          bash "$packaged/examples/vesting-streams/scripts/check.sh" "$packaged" \
+            "$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/binaryen-version_133/bin/wasm-opt"
+          cp -a "$packaged/examples/vesting-streams/evidence" examples/vesting-streams/evidence/packaged
+
+      - name: Upload generated evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: vesting-streams-evidence
+          path: examples/vesting-streams/evidence/
+          if-no-files-found: warn
+          retention-days: 30

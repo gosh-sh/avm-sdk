@@ -86,7 +86,7 @@ jobs:
           cargo +1.93.0 clippy --manifest-path sdk/Cargo.toml --all-targets -- -D warnings
           cargo +1.93.0 test --manifest-path sdk/Cargo.toml
           for manifest in sdk/examples/*/Cargo.toml; do
-            cargo +1.93.0 fmt --manifest-path "$manifest" -- --check
+            cargo +1.93.0 fmt --manifest-path "$manifest" --all -- --check
             cargo +1.93.0 clippy --manifest-path "$manifest" --target wasm32-unknown-unknown -- -D warnings
           done
 
@@ -153,6 +153,15 @@ jobs:
             ${{ runner.temp }}/dist/avm-sdk-linux-x86_64.tar.gz.sha256
           if-no-files-found: error
           retention-days: 30
+
+      - name: Run packaged vesting streams regression gate
+        if: steps.release.outputs.exists != 'true'
+        shell: bash
+        run: |
+          bash sdk/examples/vesting-streams/scripts/install_binaryen.sh "$RUNNER_TEMP/vesting-tools"
+          bash "$RUNNER_TEMP/dist/avm-sdk-linux-x86_64/examples/vesting-streams/scripts/check.sh" \
+            "$RUNNER_TEMP/dist/avm-sdk-linux-x86_64" \
+            "$RUNNER_TEMP/vesting-tools/binaryen-version_133/bin/wasm-opt"
 
       - name: Publish GitHub release
         if: steps.release.outputs.exists != 'true'
