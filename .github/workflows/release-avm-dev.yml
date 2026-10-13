@@ -135,14 +135,6 @@ jobs:
             "${{ steps.release.outputs.source_sha }}" \
             "${{ steps.release.outputs.sdk_sha }}"
 
-      - name: Run packaged CLI smoke test
-        if: steps.release.outputs.exists != 'true'
-        shell: bash
-        run: |
-          AVM_LOCAL_STAND="$RUNNER_TEMP/dist/avm-sdk-linux-x86_64/bin/avm-local-stand" \
-          AVM_WASMTIME_PROFILE="$RUNNER_TEMP/dist/avm-sdk-linux-x86_64/profiles/wasmtime-release-profile.v1" \
-          sdk/scripts/smoke.sh
-
       - name: Run packaged revenue hub regression gate
         if: steps.release.outputs.exists != 'true'
         shell: bash
@@ -151,6 +143,14 @@ jobs:
           bash "$RUNNER_TEMP/dist/avm-sdk-linux-x86_64/examples/revenue-hub/scripts/check.sh" \
             "$RUNNER_TEMP/dist/avm-sdk-linux-x86_64" \
             "$RUNNER_TEMP/revenue-tools/binaryen-version_133/bin/wasm-opt"
+
+      - name: Run packaged CLI smoke test
+        if: steps.release.outputs.exists != 'true'
+        shell: bash
+        run: |
+          AVM_LOCAL_STAND="$RUNNER_TEMP/dist/avm-sdk-linux-x86_64/bin/avm-local-stand" \
+          AVM_WASMTIME_PROFILE="$RUNNER_TEMP/dist/avm-sdk-linux-x86_64/profiles/wasmtime-release-profile.v1" \
+          sdk/scripts/smoke.sh
 
       - name: Upload immutable workflow artifact
         if: steps.release.outputs.exists != 'true'
