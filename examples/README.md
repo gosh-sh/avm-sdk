@@ -62,6 +62,17 @@ message entry point intentionally fails.
 Use it to validate `AccountBatch`, bounded batch input, large retained state,
 and narrow state patches without replacing the complete state image.
 
+### `revenue-hub`
+
+A separate reference workspace with a fixed-share revenue vault, bound payout
+receivers, and an authenticated AccountBatch receipt ledger. It covers cumulative
+entitlement arithmetic, independent pending claims, native failure/refund/retry,
+2-of-3 timelocked governance, and coalesced state patches with per-message failures.
+
+See [Revenue Hub](revenue-hub/README.md) for 74 application regressions, a native
+output-byte probe, and the actual optimized-WASM stand/replay gate. It uses this
+repository's SDK crate directly and retains the four existing fixtures unchanged.
+
 ## Build An Example
 
 Install the SDK commands first, then build any example from the repository or

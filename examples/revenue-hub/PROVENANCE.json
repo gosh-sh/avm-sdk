@@ -1,0 +1,24 @@
+{
+  "sdk_repository": "https://github.com/gosh-sh/avm-sdk",
+  "runtime_release": "avm-dev-335a0f09fdbc-sdk-0cbca40fad9a",
+  "runtime_sdk_commit": "0cbca40fad9a8f11863197cbcbaf6208651752b9",
+  "runtime_source_commit": "335a0f09fdbc98eb7a1056c0f6b84cd4f39d889e",
+  "runtime_archive_sha256": "2171ee865bc9fc2e1a1274dfdd0f4330dc362b1f49d38c0a35c4de41aa61d6f3",
+  "optimizer_repository": "https://github.com/WebAssembly/binaryen",
+  "optimizer_release": "version_133",
+  "optimizer_archive_sha256": "2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489",
+  "rust": "1.93.0",
+  "target": "wasm32-unknown-unknown",
+  "compiler_profile": {
+    "opt_level": 3,
+    "lto": false,
+    "codegen_units": 1,
+    "strip": "symbols"
+  },
+  "source_repository": "https://github.com/h2so4nackl-code/avm-revenue-hub",
+  "source_commit": "9ee2ede44af5f76515a5ab42dcddc8a7299c6354",
+  "sdk_source_baseline": "72ee42dbf923f081bf29b4a1a1b6ea012b6af54f",
+  "integrated_sdk_path": "../../crates/avm-contract-sdk",
+  "source_path_remap": "/avm-sdk",
+  "compiler_wrapper": "scripts/remap-rustc.sh"
+}
