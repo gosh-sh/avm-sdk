@@ -1,0 +1,79 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "417424813f525a795bd5024853672f2c815cca771c4a4b5f78922622cca91b0e"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "state"
+len = 136
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "config"
+len = 360
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+name = "index_hash"
+len = 33
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "index"
+len = 1
+
+[[abi.types]]
+id = 5
+kind = "fixed_bytes"
+name = "payment_receipt"
+len = 32
+
+[[abi.types]]
+id = 6
+kind = "fixed_bytes"
+name = "address_bytes"
+len = 64
+
+[[abi.types]]
+id = 7
+kind = "u128"
+name = "amount"
+
+[[abi.types]]
+id = 8
+kind = "u64"
+name = "counter"
+
+[[abi.methods]]
+name = "bounty.receiver.bind"
+input_type_id = 6
+
+[[abi.methods]]
+name = "bounty.receiver.reject"
+input_type_id = 4
+
+[[abi.methods]]
+name = "bounty.receiver.receive"
+input_type_id = 5
+
+[[abi.errors]]
+status_code = 2100
+name = "unauthorized"
+message = "unauthorized"
+
+[[abi.errors]]
+status_code = 2101
+name = "invalid_args"
+message = "invalid args"
+
+[[abi.errors]]
+status_code = 2102
+name = "receiver_rejected"
+message = "receiver rejected"

@@ -1,0 +1,21 @@
+// Generated from the official AVM builder's canonical ACAB files.
+pub const FUND: u64 = 0xc3a7a41d8d4c90a8;
+pub const SUBMIT: u64 = 0x054f8b90c305da8c;
+pub const APPROVE: u64 = 0x23db96fd54277c79;
+pub const PAY: u64 = 0x5dcaae75e94d2d7e;
+pub const REFUND: u64 = 0x8be8755cbb65918a;
+pub const CALLBACK: u64 = 0x0abddfd8d4552187;
+pub const STATUS: u64 = 0x937ea1663d7fddb7;
+pub const TOPUP: u64 = 0x87655bb82b51d673;
+pub const RECEIVE: u64 = 0xb914fe67cce93577;
+pub const BIND: u64 = 0x4ce368a64e18d258;
+pub const REJECT: u64 = 0x95bd52c9e37338ec;
+pub const EVENT_CREATED: u64 = 0xd6f347263848367f;
+pub const EVENT_STATUS: u64 = 0x2cd964cba5d7abd3;
+pub const EVENT_FEES_ADDED: u64 = 0x6cb4e9405443b5e8;
+pub const EVENT_FUNDED: u64 = 0x6e79b300e05131f5;
+pub const EVENT_SUBMITTED: u64 = 0x1265d0886b8e4195;
+pub const EVENT_APPROVED: u64 = 0x5dc6e5f43138deff;
+pub const EVENT_TRANSFER_PENDING: u64 = 0x7d771b27760e1fec;
+pub const EVENT_TRANSFER_SETTLED: u64 = 0x1d70978e718474fb;
+pub const EVENT_TRANSFER_FAILED: u64 = 0x31ec38b30d0f5b22;

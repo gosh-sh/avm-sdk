@@ -1,0 +1,12 @@
+[package]
+name = "avm-bounty-receiver"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+avm-contract-sdk = { path = "../../../../crates/avm-contract-sdk" }
+avm-bounty-escrow = { path = "../escrow", default-features = false }

@@ -1,0 +1,10 @@
+[package]
+name = "avm-bounty-tests"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+avm-contract-sdk = { path = "../../../crates/avm-contract-sdk" }
+avm-bounty-escrow = { path = "../contracts/escrow" }
+avm-bounty-receiver = { path = "../contracts/receiver" }
