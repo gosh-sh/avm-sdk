@@ -55,6 +55,7 @@ fn acmi_decode_and_acmo_encode_cover_all_effect_sections() {
         }])),
         callback_result_body: b"result".to_vec(),
         outbound_intents: vec![OutboundIntent {
+            internal_event_reads: Vec::new(),
             input_index: 0,
             destination: address(0x50, 0x51),
             value_main: 7,
@@ -104,6 +105,7 @@ fn acbi_decode_and_acbo_encode_preserve_indexes_and_statuses() {
         state_update: StateUpdate::FullReplace(b"batch-state".to_vec()),
         status_codes: vec![0, 1000],
         outbound_intents: vec![OutboundIntent {
+            internal_event_reads: Vec::new(),
             input_index: 0,
             destination: address(0x80, 0x81),
             value_main: 1,

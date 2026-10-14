@@ -12,6 +12,14 @@ The available stand commands are listed in the
 
 ## Example Set
 
+### `contract-tools` (unreleased)
+
+Exercises constructor payload access, manifest-generated IDs/errors and typed
+dispatch, an internal sum, and experimental guest-originated event reads.
+It requires the matching candidate builder/runtime; published binaries do not
+support these additions. See the [tooling preview](../docs/tooling-preview.md)
+and its [public CLI gate](../scripts/tests/sdk_issue_public_paths.py).
+
 ### `contract-a-v1`
 
 A message-isolated sender and the first version in the upgrade pair. It:

@@ -376,6 +376,7 @@ mod tests {
             fn process_message(input: MessageInput<'_>) -> MessageOutput {
                 let mut output = MessageOutput::success(StateUpdate::FullReplace(vec![1; 144]));
                 output.outbound_intents.push(crate::OutboundIntent {
+                    internal_event_reads: Vec::new(),
                     input_index: 0,
                     destination: input.destination,
                     value_main: 0,
@@ -452,6 +453,7 @@ mod tests {
         output.status_codes.push(1000);
         assert_eq!(batch_output_len_for(&input, &output), Err(EncodeError::StateModeMismatch));
         output.outbound_intents.push(crate::OutboundIntent {
+            internal_event_reads: Vec::new(),
             input_index: 1,
             destination: input.destination,
             value_main: 0,
@@ -507,6 +509,7 @@ mod tests {
             let mut output = MessageOutput::success(state.clone());
             output.callback_result_body = vec![7; 19];
             output.outbound_intents.push(OutboundIntent {
+                internal_event_reads: Vec::new(),
                 input_index: 0,
                 destination: input.destination,
                 value_main: 8,

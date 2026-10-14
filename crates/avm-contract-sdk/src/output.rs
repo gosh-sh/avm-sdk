@@ -1,8 +1,8 @@
 use alloc::{string::String, vec::Vec};
 
 use crate::{
-    AccountAddress, AvmAmount, BatchInput, CodeHash, CurrencyAmount, MessageInput, SelectedCodeId,
-    StateOutputMode, CODE_UPGRADE_METHOD_ID,
+    AccountAddress, AvmAmount, BatchInput, CodeHash, CurrencyAmount, InternalEventReadRequest,
+    MessageInput, SelectedCodeId, StateOutputMode, CODE_UPGRADE_METHOD_ID,
 };
 
 const FLAG_HAS_STATE_UPDATE: u8 = 1;
@@ -20,6 +20,7 @@ pub enum EncodeError {
     InvalidIndex,
     InvalidCallback,
     InvalidEvent,
+    InvalidEventReads,
     UpgradeForbidden,
     UpgradeRequired,
 }
@@ -53,6 +54,9 @@ pub struct OutboundIntent {
     pub value_main: AvmAmount,
     pub fuel_fee_shells: AvmAmount,
     pub extra: Vec<CurrencyAmount>,
+    /// Exact event-ring keys to resolve for the recipient at its block start.
+    /// Nonempty requests require the experimental ACM2/ACB2 runtime ABI.
+    pub internal_event_reads: Vec<InternalEventReadRequest>,
     pub method_id: u64,
     pub body: Vec<u8>,
 }
@@ -228,7 +232,8 @@ pub(crate) fn write_message_output(
     bytes: &mut impl OutputWriter,
     output: &MessageOutput,
 ) -> Result<(), EncodeError> {
-    bytes.write(b"ACMO")?;
+    let extended = has_event_reads(&output.outbound_intents);
+    bytes.write(if extended { b"ACM2" } else { b"ACMO" })?;
     bytes.write(&output.status_code.to_le_bytes())?;
 
     let mut flags = 0;
@@ -243,7 +248,7 @@ pub(crate) fn write_message_output(
         encode_state_update(bytes, state_update)?;
     }
     push_length_prefixed_u32(bytes, &output.callback_result_body)?;
-    encode_outbound_intents(bytes, &output.outbound_intents)?;
+    encode_outbound_intents(bytes, &output.outbound_intents, extended)?;
     bytes.write(&len_u32(output.callback_intents.len())?.to_le_bytes())?;
     for callback in &output.callback_intents {
         bytes.write(&callback.outbound_index.to_le_bytes())?;
@@ -271,13 +276,14 @@ pub(crate) fn write_batch_output(
     bytes: &mut impl OutputWriter,
     output: &BatchOutput,
 ) -> Result<(), EncodeError> {
-    bytes.write(b"ACBO")?;
+    let extended = has_event_reads(&output.outbound_intents);
+    bytes.write(if extended { b"ACB2" } else { b"ACBO" })?;
     encode_state_update(bytes, &output.state_update)?;
     bytes.write(&len_u32(output.status_codes.len())?.to_le_bytes())?;
     for status_code in &output.status_codes {
         bytes.write(&status_code.to_le_bytes())?;
     }
-    encode_outbound_intents(bytes, &output.outbound_intents)?;
+    encode_outbound_intents(bytes, &output.outbound_intents, extended)?;
     encode_event_intents(bytes, &output.event_intents)?;
     Ok(())
 }
@@ -303,9 +309,24 @@ fn state_update_len(update: &StateUpdate) -> Result<usize, EncodeError> {
 }
 
 fn outbound_intents_len(intents: &[OutboundIntent]) -> Result<usize, EncodeError> {
+    let extended = has_event_reads(intents);
     intents.iter().try_fold(4, |total, intent| {
-        checked_len(&[total, 114, repeated_len(intent.extra.len(), 20)?, intent.body.len()])
+        checked_len(&[
+            total,
+            114,
+            repeated_len(intent.extra.len(), 20)?,
+            intent.body.len(),
+            if extended {
+                checked_len(&[4, repeated_len(intent.internal_event_reads.len(), 72)?])?
+            } else {
+                0
+            },
+        ])
     })
+}
+
+fn has_event_reads(intents: &[OutboundIntent]) -> bool {
+    intents.iter().any(|intent| !intent.internal_event_reads.is_empty())
 }
 
 fn event_intents_len(intents: &[EventIntent]) -> Result<usize, EncodeError> {
@@ -485,6 +506,15 @@ fn validate_outbound_intents(intents: &[OutboundIntent]) -> Result<(), EncodeErr
             return Err(EncodeError::InvalidIndex);
         }
         validate_extra(&intent.extra)?;
+        len_u16(intent.internal_event_reads.len())?;
+        if intent.internal_event_reads.windows(2).any(|pair| {
+            let key = |read: &InternalEventReadRequest| {
+                (read.source.dapp_id, read.source.account_id, read.event_class)
+            };
+            key(&pair[0]) >= key(&pair[1])
+        }) {
+            return Err(EncodeError::InvalidEventReads);
+        }
         len_u32(intent.body.len())?;
     }
     Ok(())
@@ -537,6 +567,7 @@ fn encode_state_update(
 fn encode_outbound_intents(
     bytes: &mut impl OutputWriter,
     intents: &[OutboundIntent],
+    extended: bool,
 ) -> Result<(), EncodeError> {
     bytes.write(&len_u32(intents.len())?.to_le_bytes())?;
     for intent in intents {
@@ -549,6 +580,15 @@ fn encode_outbound_intents(
         for amount in &intent.extra {
             bytes.write(&amount.currency_id.to_le_bytes())?;
             bytes.write(&amount.amount.to_le_bytes())?;
+        }
+        if extended {
+            bytes.write(&len_u16(intent.internal_event_reads.len())?.to_le_bytes())?;
+            bytes.write(&0u16.to_le_bytes())?;
+            for read in &intent.internal_event_reads {
+                bytes.write(&read.source.dapp_id)?;
+                bytes.write(&read.source.account_id)?;
+                bytes.write(&read.event_class.to_le_bytes())?;
+            }
         }
         bytes.write(&intent.method_id.to_le_bytes())?;
         push_length_prefixed_u32(bytes, &intent.body)?;

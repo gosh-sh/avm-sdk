@@ -115,6 +115,7 @@ impl Contract for ContractA {
 
         let mut output = MessageOutput::success(StateUpdate::FullReplace(next_state));
         output.outbound_intents = vec![OutboundIntent {
+            internal_event_reads: Vec::new(),
             input_index: 0,
             destination,
             value_main: VALUE_MAIN,
