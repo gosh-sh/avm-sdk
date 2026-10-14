@@ -9,15 +9,16 @@ Core and tests use `../../../crates/avm-contract-sdk`; both contracts use
 and four existing fixtures are unchanged. The MIT application licence is retained.
 The single-guest WASM lint loop defaults to vesting; the full gate checks both guests.
 `cargo fmt --all` covers nested modules and tests with SDK formatting conventions.
-The Rust wrapper remaps the entire SDK repository to `/avm-sdk`, retaining the
-builder's original VM flags. No contract behavior or regression case was changed.
+The SDK 0.2.0 builder pins the compiler and rejects compiler wrappers; the old
+remapping wrapper is removed. No contract behavior or regression case was changed.
 
 The dedicated read-only workflow runs native/guest checks, immutable public tooling,
-actual AVM execution, and an extracted-package rehearsal. Release packaging already
-archives `examples/`; the release workflow runs the complete packaged vesting gate
-before GitHub release publication. Its distinct insertion position preserves the
-independent gates proposed in PRs #9 and #10. Private-source release checks remain
-required and are not replaced by the public reference runtime.
+actual AVM execution and relocated-source checks with verified public 0.2.0 tools.
+Packaging still includes `examples/`, but its v2 interface requires qualified
+private inputs and real build receipts. The retired publisher is not restored.
+`manual_gates.py` runs native tests and both guests; candidate-package execution
+runs through `scripts/check-application-examples.sh` after the standard packaged
+lifecycle. Public tools do not replace private-source or candidate qualification.
 
 Canonical IDs come from official ACAB output. `scripts/sync_ids.py --check` verifies
 them. After intentional metadata changes, rebuild metadata, regenerate IDs, then

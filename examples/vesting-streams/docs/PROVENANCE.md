@@ -1,3 +1,12 @@
+# Current SDK 0.2.0 provenance
+
+See [SDK 0.2.0 adaptation](../SDK-0.2.0.md) for the current runtime pin, source
+baseline, compiler-wrapper removal and qualification limits. Guest/profile parity
+is checked before the full gate. The original import details below are historical;
+the old runtime pin and remapping wrapper are no longer used by current checks.
+
+## Historical import record
+
 # Tool and source provenance
 
 - Application source: `h2so4nackl-code/avm-vesting-streams` at

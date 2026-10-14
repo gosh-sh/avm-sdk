@@ -42,7 +42,7 @@ local main-value units, not a live NACKL payment or bounty award.
 
 ## Validation and reproduction
 
-Requirements: Linux x86-64 (Windows: WSL2), Bash, Python 3, curl, and rustup.
+Requirements: Linux x86-64-v3 with glibc >= 2.39 (Windows: WSL2), Bash, Python >= 3.11, curl, and rustup.
 All Rust dependencies use this repository's SDK directly; checks and builds run
 offline after tool installation. The example has its own workspace and lockfile.
 
@@ -62,12 +62,20 @@ checks 1,200 bigint oracle cases; another exercises 14,400 generated state trans
 Sixteen simultaneous pending lanes and reverse settlement are native regressions;
 the actual stand journey automatically drains its delivery queue.
 
-The dedicated `vesting-streams.yml` workflow additionally runs all 12 SDK tests,
-existing example conventions, smoke, and an extracted-package rehearsal. It uploads
-generated `evidence/` logs, artifact hashes, optimizer results, and the complete
-`avm-e2e.json` journal. [VALIDATION.md](VALIDATION.md) records integration evidence
-and exact source provenance. The package rehearsal reuses public reference binaries;
-it does not rebuild the private runtime.
+The dedicated `vesting-streams.yml` workflow additionally runs all 13 SDK tests,
+existing example conventions, smoke, and the complete gate from relocated tracked
+source against verified public 0.2.0 tools. This replaces the obsolete packaging
+rehearsal: the v2 packager requires exact private-source qualification and real
+build receipts, which a public-binary copy cannot supply. It uploads generated
+`evidence/` logs, artifacts, optimizer results and the full stand journal.
+
+`manual_gates.py` checks all native tests and both WASM guests. Candidate-package
+execution remains mandatory after the standard packaged lifecycle, through
+`scripts/check-application-examples.sh` in an isolated writable verified candidate.
+See [manual qualification](../../docs/releases.md#manual-qualification) and
+[the SDK 0.2.0 adaptation](SDK-0.2.0.md). The old compiler wrapper is removed;
+the pinned builder rejects it. [VALIDATION.md](VALIDATION.md) retains historical
+integration evidence separately from the new results.
 
 ## Scope
 

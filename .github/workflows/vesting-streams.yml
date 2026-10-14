@@ -45,28 +45,19 @@ jobs:
           AVM_LOCAL_STAND="$runtime/bin/avm-local-stand" \
           AVM_WASMTIME_PROFILE="$runtime/profiles/wasmtime-release-profile.v1" \
             bash scripts/smoke.sh
-          bash examples/vesting-streams/scripts/check.sh "$runtime"
+          bash scripts/check-application-examples.sh "$runtime" "$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/binaryen-version_133/bin/wasm-opt" vesting-streams
 
-      - name: Rehearse packaging with verified public binaries
+      - name: Check relocated source against verified public tools
         run: |
           runtime="$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/avm-sdk-linux-x86_64"
-          reference="$RUNNER_TEMP/reference-source"
-          dist="$RUNNER_TEMP/vesting-dist"
-          mkdir -p "$reference/target/release"
-          cp "$runtime/bin/avm-local-stand" "$runtime/bin/avm-contract-build" "$reference/target/release/"
-          bash scripts/package-release.sh "$reference" "$GITHUB_WORKSPACE" "$dist" \
-            335a0f09fdbc98eb7a1056c0f6b84cd4f39d889e "$(git rev-parse HEAD)"
-          (cd "$dist" && sha256sum -c avm-sdk-linux-x86_64.tar.gz.sha256)
-          mkdir "$dist/extracted"
-          tar -xzf "$dist/avm-sdk-linux-x86_64.tar.gz" -C "$dist/extracted"
-          packaged="$dist/extracted/avm-sdk-linux-x86_64"
-          (cd "$packaged" && sha256sum -c SHA256SUMS)
-          AVM_LOCAL_STAND="$packaged/bin/avm-local-stand" \
-          AVM_WASMTIME_PROFILE="$packaged/profiles/wasmtime-release-profile.v1" \
-            bash "$packaged/scripts/smoke.sh"
-          bash "$packaged/examples/vesting-streams/scripts/check.sh" "$packaged" \
-            "$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/binaryen-version_133/bin/wasm-opt"
-          cp -a "$packaged/examples/vesting-streams/evidence" examples/vesting-streams/evidence/packaged
+          optimizer="$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/binaryen-version_133/bin/wasm-opt"
+          relocated="$RUNNER_TEMP/vesting-source-layout"
+          mkdir "$relocated"
+          git archive HEAD | tar -x -C "$relocated"
+          bash "$relocated/scripts/check-application-examples.sh" "$runtime" "$optimizer" vesting-streams
+          cp -a "$relocated/examples/vesting-streams/evidence" examples/vesting-streams/evidence/relocated
+          # This checks source relocation, not the receipt-bound v2 packager.
+          # Candidate-package qualification remains a separate manual gate.
 
       - name: Upload generated evidence
         if: always()
