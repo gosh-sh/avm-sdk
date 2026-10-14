@@ -31,6 +31,10 @@ On Linux with Rust/Cargo 1.93.0 and the verified public 0.2.0 distribution:
 - SDK: **13 tests (9 unit + 4 canonical I/O)**, formatting and all-target Clippy pass.
 - Upstream Python installer/provenance assertions: **40 tests pass** with the
   independently pinned `blake3==1.0.11` test dependency.
+- The actual changed manual example loop passed **27 source gates** on the
+  combined checkout, retaining the four standalone fixtures and checking every
+  native workspace and all seven application guests. This is the SDK/example
+  portion only, not a run of the inaccessible private qualification gates.
 - Application: **35 native tests pass**, all-target Clippy and formatting pass.
 - All guests pass separate WASM Clippy under `-D warnings`, official two-clean-build
   reproducibility, canonical ID checking, required exports and zero host imports.
