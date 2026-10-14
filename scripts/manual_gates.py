@@ -91,7 +91,8 @@ def main():
     for manifest in sorted((sdk / "examples").glob("*/Cargo.toml")):
         name = manifest.parent.name
         run(name + "-format", ["cargo", "fmt", "--manifest-path", str(manifest), "--all", "--", "--check"], sdk)
-        if "workspace" in tomllib.loads(manifest.read_text()):
+        # Standard single-package fixtures use an empty [workspace] boundary.
+        if tomllib.loads(manifest.read_text()).get("workspace", {}).get("members"):
             # Nested application workspaces have native regressions and multiple
             # guests; the default member alone does not qualify the application.
             run(name + "-native-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--workspace", "--all-targets", "--", "-D", "warnings"], sdk)
