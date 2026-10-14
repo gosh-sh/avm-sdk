@@ -23,12 +23,36 @@ const CALLBACK_BODY: [u8; 16] = [0x99; 16];
 const CODE_UPGRADE_HEADER_BYTES: usize = 72;
 const MIGRATION_PAYLOAD: [u8; 24] = *b"avm-a-v2-migrate-state!!";
 const MIGRATION_MARKER: [u8; 4] = *b"V1MG";
-const PACKAGE_OWNER_PUBKEY: [u8; 32] = [
+const FIXTURE_PACKAGE_OWNER_PUBKEY: [u8; 32] = [
     0x81, 0x39, 0x77, 0x0e, 0xa8, 0x7d, 0x17, 0x5f, 0x56, 0xa3, 0x54, 0x66, 0xc3, 0x4c, 0x7e, 0xcc,
     0xcb, 0x8d, 0x8a, 0x91, 0xb4, 0xee, 0x37, 0xa2, 0x5d, 0xf6, 0x0f, 0x5b, 0x8f, 0xc9, 0xb3, 0x94,
 ];
+const PACKAGE_OWNER_PUBKEY: [u8; 32] = package_owner_pubkey();
 const VERSION_MARKER: u8 = 1;
 const VERSION_METHOD_ID: u64 = 0x0dc1_fee6_93a5_219c;
+
+const fn package_owner_pubkey() -> [u8; 32] {
+    let Some(value) = option_env!("AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY") else {
+        return FIXTURE_PACKAGE_OWNER_PUBKEY;
+    };
+    let bytes = value.as_bytes();
+    assert!(bytes.len() == 64, "AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY must be 64 lowercase hex digits");
+    let mut key = [0; 32];
+    let mut index = 0;
+    while index < key.len() {
+        key[index] = (hex_digit(bytes[index * 2]) << 4) | hex_digit(bytes[index * 2 + 1]);
+        index += 1;
+    }
+    key
+}
+
+const fn hex_digit(byte: u8) -> u8 {
+    match byte {
+        b'0'..=b'9' => byte - b'0',
+        b'a'..=b'f' => byte - b'a' + 10,
+        _ => panic!("AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY must be 64 lowercase hex digits"),
+    }
+}
 
 struct ContractA;
 

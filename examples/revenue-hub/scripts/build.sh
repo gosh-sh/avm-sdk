@@ -12,10 +12,7 @@ export CARGO_PROFILE_RELEASE_OPT_LEVEL=3
 export CARGO_PROFILE_RELEASE_LTO=false
 export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 export CARGO_PROFILE_RELEASE_STRIP=symbols
-# SDK panic diagnostics otherwise embed the absolute checkout path in WASM.
-# The pinned builder supplies its own encoded rustflags; use Cargo's compiler
-# wrapper to add this independent path remap without replacing its VM flags.
-export RUSTC_WRAPPER="$root/scripts/remap-rustc.sh"
+# The 0.2.0 builder pins the compiler and rejects compiler wrappers.
 for contract in vault receiver audit; do
   "$sdk/bin/avm-contract-build" build --manifest-path "contracts/$contract/Cargo.toml" | tee "evidence/build-$contract.txt"
 done

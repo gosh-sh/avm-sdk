@@ -25,7 +25,7 @@ Integration validation is recorded separately in [VALIDATION.md](VALIDATION.md).
 There are 74 application regressions, including 4,500 generated action steps,
 10,007 one-unit deposits compared with one lump deposit, full-u128 boundary cases,
 100 failed payouts followed by retry, partial batch failures, and isolated/batch
-equivalence. The repository's 12 SDK tests run separately, for 86 tests in CI.
+equivalence. The SDK's 13 native tests run separately, for 87 tests in this workflow.
 The native byte probe covers batches of 1, 8, 64, and 256 messages. Its output-byte
 comparison is not a FUEL, CPU, or throughput benchmark.
 
@@ -54,7 +54,7 @@ cargo +1.93.0 test --locked --offline
 cargo +1.93.0 test --manifest-path examples/revenue-hub/Cargo.toml --workspace --locked --offline
 ```
 
-For the full gate, use Linux x86-64 (Windows: WSL2), Python 3, curl, tar, and
+For the full gate, use Linux x86-64-v3 with glibc >= 2.39 (Windows: WSL2), Python >= 3.11, curl, tar, and
 sha256sum. Install the pinned official runtime and Binaryen optimizer:
 
 ```bash
@@ -64,7 +64,8 @@ bash examples/revenue-hub/scripts/check.sh
 ```
 
 The installers verify immutable archive hashes; the runtime installer also
-checks its extracted file manifest. Binaryen's official archive is about 106 MiB
+uses the trusted v2 verifier for provenance, full inventory, bounded extraction,
+and activation before execution. Binaryen's official archive is about 106 MiB
 compressed. Only wasm-opt is extracted. Pins are in [PROVENANCE.json](PROVENANCE.json).
 
 To reuse verified tools, including another freshly packaged SDK:
@@ -74,10 +75,8 @@ bash examples/revenue-hub/scripts/check.sh /absolute/path/to/avm-sdk-linux-x86_6
 ```
 
 The official builder performs two clean reproducibility builds. Its release
-profile is supplied explicitly because it uses isolated manifests. SDK source
-paths are remapped to `/avm-sdk` so panic diagnostics do not encode the local
-checkout location. Cargo's small compiler wrapper adds that remap while preserving
-the VM flags supplied by the official builder. Then pinned
+profile is supplied explicitly because it uses isolated manifests. The SDK 0.2.0 builder pins the compiler and rejects `RUSTC_WRAPPER`;
+the obsolete path-remapping wrapper is removed. Then pinned
 Binaryen 133 optimizes each compiler WASM twice and compares bytes. The original
 `contract.compiler.wasm` is retained, and the tested deployment artifact is
 `contract.wasm`. Optimization fits the stand's canonical deployment body limit.
@@ -98,12 +97,13 @@ are decoded from canonical ACMO status, not inferred from the CLI's outer status
 full gate with the pinned public runtime, then uploads generated evidence even
 on failure. It uses read-only permissions and no private runtime-source checkout.
 
-The existing SDK release workflow retains its original gates and adds `--all`
-to example formatting to support this nested workspace. After packaging, it
-installs the checksum-pinned optimizer and runs this gate from the extracted
-example against the newly built packaged builder/stand before upload/publication.
-The private runtime build and its original tests still require the upstream
-environment and are not replaced by the public reference-runtime check.
+The retired publisher is not restored. `scripts/manual_gates.py` runs every
+native workspace member/test and lints all three WASM guests. The full actual
+stand/artifact gate must also run from an isolated writable verified candidate
+bundle through `scripts/check-application-examples.sh` after its standard packaged
+lifecycle. See [manual qualification](../../docs/releases.md#manual-qualification)
+and [the SDK 0.2.0 adaptation](SDK-0.2.0.md). Public binaries do not replace the
+private node build, engine/source qualification, or receipt-bound candidate gate.
 
 ## Scope
 
@@ -116,6 +116,6 @@ leave that member pending; others remain independent. Managers have availability
 power through pause and reserve changes. Audit delivery is asynchronous: a failed
 report can leave it behind a paid claim, and there is no recovery service.
 
-Runtime source and SDK baseline are different pinned revisions; validation
-establishes the tested combination, not cross-runtime or cross-DApp assurance.
+The current guest/profile match the verified public 0.2.0 distribution. Validation
+establishes this exact combination, not future-runtime or cross-DApp assurance.
 See [SPEC.md](docs/SPEC.md) for wire layouts, invariants, and trust assumptions.

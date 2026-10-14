@@ -1,3 +1,12 @@
+# Current validation
+
+The SDK 0.2.0 migration and its independently rerun results are recorded in
+[SDK-0.2.0.md](SDK-0.2.0.md). The record below is historical evidence for the
+pre-PR #14 inputs. Its retired-publisher and old-package-rehearsal descriptions
+are not current instructions or evidence for the 0.2.0 candidate.
+
+## Historical validation record
+
 # Revenue Hub integration validation
 
 Validated locally on 2026-10-13 against SDK baseline

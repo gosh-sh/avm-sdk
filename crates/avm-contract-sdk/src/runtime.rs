@@ -96,8 +96,22 @@ impl<const N: usize> GuestArena<N> {
             return None;
         }
         let source = self.bytes.get(start..end)?;
-        let mut bytes = Vec::with_capacity(length);
-        bytes.extend(source.iter().map(|byte| byte.load(Ordering::Relaxed)));
+        let mut chunks = source.chunks_exact(8);
+        let mut words = Vec::with_capacity(length.div_ceil(8));
+        words.extend(chunks.by_ref().map(|chunk| {
+            [
+                chunk[0].load(Ordering::Relaxed),
+                chunk[1].load(Ordering::Relaxed),
+                chunk[2].load(Ordering::Relaxed),
+                chunk[3].load(Ordering::Relaxed),
+                chunk[4].load(Ordering::Relaxed),
+                chunk[5].load(Ordering::Relaxed),
+                chunk[6].load(Ordering::Relaxed),
+                chunk[7].load(Ordering::Relaxed),
+            ]
+        }));
+        let mut bytes = words.into_flattened();
+        bytes.extend(chunks.remainder().iter().map(|byte| byte.load(Ordering::Relaxed)));
         Some(bytes)
     }
 
@@ -269,6 +283,24 @@ mod tests {
             dst.store(*byte, Ordering::Relaxed);
         }
         ptr
+    }
+
+    #[test]
+    fn input_copy_preserves_bytes_and_live_bounds_at_chunk_boundaries() {
+        let arena = GuestArena::<66_016>::new();
+        for len in [1, 7, 8, 9, 15, 16, 17, 65_536, 66_006] {
+            let bytes = (0..len).map(|index| (index % 251) as u8).collect::<Vec<_>>();
+            let ptr = load(&arena, &bytes);
+            let len = len as u32;
+            let copied = arena.read(ptr, len).unwrap();
+            assert_eq!(copied, bytes);
+            assert_eq!(copied.capacity(), (len as usize).div_ceil(8) * 8);
+            assert_eq!(arena.read(ptr + 1, len - 1).unwrap(), bytes[1..]);
+            assert!(arena.read(ptr, len + 1).is_none());
+            assert!(arena.read(0, len).is_none());
+            assert!(arena.free(ptr, len));
+            assert!(arena.read(ptr, len).is_none());
+        }
     }
 
     #[test]

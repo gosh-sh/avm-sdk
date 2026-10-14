@@ -45,7 +45,7 @@ jobs:
           AVM_LOCAL_STAND="$runtime/bin/avm-local-stand" \
           AVM_WASMTIME_PROFILE="$runtime/profiles/wasmtime-release-profile.v1" \
             bash scripts/smoke.sh
-          bash examples/revenue-hub/scripts/check.sh "$runtime"
+          bash scripts/check-application-examples.sh "$runtime" "$GITHUB_WORKSPACE/examples/revenue-hub/.runtime/binaryen-version_133/bin/wasm-opt" revenue-hub
 
       - name: Upload generated evidence
         if: always()
