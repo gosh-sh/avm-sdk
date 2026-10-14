@@ -1,0 +1,514 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "b93e7385d6aef6dca740eeee4bada29c81bc3f8f2acb81bb3e6ac96f1083c394"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+name = "state"
+kind = "fixed_bytes"
+len = 3272
+
+[[abi.types]]
+id = 2
+name = "config"
+kind = "fixed_bytes"
+len = 1656
+
+[[abi.types]]
+id = 3
+name = "index"
+kind = "fixed_bytes"
+len = 1
+
+[[abi.types]]
+id = 4
+name = "payment"
+kind = "fixed_bytes"
+len = 26
+
+[[abi.types]]
+id = 5
+name = "address"
+kind = "fixed_bytes"
+len = 64
+
+[[abi.types]]
+id = 6
+name = "amount"
+kind = "u128"
+
+[[abi.types]]
+id = 7
+name = "counter"
+kind = "u64"
+
+[[abi.methods]]
+name = "stream.vesting.deploy"
+input_type_id = 2
+
+[[abi.methods]]
+name = "stream.vesting.fund"
+
+[[abi.methods]]
+name = "stream.vesting.claim"
+input_type_id = 3
+
+[[abi.methods]]
+name = "stream.vesting.cancel"
+input_type_id = 3
+
+[[abi.methods]]
+name = "stream.vesting.refund"
+input_type_id = 3
+
+[[abi.methods]]
+name = "stream.vesting.callback"
+input_type_id = 4
+
+[[abi.methods]]
+name = "stream.vesting.status"
+
+[[abi.methods]]
+name = "stream.vesting.topup"
+
+[[abi.events]]
+name = "stream.created"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "claimed"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 7
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "kind"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "nonce"
+
+[[abi.events.fields]]
+id = 7
+type_id = 6
+name = "pending"
+
+[[abi.events.fields]]
+id = 8
+type_id = 6
+name = "refunded"
+
+[[abi.events.fields]]
+id = 9
+type_id = 7
+name = "time"
+
+[[abi.events]]
+name = "stream.funded"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "claimed"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 7
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "kind"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "nonce"
+
+[[abi.events.fields]]
+id = 7
+type_id = 6
+name = "pending"
+
+[[abi.events.fields]]
+id = 8
+type_id = 6
+name = "refunded"
+
+[[abi.events.fields]]
+id = 9
+type_id = 7
+name = "time"
+
+[[abi.events]]
+name = "stream.cancelled"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "claimed"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 7
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "kind"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "nonce"
+
+[[abi.events.fields]]
+id = 7
+type_id = 6
+name = "pending"
+
+[[abi.events.fields]]
+id = 8
+type_id = 6
+name = "refunded"
+
+[[abi.events.fields]]
+id = 9
+type_id = 7
+name = "time"
+
+[[abi.events]]
+name = "stream.pending"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "claimed"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 7
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "kind"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "nonce"
+
+[[abi.events.fields]]
+id = 7
+type_id = 6
+name = "pending"
+
+[[abi.events.fields]]
+id = 8
+type_id = 6
+name = "refunded"
+
+[[abi.events.fields]]
+id = 9
+type_id = 7
+name = "time"
+
+[[abi.events]]
+name = "stream.settled"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "claimed"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 7
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "kind"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "nonce"
+
+[[abi.events.fields]]
+id = 7
+type_id = 6
+name = "pending"
+
+[[abi.events.fields]]
+id = 8
+type_id = 6
+name = "refunded"
+
+[[abi.events.fields]]
+id = 9
+type_id = 7
+name = "time"
+
+[[abi.events]]
+name = "stream.failed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "claimed"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 7
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "kind"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "nonce"
+
+[[abi.events.fields]]
+id = 7
+type_id = 6
+name = "pending"
+
+[[abi.events.fields]]
+id = 8
+type_id = 6
+name = "refunded"
+
+[[abi.events.fields]]
+id = 9
+type_id = 7
+name = "time"
+
+[[abi.events]]
+name = "stream.status"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "claimed"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 7
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "kind"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "nonce"
+
+[[abi.events.fields]]
+id = 7
+type_id = 6
+name = "pending"
+
+[[abi.events.fields]]
+id = 8
+type_id = 6
+name = "refunded"
+
+[[abi.events.fields]]
+id = 9
+type_id = 7
+name = "time"
+
+[[abi.events]]
+name = "stream.fees"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "claimed"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 7
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "kind"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "nonce"
+
+[[abi.events.fields]]
+id = 7
+type_id = 6
+name = "pending"
+
+[[abi.events.fields]]
+id = 8
+type_id = 6
+name = "refunded"
+
+[[abi.events.fields]]
+id = 9
+type_id = 7
+name = "time"
+
+[[abi.errors]]
+status_code = 4000
+name = "invalid_args"
+message = "invalid args"
+
+[[abi.errors]]
+status_code = 4001
+name = "unauthorized"
+message = "unauthorized"
+
+[[abi.errors]]
+status_code = 4002
+name = "invalid_state"
+message = "invalid state"
+
+[[abi.errors]]
+status_code = 4003
+name = "invalid_value"
+message = "invalid value"
+
+[[abi.errors]]
+status_code = 4004
+name = "invalid_phase"
+message = "invalid phase"
+
+[[abi.errors]]
+status_code = 4005
+name = "nothing_due"
+message = "nothing due"
+
+[[abi.errors]]
+status_code = 4006
+name = "pending_payment"
+message = "pending payment"
+
+[[abi.errors]]
+status_code = 4007
+name = "invalid_callback"
+message = "invalid callback"
+
+[[abi.errors]]
+status_code = 4008
+name = "overflow"
+message = "overflow"
+
+[[abi.errors]]
+status_code = 4009
+name = "insufficient_balance"
+message = "insufficient balance"
+
+[[abi.errors]]
+status_code = 4010
+name = "irrevocable"
+message = "irrevocable"

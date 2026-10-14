@@ -93,6 +93,14 @@ cargo +1.93.0 clippy \
   --target wasm32-unknown-unknown -- -D warnings
 ```
 
+## Vesting Streams
+
+[`vesting-streams`](vesting-streams/README.md) is a separate workspace for up to
+eight fixed-beneficiary grants with cliffs, linear or stepped accrual, cancellation,
+and independent payout/refund callbacks. Its full gate checks 60 application
+regressions and an actual three-grant AVM journey with conservation and replay.
+It depends directly on this repository's SDK and retains the existing fixtures.
+
 ## Recommended Use
 
 Keep the checked-in examples unchanged when using them as release fixtures.

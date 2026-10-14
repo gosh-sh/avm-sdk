@@ -1,0 +1,69 @@
+name: Vesting streams regressions
+
+on:
+  push:
+    branches: [main, "examples/vesting-streams*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out SDK source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal --component clippy --component rustfmt
+          rustup target add wasm32-unknown-unknown --toolchain 1.93.0
+
+      - name: Check SDK and all example conventions
+        run: |
+          cargo +1.93.0 fmt -- --check
+          cargo +1.93.0 clippy --all-targets --locked --offline -- -D warnings
+          cargo +1.93.0 test --locked --offline
+          for manifest in examples/*/Cargo.toml; do
+            cargo +1.93.0 fmt --manifest-path "$manifest" --all -- --check
+            cargo +1.93.0 clippy --manifest-path "$manifest" --target wasm32-unknown-unknown --locked --offline -- -D warnings
+          done
+
+      - name: Download and verify immutable reference tools
+        run: |
+          bash examples/vesting-streams/scripts/install_runtime.sh
+          bash examples/vesting-streams/scripts/install_binaryen.sh
+
+      - name: Run smoke and complete vesting streams gate
+        run: |
+          runtime="$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/avm-sdk-linux-x86_64"
+          AVM_LOCAL_STAND="$runtime/bin/avm-local-stand" \
+          AVM_WASMTIME_PROFILE="$runtime/profiles/wasmtime-release-profile.v1" \
+            bash scripts/smoke.sh
+          bash scripts/check-application-examples.sh "$runtime" "$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/binaryen-version_133/bin/wasm-opt" vesting-streams
+
+      - name: Check relocated source against verified public tools
+        run: |
+          runtime="$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/avm-sdk-linux-x86_64"
+          optimizer="$GITHUB_WORKSPACE/examples/vesting-streams/.runtime/binaryen-version_133/bin/wasm-opt"
+          relocated="$RUNNER_TEMP/vesting-source-layout"
+          mkdir "$relocated"
+          git archive HEAD | tar -x -C "$relocated"
+          bash "$relocated/scripts/check-application-examples.sh" "$runtime" "$optimizer" vesting-streams
+          cp -a "$relocated/examples/vesting-streams/evidence" examples/vesting-streams/evidence/relocated
+          # This checks source relocation, not the receipt-bound v2 packager.
+          # Candidate-package qualification remains a separate manual gate.
+
+      - name: Upload generated evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: vesting-streams-evidence
+          path: examples/vesting-streams/evidence/
+          if-no-files-found: warn
+          retention-days: 30
