@@ -1,0 +1,81 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "fungible_token_state"
+len = 336
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "fungible_token_transfer_args"
+len = 40
+
+[[abi.types]]
+id = 3
+kind = "u64"
+name = "event_amount"
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "event_holder"
+len = 32
+
+[[abi.methods]]
+name = "token.transfer"
+input_type_id = 2
+
+[[abi.events]]
+name = "token.transferred"
+
+[[abi.events.fields]]
+id = 1
+type_id = 3
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 4
+name = "from"
+
+[[abi.events.fields]]
+id = 3
+type_id = 4
+name = "to"
+
+[[abi.errors]]
+status_code = 1300
+name = "external_caller_required"
+message = "token deploy and transfers must be signed external messages"
+
+[[abi.errors]]
+status_code = 1301
+name = "invalid_transfer_args"
+message = "token accepts only token.transfer with a 32-byte recipient and a non-zero u64 amount"
+
+[[abi.errors]]
+status_code = 1302
+name = "invalid_token_state"
+message = "token state is malformed or its balances do not add up to the supply"
+
+[[abi.errors]]
+status_code = 1303
+name = "insufficient_balance"
+message = "sender balance is lower than the transfer amount"
+
+[[abi.errors]]
+status_code = 1304
+name = "holder_capacity_exhausted"
+message = "token ledger has no free holder slot for a new recipient"
+
+[[abi.errors]]
+status_code = 1305
+name = "invalid_event"
+message = "token transfer event fields could not be encoded"

@@ -67,6 +67,25 @@ message entry point intentionally fails.
 Use it to validate `AccountBatch`, bounded batch input, large retained state,
 and narrow state patches without replacing the complete state image.
 
+### `fungible-token`
+
+A message-isolated fungible token with a fixed supply. It:
+
+- credits the whole supply to the deployer's signing key in `init`;
+- moves balances between signing keys with `token.transfer`;
+- rejects overdrafts and malformed arguments without changing state;
+- checks on every call that the balances add up to the supply;
+- emits one `token.transferred` event for the mint and for each transfer.
+
+The ledger holds at most eight keys, and a key keeps its slot when its balance
+reaches zero. There are no allowances, no minting after `init`, and no contract
+holders. `stand-e2e.sh` builds the example, deploys it on a fresh stand, and
+checks a transfer, a rejected overdraft, the events, and the replay:
+
+```bash
+examples/fungible-token/stand-e2e.sh
+```
+
 ## Build An Example
 
 Install the SDK commands first, then build any example from the repository or
@@ -106,7 +125,8 @@ Use the examples as focused references:
 - start with `contract-a-v1` for a message-isolated contract;
 - add `contract-b` for internal messaging, callbacks, events, and deployment;
 - use the v1/v2 pair for upgrades;
-- use `contract-batch-patch` only when batch execution and patch output are required.
+- use `contract-batch-patch` only when batch execution and patch output are required;
+- use `fungible-token` for a small ledger keyed by external signing keys.
 
 The source-test owner, fixed values, salts, payloads, and failure hooks are test data.
 Replace them before using copied code in an application.
