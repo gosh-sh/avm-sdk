@@ -184,23 +184,29 @@ pub fn encode_batch_output(output: &BatchOutput) -> Result<Vec<u8>, EncodeError>
     encode_batch_output_inner(output, None)
 }
 
-pub(crate) fn message_output_len_for(
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct OutputPlan {
+    pub len: usize,
+    pub extended: bool,
+}
+
+pub(crate) fn message_output_plan_for(
     input: &MessageInput<'_>,
     is_init: bool,
     output: &MessageOutput,
-) -> Result<usize, EncodeError> {
+) -> Result<OutputPlan, EncodeError> {
     validate_message_context(input, is_init, output)?;
-    validate_message_shape(output, Some(input.required_state_output_mode))?;
-    message_output_len(output)
+    let extended = validate_message_shape(output, Some(input.required_state_output_mode))?;
+    Ok(OutputPlan { len: message_output_len(output, extended)?, extended })
 }
 
-pub(crate) fn batch_output_len_for(
+pub(crate) fn batch_output_plan_for(
     input: &BatchInput<'_>,
     output: &BatchOutput,
-) -> Result<usize, EncodeError> {
+) -> Result<OutputPlan, EncodeError> {
     validate_batch_context(input, output)?;
-    validate_batch_shape(output, Some(input.required_state_output_mode))?;
-    batch_output_len(output)
+    let extended = validate_batch_shape(output, Some(input.required_state_output_mode))?;
+    Ok(OutputPlan { len: batch_output_len(output, extended)?, extended })
 }
 
 pub(crate) trait OutputWriter {
@@ -222,17 +228,17 @@ fn encode_message_output_inner(
     output: &MessageOutput,
     required_mode: Option<StateOutputMode>,
 ) -> Result<Vec<u8>, EncodeError> {
-    validate_message_shape(output, required_mode)?;
+    let extended = validate_message_shape(output, required_mode)?;
     let mut bytes = Vec::new();
-    write_message_output(&mut bytes, output)?;
+    write_message_output(&mut bytes, output, extended)?;
     Ok(bytes)
 }
 
 pub(crate) fn write_message_output(
     bytes: &mut impl OutputWriter,
     output: &MessageOutput,
+    extended: bool,
 ) -> Result<(), EncodeError> {
-    let extended = has_event_reads(&output.outbound_intents);
     bytes.write(if extended { b"ACM2" } else { b"ACMO" })?;
     bytes.write(&output.status_code.to_le_bytes())?;
 
@@ -266,17 +272,17 @@ fn encode_batch_output_inner(
     output: &BatchOutput,
     required_mode: Option<StateOutputMode>,
 ) -> Result<Vec<u8>, EncodeError> {
-    validate_batch_shape(output, required_mode)?;
+    let extended = validate_batch_shape(output, required_mode)?;
     let mut bytes = Vec::new();
-    write_batch_output(&mut bytes, output)?;
+    write_batch_output(&mut bytes, output, extended)?;
     Ok(bytes)
 }
 
 pub(crate) fn write_batch_output(
     bytes: &mut impl OutputWriter,
     output: &BatchOutput,
+    extended: bool,
 ) -> Result<(), EncodeError> {
-    let extended = has_event_reads(&output.outbound_intents);
     bytes.write(if extended { b"ACB2" } else { b"ACBO" })?;
     encode_state_update(bytes, &output.state_update)?;
     bytes.write(&len_u32(output.status_codes.len())?.to_le_bytes())?;
@@ -308,8 +314,7 @@ fn state_update_len(update: &StateUpdate) -> Result<usize, EncodeError> {
     }
 }
 
-fn outbound_intents_len(intents: &[OutboundIntent]) -> Result<usize, EncodeError> {
-    let extended = has_event_reads(intents);
+fn outbound_intents_len(intents: &[OutboundIntent], extended: bool) -> Result<usize, EncodeError> {
     intents.iter().try_fold(4, |total, intent| {
         checked_len(&[
             total,
@@ -325,10 +330,6 @@ fn outbound_intents_len(intents: &[OutboundIntent]) -> Result<usize, EncodeError
     })
 }
 
-fn has_event_reads(intents: &[OutboundIntent]) -> bool {
-    intents.iter().any(|intent| !intent.internal_event_reads.is_empty())
-}
-
 fn event_intents_len(intents: &[EventIntent]) -> Result<usize, EncodeError> {
     intents.iter().try_fold(4, |total, intent| {
         let topics = intent
@@ -339,13 +340,13 @@ fn event_intents_len(intents: &[EventIntent]) -> Result<usize, EncodeError> {
     })
 }
 
-fn message_output_len(output: &MessageOutput) -> Result<usize, EncodeError> {
+fn message_output_len(output: &MessageOutput, extended: bool) -> Result<usize, EncodeError> {
     checked_len(&[
         9,
         output.state_update.as_ref().map(state_update_len).transpose()?.unwrap_or(0),
         4,
         output.callback_result_body.len(),
-        outbound_intents_len(&output.outbound_intents)?,
+        outbound_intents_len(&output.outbound_intents, extended)?,
         4,
         repeated_len(output.callback_intents.len(), 12)?,
         event_intents_len(&output.event_intents)?,
@@ -353,13 +354,13 @@ fn message_output_len(output: &MessageOutput) -> Result<usize, EncodeError> {
     ])
 }
 
-fn batch_output_len(output: &BatchOutput) -> Result<usize, EncodeError> {
+fn batch_output_len(output: &BatchOutput, extended: bool) -> Result<usize, EncodeError> {
     checked_len(&[
         4,
         state_update_len(&output.state_update)?,
         4,
         repeated_len(output.status_codes.len(), 4)?,
-        outbound_intents_len(&output.outbound_intents)?,
+        outbound_intents_len(&output.outbound_intents, extended)?,
         event_intents_len(&output.event_intents)?,
     ])
 }
@@ -367,7 +368,7 @@ fn batch_output_len(output: &BatchOutput) -> Result<usize, EncodeError> {
 fn validate_message_shape(
     output: &MessageOutput,
     required_mode: Option<StateOutputMode>,
-) -> Result<(), EncodeError> {
+) -> Result<bool, EncodeError> {
     validate_status_code(output.status_code)?;
     if output.status_code == 0 {
         let update = output.state_update.as_ref().ok_or(EncodeError::MissingStateUpdate)?;
@@ -385,7 +386,7 @@ fn validate_message_shape(
     }
 
     validate_state_update(output.state_update.as_ref())?;
-    validate_outbound_intents(&output.outbound_intents)?;
+    let extended = validate_outbound_intents(&output.outbound_intents)?;
     validate_event_intents(&output.event_intents)?;
     let mut seen = Vec::new();
     for callback in &output.callback_intents {
@@ -404,13 +405,13 @@ fn validate_message_shape(
     {
         return Err(EncodeError::InvalidIndex);
     }
-    Ok(())
+    Ok(extended)
 }
 
 fn validate_batch_shape(
     output: &BatchOutput,
     required_mode: Option<StateOutputMode>,
-) -> Result<(), EncodeError> {
+) -> Result<bool, EncodeError> {
     if required_mode.is_some_and(|mode| mode != output.state_update.mode()) {
         return Err(EncodeError::StateModeMismatch);
     }
@@ -418,8 +419,9 @@ fn validate_batch_shape(
     for status_code in &output.status_codes {
         validate_status_code(*status_code)?;
     }
-    validate_outbound_intents(&output.outbound_intents)?;
-    validate_event_intents(&output.event_intents)
+    let extended = validate_outbound_intents(&output.outbound_intents)?;
+    validate_event_intents(&output.event_intents)?;
+    Ok(extended)
 }
 
 fn validate_message_context(
@@ -499,9 +501,13 @@ fn validate_state_update(update: Option<&StateUpdate>) -> Result<(), EncodeError
     Ok(())
 }
 
-fn validate_outbound_intents(intents: &[OutboundIntent]) -> Result<(), EncodeError> {
+fn validate_outbound_intents(intents: &[OutboundIntent]) -> Result<bool, EncodeError> {
     len_u32(intents.len())?;
+    let mut extended = false;
     for intent in intents {
+        #[cfg(test)]
+        work::event_read_probe();
+        extended |= !intent.internal_event_reads.is_empty();
         if intent.destination.dapp_id == [0; 32] || intent.destination.account_id == [0; 32] {
             return Err(EncodeError::InvalidIndex);
         }
@@ -517,7 +523,7 @@ fn validate_outbound_intents(intents: &[OutboundIntent]) -> Result<(), EncodeErr
         }
         len_u32(intent.body.len())?;
     }
-    Ok(())
+    Ok(extended)
 }
 
 fn validate_extra(extra: &[CurrencyAmount]) -> Result<(), EncodeError> {
@@ -732,6 +738,15 @@ pub(crate) mod work {
 
     std::thread_local! {
         static WRITES: Cell<(usize, usize, usize)> = const { Cell::new((0, 0, 0)) };
+        static EVENT_READ_PROBES: Cell<usize> = const { Cell::new(0) };
+    }
+
+    pub(super) fn event_read_probe() {
+        EVENT_READ_PROBES.with(|count| count.set(count.get() + 1));
+    }
+
+    pub(crate) fn take_event_read_probes() -> usize {
+        EVENT_READ_PROBES.with(|count| count.replace(0))
     }
 
     pub(super) fn vec_write(bytes: usize, grew: bool) {
