@@ -4,6 +4,9 @@ Every release uses an immutable tag `avm-dev-<source12>-sdk-<sdk12>`.
 BUILD-MANIFEST.json contains both complete 40-character commits. A previously
 published tag or asset must never be overwritten.
 
+Write the public release body and release notes using the
+[contract-developer release-note recipe](../AGENTS.md#release-notes-for-contract-developers).
+
 The public guest and examples come from the exact SDK commit. Host tools come
 from the qualified node commit, its committed Cargo.lock and the separately
 approved engine profile. Guest/profile parity is a mandatory gate. A local
