@@ -1,6 +1,10 @@
 # CLI Reference
 
-Both commands emit deterministic JSON on stdout and diagnostics on stderr.
+`avm-local-stand` emits JSON on stdout and diagnostics on stderr.
+`avm-contract-build` emits exactly three text lines: artifact name and BLAKE3
+digest. The ACAB digest uses the AVM_ABI domain; WASM and descriptor use raw
+BLAKE3. `--version` reports the builder version. Compiler/lock provenance is
+written separately to `target/avm-build-provenance.txt`.
 
 ## avm-contract-build
 
@@ -8,7 +12,8 @@ Both commands emit deterministic JSON on stdout and diagnostics on stderr.
 avm-contract-build build --manifest-path <Cargo.toml>
 ```
 
-The contract directory must contain `avm-contract.toml`. Successful output is
+The contract directory must contain `avm-contract.toml` and its Cargo workspace
+must have a reviewed `Cargo.lock`. Rust/Cargo 1.93.0 is enforced. Successful output is
 written to `target/avm` below that directory.
 
 ## avm-local-stand

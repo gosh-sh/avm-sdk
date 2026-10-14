@@ -2,6 +2,9 @@
 set -euo pipefail
 
 sdk_home="${AVM_SDK_HOME:-${HOME}/.local/share/avm-sdk}"
+export TMPDIR="${TMPDIR:-${sdk_home}/tmp}"
+export TMP="$TMPDIR" TEMP="$TMPDIR"
+mkdir -p "$TMPDIR"
 stand="${AVM_LOCAL_STAND:-${sdk_home}/current/bin/avm-local-stand}"
 profile="${AVM_WASMTIME_PROFILE:-${sdk_home}/current/profiles/wasmtime-release-profile.v1}"
 state_dir="$(mktemp -d)"

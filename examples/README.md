@@ -25,6 +25,11 @@ A message-isolated sender and the first version in the upgrade pair. It:
 
 Use it with `contract-b` to exercise outbound delivery and callbacks, or with
 `contract-a-v2` to exercise publication, selection, and account upgrade.
+Before building for the public stand, set `AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY` to
+the 64 lowercase hex digits at `.identities.package_owner` in its `init` output.
+This configures upgrade authorization at compile time; it takes only a public
+key. With the variable absent, the fixed source-test owner remains in use and
+will not match a new stand's randomly generated owner.
 
 ### `contract-a-v2`
 
@@ -75,9 +80,12 @@ local-stand gate. The four standard fixtures above remain unchanged.
 ## Build An Example
 
 Install the SDK commands first, then build any example from the repository or
-an installed release:
+a writable development copy of a release. Keep installed immutable release
+directories unchanged: copy the examples together with `crates/avm-contract-sdk`
+so their relative dependency paths still resolve before building:
 
 ```bash
+export AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY="$(jq -er .identities.package_owner init.json)"
 avm-contract-build build \
   --manifest-path examples/contract-a-v1/Cargo.toml
 ```
@@ -110,5 +118,5 @@ Use the examples as focused references:
 - use the v1/v2 pair for upgrades;
 - use `contract-batch-patch` only when batch execution and patch output are required.
 
-The fixed identities, values, salts, payloads, and failure hooks are test data.
+The source-test owner, fixed values, salts, payloads, and failure hooks are test data.
 Replace them before using copied code in an application.

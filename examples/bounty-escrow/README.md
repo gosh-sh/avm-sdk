@@ -50,7 +50,8 @@ transfer isolation, deadline boundaries, fee/principal isolation, and attempt li
 
 ## Full build and local-stand gate
 
-Linux x86-64 is required for the published stand (Windows: use WSL2). From the
+Linux x86-64-v3 and glibc >= 2.39 are required for the published stand
+(Windows: use WSL2); use Python >= 3.11 for the verified installer. From the
 repository root, install the immutable reference runtime and run the example:
 
 ```bash
@@ -58,16 +59,13 @@ bash examples/bounty-escrow/scripts/install_runtime.sh
 bash examples/bounty-escrow/scripts/check.sh
 ```
 
-The installer verifies archive SHA-256
-`2171ee865bc9fc2e1a1274dfdd0f4330dc362b1f49d38c0a35c4de41aa61d6f3`
-and the extracted release's `SHA256SUMS`. It pins the official release
-[`avm-dev-335a0f09fdbc-sdk-0cbca40fad9a`](https://github.com/gosh-sh/avm-sdk/releases/tag/avm-dev-335a0f09fdbc-sdk-0cbca40fad9a).
-Its runtime source is `335a0f09fdbc98eb7a1056c0f6b84cd4f39d889e`
-and its packaged SDK revision is `0cbca40fad9a8f11863197cbcbaf6208651752b9`.
-The contracts instead compile against this checkout's SDK crate. The reference
-runtime and the source baseline `72ee42dbf923f081bf29b4a1a1b6ea012b6af54f`
-are different revisions; this gate verifies that exact combination, not every
-future runtime.
+The installer pins the official SDK 0.2.0 / guest SDK 0.1.1 release
+[`avm-dev-06e96ef71006-sdk-0748f4f0767a`](https://github.com/gosh-sh/avm-sdk/releases/tag/avm-dev-06e96ef71006-sdk-0748f4f0767a)
+and archive SHA-256 `8728497cf1e476d3d770a09b19929f7c196f2637654642727432b4c285c85143`.
+The trusted checkout's v2 installer verifies provenance and the complete inventory
+before bounded extraction and activation. The contracts compile against this
+checkout's SDK crate; the shared application runner checks guest/profile parity.
+See [the SDK 0.2.0 adaptation](SDK-0.2.0.md) for exact inputs and limitations.
 
 To check another verified SDK distribution, including a freshly packaged release:
 
@@ -98,13 +96,12 @@ reference release, without the private runtime-source checkout. It checks SDK
 source and all standard examples before this example and uploads generated
 evidence, including on failure.
 
-The existing release workflow additionally invokes this example's full gate
-against its newly built packaged builder/stand before uploading or publishing the
-release. The example formatting loop adds `--all` so rustfmt resolves this nested
-virtual workspace and checks its members. Existing source, SDK, standard-example,
-stand, and smoke gates remain in place. A compatibility failure stops release publication. Running the private
-runtime-source build locally still requires access to `gosh-sh/acki-nacki` and its
-build environment; the public reference-runtime run does not replace those gates.
+The retired SDK publisher is not restored. `scripts/manual_gates.py` checks
+all native workspace tests and both guests. After receipt-bound candidate packaging
+and the standard packaged lifecycle, run `scripts/check-application-examples.sh`
+from the isolated writable verified bundle as described in
+[manual qualification](../../docs/releases.md#manual-qualification).
+A public binary run does not replace private runtime-source or candidate gates.
 
 Original published CI evidence:
 [escrow source run 38196158944](https://github.com/h2so4nackl-code/avm-bounty-escrow/actions/runs/38196158944).

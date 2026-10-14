@@ -1,0 +1,387 @@
+{
+  "packages": {
+    "registry+https://github.com/rust-lang/crates.io-index#cranelift-assembler-x64-meta@0.123.15": {
+      "files": [
+        {
+          "file": "wasmtime-5dbbe86472adcbec799e16ad85433095f3b11d67/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/5dbbe86472adcbec799e16ad85433095f3b11d67/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": null,
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "5dbbe86472adcbec799e16ad85433095f3b11d67"
+        },
+        "path_in_vcs": "cranelift/assembler-x64/meta"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#cranelift-assembler-x64@0.123.15": {
+      "files": [
+        {
+          "file": "wasmtime-5dbbe86472adcbec799e16ad85433095f3b11d67/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/5dbbe86472adcbec799e16ad85433095f3b11d67/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": null,
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "5dbbe86472adcbec799e16ad85433095f3b11d67"
+        },
+        "path_in_vcs": "cranelift/assembler-x64"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#cranelift-bitset@0.123.15": {
+      "files": [
+        {
+          "file": "wasmtime-5dbbe86472adcbec799e16ad85433095f3b11d67/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/5dbbe86472adcbec799e16ad85433095f3b11d67/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "5dbbe86472adcbec799e16ad85433095f3b11d67"
+        },
+        "path_in_vcs": "cranelift/bitset"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#cranelift-isle@0.123.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "cranelift/isle/isle"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#cranelift-srcgen@0.123.15": {
+      "files": [
+        {
+          "file": "wasmtime-5dbbe86472adcbec799e16ad85433095f3b11d67/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/5dbbe86472adcbec799e16ad85433095f3b11d67/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "5dbbe86472adcbec799e16ad85433095f3b11d67"
+        },
+        "path_in_vcs": "cranelift/srcgen"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#pulley-interpreter@36.0.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime/tree/main/pulley",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "pulley"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#pulley-macros@36.0.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime/tree/main/pulley/macros",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "pulley/macros"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasm-encoder@0.236.1": {
+      "files": [
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-APACHE"
+        },
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-Apache-2.0_WITH_LLVM-exception",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-Apache-2.0_WITH_LLVM-exception"
+        },
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-MIT",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-MIT"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository_metadata": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-encoder",
+      "upstream_repository": "https://github.com/bytecodealliance/wasm-tools",
+      "vcs": {
+        "git": {
+          "sha1": "9dd8df4fdc53597af7534b6a4d4c11d9065690d3"
+        },
+        "path_in_vcs": "crates/wasm-encoder"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmparser@0.236.1": {
+      "files": [
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-APACHE"
+        },
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-Apache-2.0_WITH_LLVM-exception",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-Apache-2.0_WITH_LLVM-exception"
+        },
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-MIT",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-MIT"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository_metadata": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmparser",
+      "upstream_repository": "https://github.com/bytecodealliance/wasm-tools",
+      "vcs": {
+        "git": {
+          "sha1": "9dd8df4fdc53597af7534b6a4d4c11d9065690d3"
+        },
+        "path_in_vcs": "crates/wasmparser"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmprinter@0.236.1": {
+      "files": [
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-APACHE"
+        },
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-Apache-2.0_WITH_LLVM-exception",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-Apache-2.0_WITH_LLVM-exception"
+        },
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-MIT",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-MIT"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository_metadata": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmprinter",
+      "upstream_repository": "https://github.com/bytecodealliance/wasm-tools",
+      "vcs": {
+        "git": {
+          "sha1": "9dd8df4fdc53597af7534b6a4d4c11d9065690d3"
+        },
+        "path_in_vcs": "crates/wasmprinter"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-asm-macros@36.0.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "crates/asm-macros"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-component-macro@36.0.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "crates/component-macro"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-component-util@36.0.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "crates/component-util"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-jit-icache-coherence@36.0.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "crates/jit-icache-coherence"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-math@36.0.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "crates/math"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-slab@36.0.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "crates/slab"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-versioned-export-macros@36.0.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "crates/versioned-export-macros"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-wit-bindgen@36.0.12": {
+      "files": [
+        {
+          "file": "wasmtime-6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0/LICENSE"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception",
+      "repository_metadata": "https://github.com/bytecodealliance/wasmtime",
+      "upstream_repository": "https://github.com/bytecodealliance/wasmtime",
+      "vcs": {
+        "git": {
+          "sha1": "6c0a7fc9c387f34dddcf94ef41d7b3b0f9d18cb0"
+        },
+        "path_in_vcs": "crates/wit-bindgen"
+      }
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#wit-parser@0.236.1": {
+      "files": [
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-APACHE"
+        },
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-Apache-2.0_WITH_LLVM-exception",
+          "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-Apache-2.0_WITH_LLVM-exception"
+        },
+        {
+          "file": "wasm-tools-9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-MIT",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "url": "https://raw.githubusercontent.com/bytecodealliance/wasm-tools/9dd8df4fdc53597af7534b6a4d4c11d9065690d3/LICENSE-MIT"
+        }
+      ],
+      "license_expression": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository_metadata": "https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wit-parser",
+      "upstream_repository": "https://github.com/bytecodealliance/wasm-tools",
+      "vcs": {
+        "git": {
+          "sha1": "9dd8df4fdc53597af7534b6a4d4c11d9065690d3"
+        },
+        "path_in_vcs": "crates/wit-parser"
+      }
+    }
+  },
+  "schema": "gosh.avm-sdk.upstream-notices.v1"
+}
