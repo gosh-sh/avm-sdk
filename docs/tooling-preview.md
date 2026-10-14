@@ -105,15 +105,17 @@ and CLI commands, with no fabricated state or injected event-read inputs.
 
 The runtime candidate implements a requested, empty-body success callback after
 successful contract-initiated deploy. This differs from a callback request or
-result body emitted by `init`, which remains forbidden. Deploy failure delivery
-is not implemented by this correction. In particular, the stand currently
-rejects an already-active destination and rolls back the forwarding call; it
-does not deliver a failure callback. The
+result body emitted by `init`, which remains forbidden. Internal deploy precheck
+failures now produce status-63 callbacks or method-zero value refunds while
+retaining the parent's forwarding transition. This includes already-active
+destinations, malformed bodies and rejected deploy identity. The target account
+or placeholder is unchanged. Failures after init starts remain unsupported;
+their init-fee/refund contract needs reconciliation. The
 [`deploy-callback-repro`](../examples/deploy-callback-repro/repro.sh) checks
-success delivery separately from that negative probe. Track
+success delivery and precheck failures separately, including replay. Track
 [issue #13](https://github.com/gosh-sh/avm-sdk/issues/13).
 
 There is no guest API proving an internal sender's selected code/hash, nor an
 adopted non-withdrawable DApp balance or arbitrary third-party fee payer. These
-remain protocol proposals; see [issue #8](https://github.com/gosh-sh/avm-sdk/issues/8)
+remain [concrete research proposals](protocol-proposals.md); see [issue #8](https://github.com/gosh-sh/avm-sdk/issues/8)
 and [the funding explanation](fuel-and-fees.md#funding-is-a-separate-concern).

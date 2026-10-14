@@ -61,10 +61,9 @@ call() {
     fail "$method returned a non-zero status"
 }
 
-# Hex state of an account, read through a no-op call. Sets $hex.
+# Hex state of an account, without executing or mutating it. Sets $hex.
 read_state() {
-  call "$1" "$2" repro.ping null "${work}/ping.json"
-  hex="$(jq -r .raw_state "${work}/ping.json")"
+  hex="$(run "$1" inspect --account "$2" | jq -r .raw_state)"
 }
 
 # Byte range [start, end) of a hex string.
@@ -149,19 +148,52 @@ else
   echo "PASS: ordinary control, no-request deploy, exactly one deploy success callback, and replay"
 fi
 
-# Separate negative probe: a success callback is not evidence of deploy-failure
-# delivery. The current stand rejects and rolls back an already-active target.
-rejected="${work}/deploy-active.state"
-cp "$capture" "$rejected"
-cp "$rejected" "${work}/deploy-active.before"
-tick
-if run "$rejected" call --address "$parent" --method repro.forward \
-  --args-json "$(forward_args "$child" "$init_method_le" 01 "$deploy_body")" \
-  --identity developer --value-main 0 --extra-currencies '' "${timestamps[@]}" \
-  >"${work}/deploy-active.json" 2>"${work}/deploy-active.stderr"; then
-  fail "active-target behavior changed: qualify its failure callback and settlement"
-fi
-cmp "$rejected" "${work}/deploy-active.before" || fail "rejected active-target deploy changed state"
-jq -e 'tostring | contains("already active")' "${work}/deploy-active.json" >/dev/null ||
-  fail "active-target rejection did not identify the cause"
-echo "KNOWN LIMITATION: active-target deploy is rejected with whole-call rollback; no failure callback is delivered"
+# Real deploy-precheck failures must retain the parent's forwarding transition,
+# return its 17 SHELL, and never execute init or mutate the target. An ordinary
+# callback control cannot establish any of these assertions.
+for failure in active malformed wrong-address; do
+  for request_callback in 00 01; do
+    rejected="${work}/deploy-${failure}-${request_callback}.state"
+    target="$child"
+    body="$deploy_body"
+    if [[ "$failure" == active ]]; then
+      cp "$capture" "$rejected"
+    else
+      cp "$base" "$rejected"
+      if [[ "$failure" == malformed ]]; then body=41434450; fi
+      if [[ "$failure" == wrong-address ]]; then
+        target="${dapp_id}:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      fi
+      run "$rejected" fund-user --address "$target" --shells 10000000 >/dev/null
+    fi
+    run "$rejected" inspect >"${work}/failure-before.json"
+    call "$rejected" "$parent" repro.forward \
+      "$(forward_args "$target" "$init_method_le" "$request_callback" "$body")" \
+      "${work}/deploy-${failure}-${request_callback}.json"
+    run "$rejected" inspect >"${work}/failure-after.json"
+    jq -S --arg target "$target" '{target: [.accounts[] | select(.address == $target)],
+      funding, registry_root, init_event_count, init_calls: .counters.init_executor_calls}' \
+      "${work}/failure-before.json" >"${work}/target-before.json"
+    jq -S --arg target "$target" '{target: [.accounts[] | select(.address == $target)],
+      funding, registry_root, init_event_count, init_calls: .counters.init_executor_calls}' \
+      "${work}/failure-after.json" >"${work}/target-after.json"
+    cmp "${work}/target-before.json" "${work}/target-after.json" || fail "failure changed receiver/registry/init effects"
+    before_calls="$(jq .counters.message_executor_calls "${work}/failure-before.json")"
+    after_calls="$(jq .counters.message_executor_calls "${work}/failure-after.json")"
+    [[ "$after_calls" == "$((before_calls + 1 + 10#$request_callback))" ]] || fail "failure executed unexpected guest calls"
+    read_state "$rejected" "$parent"
+    [[ "$(slice "$hex" 3 4)" == "$request_callback" ]] || fail "exact failure callback count"
+    if [[ "$request_callback" == 01 ]]; then
+      [[ "$(slice "$hex" 0 1)" == 02 ]] || fail "failure callback phase"
+      [[ "$(slice "$hex" 4 8)" == 3f000000 ]] || fail "VM_DEPLOY_FAILED status"
+      [[ "$(slice "$hex" 56 64)" == 1100000000000000 ]] || fail "failure did not refund exactly 17 SHELL"
+    else
+      [[ "$(slice "$hex" 0 1)" == 01 ]] || fail "no-handler refund executed callback code"
+    fi
+    jq -e '.queue.message_count == 0' "${work}/failure-after.json" >/dev/null || fail "failure queue not drained"
+    run "$rejected" replay | jq -e '.status == "ok"' >/dev/null || fail "failure replay"
+    echo "deploy ${failure}, callback ${request_callback}: parent retained, exact notification, target unchanged, replay ok"
+  done
+done
+echo "PASS: deploy precheck failures deliver requested status 63 callbacks or no-handler refunds"
+echo "KNOWN LIMITATION: failures after init starts still need fee/refund contract resolution and implementation"

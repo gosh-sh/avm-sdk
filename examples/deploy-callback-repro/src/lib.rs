@@ -12,6 +12,7 @@ use avm_contract_sdk::CallbackIntent;
 use avm_contract_sdk::Caller;
 use avm_contract_sdk::CanonicalMessage;
 use avm_contract_sdk::Contract;
+use avm_contract_sdk::CurrencyAmount;
 use avm_contract_sdk::MessageInput;
 use avm_contract_sdk::MessageOutput;
 use avm_contract_sdk::OutboundIntent;
@@ -27,6 +28,7 @@ use avm_contract_sdk::StateUpdate;
 //   [40..48]  init method id u64
 //   [48..52]  init body length u32
 //   [52]      init body captured: 0 or 1
+//   [56..64]  callback SHELL value u64 (bounded by this example)
 //   [64..]    init body, when it fits
 const STATE_BYTES: usize = 1024;
 const BODY_OFFSET: usize = 64;
@@ -119,7 +121,7 @@ fn forward(input: MessageInput<'_>) -> MessageOutput {
         destination: AccountAddress { dapp_id, account_id },
         value_main: 0,
         fuel_fee_shells: 1000,
-        extra: Vec::new(),
+        extra: vec![CurrencyAmount { currency_id: 2, amount: 17 }],
         method_id,
         body: args[FORWARD_HEADER_BYTES..].to_vec(),
     }];
@@ -145,6 +147,12 @@ fn record_callback(input: MessageInput<'_>) -> MessageOutput {
     state[3] = count;
     state[4..8].copy_from_slice(&callback.status_code.to_le_bytes());
     state[8..40].copy_from_slice(&callback.cause_msg_hash);
+    let shells =
+        message.extra.iter().find(|entry| entry.currency_id == 2).map_or(0, |entry| entry.amount);
+    let Ok(shells) = u64::try_from(shells) else {
+        return MessageOutput::failure(INVALID_CALLBACK);
+    };
+    state[56..64].copy_from_slice(&shells.to_le_bytes());
     MessageOutput::success(StateUpdate::FullReplace(state))
 }
 
