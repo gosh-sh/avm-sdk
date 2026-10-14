@@ -124,10 +124,11 @@ def main():
             generated.write_text(run(manifest.parent.name + "-bindings", argv, sdk))
             env["AVM_CONTRACT_BINDINGS"] = str(generated)
         run(manifest.parent.name + "-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk, env=env)
-    packages = ["avm-config", "avm-contract-sdk", "avm-contract-build", "avm-code-registry", "avm-deploy-upgrade", "avm-economics", "avm-effect-materializer", "avm-test-harness", "avm-wasm-code", "avm-wasm-executor"]
+    packages = ["avm-config", "avm-contract-sdk", "avm-contract-build", "avm-code-registry", "avm-deploy-upgrade", "avm-economics", "avm-effect-materializer", "avm-execution-abi", "avm-test-harness", "avm-wasm-code", "avm-wasm-executor", "avm-block", "avm-block-pipeline", "avm-message-queue", "avm-scheduler", "avm-event-capnp-codec"]
     selection = [arg for package in packages for arg in ("-p", package)]
     run("runtime-check", ["cargo", "check", "--locked", "--offline", "--all-targets", *selection])
     run("runtime-clippy", ["cargo", "clippy", "--locked", "--offline", "--all-targets", *selection, "--", "-D", "warnings"])
+    run("executor-process-backend-clippy", ["cargo", "clippy", "--locked", "--offline", "--all-targets", "-p", "avm-wasm-executor", "--features", "process-backend-experiment", "--", "-D", "warnings"])
     for fixture in ("contract-b", "contract-batch-patch", "contract-a-v1"):
         manifest = source / "node/libs/avm-test-harness/tests/fixtures/e2e-standard-contract-stand" / fixture / "Cargo.toml"
         run("runtime-" + fixture + "-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"])
@@ -161,7 +162,15 @@ def main():
     test("avm-contract-sdk", ["--test", "deploy_accessors"])
     test("avm-contract-sdk", ["--test", "event_read_outbound"])
     test("avm-execution-abi", [])
+    for package in ("avm-block", "avm-block-pipeline", "avm-message-queue", "avm-scheduler", "avm-event-capnp-codec"):
+        test(package, [])
+    run("executor-process-backend-tests", ["cargo", "test", "--locked", "--offline", "-p", "avm-wasm-executor", "--features", "process-backend-experiment", "--", "--test-threads=1"], tests=True)
     run("sdk-public-issue-paths", [sys.executable, "-B", str(sdk / "scripts/tests/sdk_issue_public_paths.py"), "--sdk", str(sdk), "--builder", str(builder), "--stand", str(stand), "--profile", str(source / "specs/avm-vm/wasmtime-release-profile.v1"), "--out", str(evidence / "public-issue-paths")])
+    callback_env = os.environ.copy()
+    callback_env.update(AVM_CONTRACT_BUILD=str(builder), AVM_LOCAL_STAND=str(stand),
+                        AVM_WASMTIME_PROFILE=str(source / "specs/avm-vm/wasmtime-release-profile.v1"),
+                        AVM_DEPLOY_REPRO_WORK=str(evidence / "deploy-callback-repro"))
+    run("sdk-deploy-callback-delivery", ["bash", str(sdk / "examples/deploy-callback-repro/repro.sh")], sdk, env=callback_env)
     cases = "deploy_init_success_executes_real_wasm_with_exact_output_and_fuel process_message_selects_real_export_with_exact_output_and_fuel process_batch_uses_the_batch_export_and_output_at_effective_cap_succeeds allocator_fuel_exhaustion_precedes_the_generic_trap_status invalid_non_null_allocator_ranges_do_not_copy_call_init_or_free output_cap_precedes_pointer_validation invalid_output_pointer_range_and_input_overlap_are_rejected_before_read_or_free output_free_non_fuel_trap_skips_input_free_and_discards_copied_output fuel_exhaustion_at_output_free_and_input_free_has_fuel_precedence successful_cleanup_copies_output_then_frees_output_before_input same_input_uses_fresh_stores_and_is_deterministic failed_attempts_also_discard_their_store_state".split()
     test("avm-wasm-executor", ["--lib"], ["tests::" + case for case in cases])
     test("avm-wasm-executor", ["--lib"], ["tests::deadline::" + case for case in "completed_controlled_exports_preserve_exact_output_status_and_fuel expired_control_starts_no_guest_or_alarm cutoff_interrupts_allocator_entrypoint_and_each_free cancelled_store_is_discarded_and_next_call_matches_fresh_execution".split()])

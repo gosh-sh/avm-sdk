@@ -20,7 +20,7 @@ Add `[bindings] enabled = true` to `avm-contract.toml`. The builder regenerates
 through `AVM_CONTRACT_BINDINGS`. Include it inside a module:
 
 ```rust
-mod generated { include!(env!("AVM_CONTRACT_BINDINGS")); }
+pub mod generated { include!(env!("AVM_CONTRACT_BINDINGS")); }
 ```
 
 `generated::methods` contains method-name-derived `u64` constants and
@@ -99,11 +99,15 @@ and CLI commands, with no fabricated state or injected event-read inputs.
 
 ## Deploy callbacks and remaining protocol questions
 
-The runtime candidate restores a requested, empty-body success callback after
+The runtime candidate implements a requested, empty-body success callback after
 successful contract-initiated deploy. This differs from a callback request or
 result body emitted by `init`, which remains forbidden. Deploy failure delivery
-must be qualified separately; success and ordinary-call tests cannot establish
-it. Track [issue #13](https://github.com/gosh-sh/avm-sdk/issues/13).
+is not implemented by this correction. In particular, the stand currently
+rejects an already-active destination and rolls back the forwarding call; it
+does not deliver a failure callback. The
+[`deploy-callback-repro`](../examples/deploy-callback-repro/repro.sh) checks
+success delivery separately from that negative probe. Track
+[issue #13](https://github.com/gosh-sh/avm-sdk/issues/13).
 
 There is no guest API proving an internal sender's selected code/hash, nor an
 adopted non-withdrawable DApp balance or arbitrary third-party fee payer. These

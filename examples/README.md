@@ -20,6 +20,14 @@ It requires the matching candidate builder/runtime; published binaries do not
 support these additions. See the [tooling preview](../docs/tooling-preview.md)
 and its [public CLI gate](../scripts/tests/sdk_issue_public_paths.py).
 
+### `deploy-callback-repro` (unreleased)
+
+Runs the parent/child flow reported in [issue #13](https://github.com/gosh-sh/avm-sdk/issues/13).
+Its `repro.sh` requires the matching candidate builder/runtime and checks ordinary
+callbacks, deploy without a callback request, exactly one deploy success callback,
+an empty queue, and replay. Deploy failures and sender-code authentication are
+separate limitations described in the [tooling preview](../docs/tooling-preview.md).
+
 ### `contract-a-v1`
 
 A message-isolated sender and the first version in the upgrade pair. It:
