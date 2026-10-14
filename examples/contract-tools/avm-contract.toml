@@ -28,7 +28,14 @@ name = "amount"
 id = 4
 kind = "struct"
 name = "addition"
-fields = [{ id = 1, name = "a", type_id = 3 }, { id = 2, name = "b", type_id = 3 }]
+[[abi.types.fields]]
+id = 1
+name = "a"
+type_id = 3
+[[abi.types.fields]]
+id = 2
+name = "b"
+type_id = 3
 
 [[abi.methods]]
 name = "tools.add"
@@ -56,7 +63,10 @@ caller = "internal"
 
 [[abi.events]]
 name = "tools.changed"
-fields = [{ id = 1, name = "value", type_id = 3 }]
+[[abi.events.fields]]
+id = 1
+name = "value"
+type_id = 3
 
 [[abi.errors]]
 status_code = 1750
