@@ -77,10 +77,14 @@ storage-payment time is rejected with both times in the diagnostic.
 
 ## Experimental guest event reads
 
-`OutboundIntent.internal_event_reads` requests exact source account/event-class
-keys for the recipient. Keep it empty for ordinary output. Nonempty requests
-use proposed `ACM2`/`ACB2` output formats and require the matching experimental
-runtime; published runtimes reject them. Old struct literals need the new field.
+`MessageOutput.internal_event_read_intents` and the same field on `BatchOutput`
+attach `InternalEventReadIntent { outbound_index, requests }` groups to produced
+messages, following the callback-intent pattern. Groups must have strictly
+increasing outbound indices and nonempty request lists. Keep the vector empty
+for ordinary output. Requests use proposed `ACM2`/`ACB2` formats and require the
+matching experimental runtime; published runtimes reject them. `OutboundIntent`
+literals remain compatible. Explicit `MessageOutput`/`BatchOutput` literals need
+`internal_event_read_intents: Vec::new()`; message constructors supply it.
 Canonical ordinary output bytes remain unchanged when every request list is
 empty. Lists must be strictly sorted by source DApp, source account, then numeric
 event class, without duplicates.

@@ -73,7 +73,6 @@ impl Contract for ContractB {
         let mut output = MessageOutput::success(StateUpdate::FullReplace(state));
         output.outbound_intents = (0..2)
             .map(|_| OutboundIntent {
-                internal_event_reads: Vec::new(),
                 input_index: 0,
                 destination: source,
                 value_main: 1,
@@ -148,7 +147,6 @@ impl Contract for ContractB {
             }
             let mut output = MessageOutput::success(StateUpdate::FullReplace(input.state.to_vec()));
             output.outbound_intents = vec![OutboundIntent {
-                internal_event_reads: Vec::new(),
                 input_index: 0,
                 destination: source,
                 value_main: input.balance_main,

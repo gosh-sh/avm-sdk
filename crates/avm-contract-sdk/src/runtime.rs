@@ -376,7 +376,6 @@ mod tests {
             fn process_message(input: MessageInput<'_>) -> MessageOutput {
                 let mut output = MessageOutput::success(StateUpdate::FullReplace(vec![1; 144]));
                 output.outbound_intents.push(crate::OutboundIntent {
-                    internal_event_reads: Vec::new(),
                     input_index: 0,
                     destination: input.destination,
                     value_main: 0,
@@ -418,6 +417,7 @@ mod tests {
         impl BatchContract for BatchEcho {
             fn process_batch(input: crate::BatchInput<'_>) -> crate::BatchOutput {
                 crate::BatchOutput {
+                    internal_event_read_intents: Vec::new(),
                     state_update: StateUpdate::FullReplace(input.state.to_vec()),
                     status_codes: vec![0, 1000],
                     outbound_intents: Vec::new(),
@@ -453,7 +453,6 @@ mod tests {
         output.status_codes.push(1000);
         assert_eq!(batch_output_plan_for(&input, &output), Err(EncodeError::StateModeMismatch));
         output.outbound_intents.push(crate::OutboundIntent {
-            internal_event_reads: Vec::new(),
             input_index: 1,
             destination: input.destination,
             value_main: 0,
@@ -510,30 +509,32 @@ mod tests {
                     value_main: 0,
                     fuel_fee_shells: 1000,
                     extra: Vec::new(),
-                    internal_event_reads: if with_read && index == 31 {
-                        vec![crate::InternalEventReadRequest {
-                            source: input.destination,
-                            event_class: 17,
-                        }]
-                    } else {
-                        Vec::new()
-                    },
                     method_id: 1,
                     body: vec![index as u8; 8],
                 });
             }
+            if with_read {
+                output.internal_event_read_intents.push(crate::InternalEventReadIntent {
+                    outbound_index: 31,
+                    requests: vec![crate::InternalEventReadRequest {
+                        source: input.destination,
+                        event_class: 17,
+                    }],
+                });
+            }
             let expected = crate::encode_message_output(&output).unwrap();
             crate::output::work::take();
-            crate::output::work::take_event_read_probes();
+            crate::output::work::take_outbound_validations();
             let plan = message_output_plan_for(&input, false, &output).unwrap();
             let arena = GuestArena::<8192>::new();
             let packed = arena.write_output(plan.len, |writer| {
                 write_message_output(writer, &output, plan.extended)
             });
             assert_eq!(arena.read((packed >> 32) as u32, packed as u32).unwrap(), expected);
-            assert_eq!(crate::output::work::take_event_read_probes(), 32);
+            assert_eq!(crate::output::work::take_outbound_validations(), 32);
             assert_eq!(crate::output::work::take(), (0, 0, expected.len()));
             let batch = crate::BatchOutput {
+                internal_event_read_intents: output.internal_event_read_intents,
                 state_update: output.state_update.unwrap(),
                 status_codes: vec![0],
                 outbound_intents: output.outbound_intents,
@@ -541,13 +542,13 @@ mod tests {
             };
             let expected = crate::encode_batch_output(&batch).unwrap();
             crate::output::work::take();
-            crate::output::work::take_event_read_probes();
+            crate::output::work::take_outbound_validations();
             let plan = batch_output_plan_for(&batch_input, &batch).unwrap();
             let arena = GuestArena::<8192>::new();
             let packed = arena
                 .write_output(plan.len, |writer| write_batch_output(writer, &batch, plan.extended));
             assert_eq!(arena.read((packed >> 32) as u32, packed as u32).unwrap(), expected);
-            assert_eq!(crate::output::work::take_event_read_probes(), 32);
+            assert_eq!(crate::output::work::take_outbound_validations(), 32);
             assert_eq!(crate::output::work::take(), (0, 0, expected.len()));
         }
     }
@@ -576,7 +577,6 @@ mod tests {
             let mut output = MessageOutput::success(state.clone());
             output.callback_result_body = vec![7; 19];
             output.outbound_intents.push(OutboundIntent {
-                internal_event_reads: Vec::new(),
                 input_index: 0,
                 destination: input.destination,
                 value_main: 8,
@@ -612,6 +612,7 @@ mod tests {
             assert_eq!(arena.read(live, bytes.len() as u32).unwrap(), bytes);
 
             let batch = BatchOutput {
+                internal_event_read_intents: output.internal_event_read_intents,
                 state_update: state,
                 status_codes: vec![0, 1000],
                 outbound_intents: output.outbound_intents,

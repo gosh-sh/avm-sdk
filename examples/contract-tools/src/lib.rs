@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
 use avm_contract_sdk::{
-    encode_event_fields, EventField, EventIntent, EventKind, EventValue, InternalEventReadRequest,
-    MessageInput, MessageOutput, OutboundIntent, StateUpdate,
+    encode_event_fields, EventField, EventIntent, EventKind, EventValue, InternalEventReadIntent,
+    InternalEventReadRequest, MessageInput, MessageOutput, OutboundIntent, StateUpdate,
 };
 
 // Build regenerates this file before each clean compilation. No copied IDs.
@@ -62,12 +62,14 @@ impl generated::Handlers for Handlers {
                 17u64.to_le_bytes().to_vec(),
             ));
         }
-        let mut read = outbound(ctx.input, methods::TOOLS_COLLECT, Vec::new());
-        read.internal_event_reads.push(InternalEventReadRequest {
-            source: ctx.input.destination,
-            event_class: EVENT_CLASS,
+        output.internal_event_read_intents.push(InternalEventReadIntent {
+            outbound_index: output.outbound_intents.len() as u32,
+            requests: vec![InternalEventReadRequest {
+                source: ctx.input.destination,
+                event_class: EVENT_CLASS,
+            }],
         });
-        output.outbound_intents.push(read);
+        output.outbound_intents.push(outbound(ctx.input, methods::TOOLS_COLLECT, Vec::new()));
         output
     }
 
@@ -114,7 +116,6 @@ fn outbound(input: MessageInput<'_>, method_id: u64, body: Vec<u8>) -> OutboundI
         value_main: 0,
         fuel_fee_shells: 1000,
         extra: Vec::new(),
-        internal_event_reads: Vec::new(),
         method_id,
         body,
     }

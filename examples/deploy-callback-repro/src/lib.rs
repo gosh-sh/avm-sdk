@@ -120,7 +120,6 @@ fn forward(input: MessageInput<'_>) -> MessageOutput {
         value_main: 0,
         fuel_fee_shells: 1000,
         extra: Vec::new(),
-        internal_event_reads: Vec::new(),
         method_id,
         body: args[FORWARD_HEADER_BYTES..].to_vec(),
     }];
