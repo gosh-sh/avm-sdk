@@ -1,14 +1,19 @@
 # AVM SDK 0.2.0 / guest SDK 0.1.1
 
-This release aligns the SDK tools and makes owner-authorized upgrades usable
-with a freshly initialized local stand.
+Contract results avoid an extra output copy, and the local stand now uses the
+updated AVM runtime.
 
 ## What's Changed
 
-- Stricter installation checks verify package contents, profile and binaries
-  before activation, keeping host tools and guest SDK matched.
-- Contract A can use your stand's owner key instead of the fixed test key,
-  allowing you to exercise authorized upgrades.
+- **Guest execution:** results encode directly into guest output memory;
+  input copying is optimized without changing the public Rust API or wire format.
+- **Runtime:** pooled allocation and deadline cancellation preserve fresh
+  isolated contexts and FUEL. Message admission no longer truncates valid inputs
+  by cumulative reserved FUEL; failed-batch charging is corrected.
+- **Build and install:** builds enforce Rust/Cargo 1.93.0, rust-lld and a reviewed
+  `Cargo.lock`. Installation verifies the complete package before activation.
+- **Upgrades:** Contract A accepts your stand's owner key instead of the fixed
+  test key, enabling owner-authorized upgrades.
 
 ## Get Started
 
@@ -51,8 +56,9 @@ together for replay. Initialize a fresh local stand, explicitly fund its derived
 addresses and redeploy. This guidance applies only to local development and
 does not authorize a production reset.
 
-Runtime roots/proofs, EventLog commitments and profile/cache identities have
-changed. Use the shipped profile; do not mix profiles or compiled caches, or
+CompactV1 state trees change runtime roots/proofs; canonical `List(Data)`
+EventLog encoding changes aggregate commitments. Profile/cache identities also
+change. Use the shipped profile; do not mix profiles or compiled caches, or
 edit state headers to force acceptance. The unchanged release's
 [detailed runtime compatibility notes](https://github.com/gosh-sh/avm-sdk/blob/0748f4f0767a26da8bc363bcb6b5585539d6970e/docs/release-notes.md#runtime-compatibility-and-reset-guidance)
 remain available.
