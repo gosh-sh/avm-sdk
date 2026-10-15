@@ -274,6 +274,12 @@ def verify_tree(root, expected):
         else:
             require(path.is_dir(), "existing release contains a special file")
     require(actual == {name: digest(data) for name, data in expected.items()}, "immutable release already exists with different contents")
+    # Validate permissions only after the complete tree passes integrity checks.
+    for name in expected:
+        if name in {"bin/" + b for b in BINARIES} or name.endswith(".sh"):
+            path = root / name
+            require(path.stat().st_mode & 0o111 == 0o111,
+                    f"missing executable permissions: {path}; restore mode 0755 on this verified file and rerun the installer")
 
 
 def atomic_link(target, destination):
