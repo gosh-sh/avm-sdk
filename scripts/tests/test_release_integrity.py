@@ -5,6 +5,9 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import stat
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -149,7 +152,94 @@ class IntegrityTests(unittest.TestCase):
         installed = self.install(archive, checksum)
         self.assertEqual((self.sdk_home / "current").resolve(), installed.resolve())
         self.assertEqual((self.bin_dir / "avm-local-stand").read_bytes(), b"stand fixture\n")
+        before = {path.relative_to(installed): (path.read_bytes(), stat.S_IMODE(path.stat().st_mode))
+                  for path in installed.rglob("*") if path.is_file()}
+        for name in release.BINARIES:
+            self.assertEqual(before[Path("bin") / name][1], 0o755)
+        self.assertEqual(before[Path("LICENSE.md")][1], 0o644)
+        for _ in range(2):
+            self.assertEqual(self.install(archive, checksum), installed)
+            self.assertEqual({path.relative_to(installed): (path.read_bytes(), stat.S_IMODE(path.stat().st_mode))
+                              for path in installed.rglob("*") if path.is_file()}, before)
+
+    def test_reinstall_reports_lost_execute_permissions_without_activation(self):
+        files = payload()
+        files["scripts/example.sh"] = b"#!/bin/sh\nexit 0\n"
+        archive, checksum = write_archive(self.root, files)
+        installed = self.install(archive, checksum)
+        current = self.sdk_home / "current"
+        current.unlink()
+        current.symlink_to(self.previous, target_is_directory=True)
+        links = {path: (path.readlink(), path.lstat().st_ino)
+                 for path in [current, *(self.bin_dir / name for name in release.BINARIES)]}
+        for name in [*("bin/" + name for name in release.BINARIES), "scripts/example.sh"]:
+            for mode in (0o644, 0o654, 0o745, 0o754):
+                with self.subTest(name=name, mode=oct(mode)):
+                    command = installed / name
+                    command.chmod(mode)
+                    result = subprocess.run([
+                        sys.executable, str(SPEC.origin), "install", "--archive", str(archive),
+                        "--checksum", str(checksum), "--tag", TAG,
+                        "--sdk-home", str(self.sdk_home), "--bin-dir", str(self.bin_dir),
+                    ], capture_output=True, text=True, check=False)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("missing executable permissions", result.stderr)
+                    self.assertIn(str(command), result.stderr)
+                    self.assertIn("0755", result.stderr)
+                    self.assertIn("rerun", result.stderr)
+                    self.assertNotIn("installed verified", result.stdout)
+                    self.assertEqual(stat.S_IMODE(command.stat().st_mode), mode)
+                    self.assertEqual(command.read_bytes(), files[name])
+                    self.assertEqual({path: (path.readlink(), path.lstat().st_ino) for path in links}, links)
+                    self.assertEqual(current.resolve(), self.previous)
+                    command.chmod(0o755)
+        # Following the diagnostic recovers the same verified release.
         self.assertEqual(self.install(archive, checksum), installed)
+        self.assertEqual(current.resolve(), installed.resolve())
+
+    def test_modified_existing_files_reject_before_permission_validation(self):
+        archive, checksum = write_archive(self.root)
+        installed = self.install(archive, checksum)
+        command = installed / "bin/avm-contract-build"
+        command.chmod(0o644)
+        current = self.sdk_home / "current"
+        current.unlink()
+        current.symlink_to(self.previous, target_is_directory=True)
+        for name in ("bin/avm-local-stand", "LICENSE.md"):
+            with self.subTest(name=name):
+                modified = installed / name
+                before = modified.read_bytes()
+                modified.write_bytes(before + b"changed")
+                with self.assertRaisesRegex(ValueError, "different contents"):
+                    self.install(archive, checksum)
+                self.assertEqual(modified.read_bytes(), before + b"changed")
+                self.assertEqual(stat.S_IMODE(command.stat().st_mode), 0o644)
+                self.assertEqual(current.resolve(), self.previous)
+                modified.write_bytes(before)
+
+    def test_existing_release_symlinks_cannot_bypass_permission_validation(self):
+        archive, checksum = write_archive(self.root)
+        installed = self.install(archive, checksum)
+        command = installed / "bin/avm-contract-build"
+        command.chmod(0o644)
+        current = self.sdk_home / "current"
+        current.unlink()
+        current.symlink_to(self.previous, target_is_directory=True)
+        outside = self.root / "outside"
+        for path in (command, command.parent, installed, installed.parent):
+            with self.subTest(path=str(path)):
+                path.rename(outside)
+                path.symlink_to(outside, target_is_directory=outside.is_dir())
+                files = list(outside.rglob("*")) if outside.is_dir() else [outside]
+                before = {entry: (entry.read_bytes(), stat.S_IMODE(entry.stat().st_mode))
+                          for entry in files if entry.is_file()}
+                with self.assertRaisesRegex(ValueError, "link|real directory"):
+                    self.install(archive, checksum)
+                self.assertEqual({entry: (entry.read_bytes(), stat.S_IMODE(entry.stat().st_mode))
+                                  for entry in before}, before)
+                self.assertEqual(current.resolve(), self.previous)
+                path.unlink()
+                outside.rename(path)
 
     def test_engine_build_script_does_not_replace_or_duplicate_its_library(self):
         files = payload()
