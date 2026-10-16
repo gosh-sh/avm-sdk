@@ -116,6 +116,6 @@ success delivery and precheck failures separately, including replay. Track
 [issue #13](https://github.com/gosh-sh/avm-sdk/issues/13).
 
 There is no guest API proving an internal sender's selected code/hash, nor an
-adopted non-withdrawable DApp balance or arbitrary third-party fee payer. These
-remain [concrete research proposals](protocol-proposals.md); see [issue #8](https://github.com/gosh-sh/avm-sdk/issues/8)
+adopted non-withdrawable DApp balance or arbitrary third-party fee payer. See
+[issue #8](https://github.com/gosh-sh/avm-sdk/issues/8)
 and [the funding explanation](fuel-and-fees.md#funding-is-a-separate-concern).
