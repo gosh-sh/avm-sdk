@@ -35,6 +35,7 @@ export PATH="${HOME}/.local/bin:${PATH}"
 - [FUEL And SHELL](docs/fuel-and-fees.md)
 - [Command-Line Reference](docs/cli-reference.md)
 - [Contract Examples](examples/README.md)
+- [Unreleased Tooling And Event-Read Preview](docs/tooling-preview.md)
 - [Releases And Provenance](docs/releases.md)
 - [Guest SDK MIT License](LICENSE.md)
 - [Compatibility, Platform And License Scopes](docs/release-notes.md)

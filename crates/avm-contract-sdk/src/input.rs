@@ -316,6 +316,91 @@ pub struct MessageInput<'a> {
     pub internal_event_results: &'a [u8],
 }
 
+/// Borrowed constructor fields from the canonical ACDP deployment envelope.
+///
+/// The host owns code/hash, signature, metadata and configured-limit validation.
+/// This view checks the envelope's structural bounds without copying its code
+/// or constructor payload, and does not change `message.body()`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DeployInput<'a> {
+    package_id: [u8; 32],
+    owner_id: [u8; 32],
+    ui_name: &'a [u8],
+    salt: &'a [u8],
+    init_data: &'a [u8],
+}
+
+impl<'a> DeployInput<'a> {
+    pub const fn package_id(self) -> [u8; 32] {
+        self.package_id
+    }
+
+    pub const fn owner_id(self) -> [u8; 32] {
+        self.owner_id
+    }
+
+    pub const fn ui_name(self) -> &'a [u8] {
+        self.ui_name
+    }
+
+    pub const fn salt(self) -> &'a [u8] {
+        self.salt
+    }
+
+    pub const fn init_data(self) -> &'a [u8] {
+        self.init_data
+    }
+}
+
+impl<'a> MessageInput<'a> {
+    /// Reads this init call's constructor envelope. Ordinary calls return
+    /// `InvalidValue`; malformed or incomplete envelopes return a decode error.
+    pub fn deploy(self) -> Result<DeployInput<'a>, DecodeError> {
+        if !self.message.is_deploy() {
+            return Err(DecodeError::InvalidValue);
+        }
+        let body = self.message.body();
+        let mut tail = Reader::with_position(body, 288)?;
+        if read_fixed_at::<4>(body, 0)? != *b"ACDP" {
+            return Err(DecodeError::BadMagic);
+        }
+        let flags = read_u16_at(body, 4)?;
+        if flags & !0x3f != 0 {
+            return Err(DecodeError::UnknownTag);
+        }
+        if read_u16_at(body, 6)? != 0 || read_u16_at(body, 286)? != 0 {
+            return Err(DecodeError::NonZeroReserved);
+        }
+        let owner_key = read_fixed_at::<32>(body, 200)?;
+        let owner_key_set = flags & 0x10 != 0;
+        if owner_key_set == (owner_key == [0; 32]) || (flags & 8 != 0 && owner_key_set) {
+            return Err(DecodeError::InvalidValue);
+        }
+        let abi_len = to_usize(read_u32_at(body, 280)?)?;
+        if abi_len == 0 && read_fixed_at::<32>(body, 232)? != [0; 32] {
+            return Err(DecodeError::InvalidValue);
+        }
+        let ui_name = tail.take(usize::from(read_u16_at(body, 264)?))?;
+        let salt = tail.take(usize::from(read_u16_at(body, 266)?))?;
+        let init_data = tail.take(to_usize(read_u32_at(body, 268)?)?)?;
+        tail.take(to_usize(read_u32_at(body, 272)?)?)?;
+        tail.take(to_usize(read_u32_at(body, 276)?)?)?;
+        tail.take(abi_len)?;
+        tail.take(usize::from(read_u16_at(body, 284)?))?;
+        if flags & 0x20 != 0 {
+            tail.take(64)?;
+        }
+        tail.finish()?;
+        Ok(DeployInput {
+            package_id: read_fixed_at(body, 40)?,
+            owner_id: read_fixed_at(body, 136)?,
+            ui_name,
+            salt,
+            init_data,
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct BatchInput<'a> {
     pub context: ExecutionContext,

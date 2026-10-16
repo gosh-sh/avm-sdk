@@ -40,6 +40,7 @@ impl Contract for BatchPatchContract {
 impl BatchContract for BatchPatchContract {
     fn process_batch(input: BatchInput<'_>) -> BatchOutput {
         let failure = || BatchOutput {
+            internal_event_read_intents: Vec::new(),
             state_update: StateUpdate::DataPatchList(Vec::new()),
             status_codes: vec![1402; input.message_count() as usize],
             outbound_intents: Vec::new(),
@@ -76,6 +77,7 @@ impl BatchContract for BatchPatchContract {
         let Some(next_counter) = previous_counter.checked_add(1) else { return failure() };
 
         BatchOutput {
+            internal_event_read_intents: Vec::new(),
             state_update: StateUpdate::DataPatchList(vec![StatePatch {
                 offset: COUNTER_OFFSET as u32,
                 old_len: COUNTER_BYTES as u32,

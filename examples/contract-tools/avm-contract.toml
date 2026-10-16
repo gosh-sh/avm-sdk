@@ -1,0 +1,89 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "7575757575757575757575757575757575757575757575757575757575757575"
+
+[bindings]
+enabled = true
+dispatch = true
+
+[abi]
+init_input_type_id = 2
+
+[[abi.types]]
+id = 1
+kind = "bool"
+name = "emit_first"
+
+[[abi.types]]
+id = 2
+kind = "bytes"
+name = "constructor_bytes"
+
+[[abi.types]]
+id = 3
+kind = "u64"
+name = "amount"
+
+[[abi.types]]
+id = 4
+kind = "struct"
+name = "addition"
+[[abi.types.fields]]
+id = 1
+name = "a"
+type_id = 3
+[[abi.types.fields]]
+id = 2
+name = "b"
+type_id = 3
+
+[[abi.methods]]
+name = "tools.add"
+input_type_id = 4
+caller = "external"
+
+[[abi.methods]]
+name = "tools.sum"
+input_type_id = 4
+caller = "internal"
+
+[[abi.methods]]
+name = "tools.cycle"
+input_type_id = 1
+caller = "external"
+
+[[abi.methods]]
+name = "tools.emit"
+input_type_id = 3
+caller = "internal"
+
+[[abi.methods]]
+name = "tools.collect"
+caller = "internal"
+
+[[abi.events]]
+name = "tools.changed"
+[[abi.events.fields]]
+id = 1
+name = "value"
+type_id = 3
+
+[[abi.errors]]
+status_code = 1750
+name = "invalid_body"
+message = "Typed body or constructor payload is invalid"
+
+[[abi.errors]]
+status_code = 1751
+name = "wrong_caller"
+message = "Caller kind or sender address is not authorized"
+
+[[abi.errors]]
+status_code = 1752
+name = "unknown_method"
+message = "Method is absent from the manifest"
+
+[[abi.errors]]
+status_code = 1753
+name = "overflow"
+message = "The addition overflows u64"

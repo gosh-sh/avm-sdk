@@ -1,0 +1,13 @@
+[workspace]
+
+[package]
+name = "avm-contract-tools-example"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+avm-contract-sdk = { path = "../../crates/avm-contract-sdk" }

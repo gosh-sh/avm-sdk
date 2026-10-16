@@ -15,14 +15,14 @@ mod runtime;
 
 pub use input::{
     decode_batch_input, decode_message_input, BatchInput, BatchMessageIter, CallbackHeader, Caller,
-    CanonicalMessage, CurrencyAmountIter, CurrencyAmounts, DecodeError, ExternalMessage,
-    InternalEventReadRequest, InternalEventReadRequestIter, InternalEventReadRequests,
-    InternalMessage, MessageInput,
+    CanonicalMessage, CurrencyAmountIter, CurrencyAmounts, DecodeError, DeployInput,
+    ExternalMessage, InternalEventReadRequest, InternalEventReadRequestIter,
+    InternalEventReadRequests, InternalMessage, MessageInput,
 };
 pub use output::{
     encode_batch_output, encode_event_fields, encode_message_output, BatchOutput, CallbackIntent,
-    CodeUpgradeIntent, EncodeError, EventField, EventIntent, EventKind, EventValue, MessageOutput,
-    OutboundIntent, StatePatch, StateUpdate,
+    CodeUpgradeIntent, EncodeError, EventField, EventIntent, EventKind, EventValue,
+    InternalEventReadIntent, MessageOutput, OutboundIntent, StatePatch, StateUpdate,
 };
 #[doc(hidden)]
 pub use runtime::{dispatch_batch, dispatch_init, dispatch_message, GuestArena};
