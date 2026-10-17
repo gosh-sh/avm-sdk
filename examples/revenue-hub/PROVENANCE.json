@@ -1,0 +1,23 @@
+{
+  "sdk_repository": "https://github.com/gosh-sh/avm-sdk",
+  "runtime_release": "avm-dev-06e96ef71006-sdk-0748f4f0767a",
+  "runtime_sdk_commit": "0748f4f0767a26da8bc363bcb6b5585539d6970e",
+  "runtime_source_commit": "06e96ef71006cca020575cbf35e6b82cc82a324e",
+  "runtime_archive_sha256": "8728497cf1e476d3d770a09b19929f7c196f2637654642727432b4c285c85143",
+  "optimizer_repository": "https://github.com/WebAssembly/binaryen",
+  "optimizer_release": "version_133",
+  "optimizer_archive_sha256": "2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489",
+  "rust": "1.93.0",
+  "target": "wasm32-unknown-unknown",
+  "compiler_profile": {
+    "opt_level": 3,
+    "lto": false,
+    "codegen_units": 1,
+    "strip": "symbols"
+  },
+  "source_repository": "https://github.com/h2so4nackl-code/avm-revenue-hub",
+  "source_commit": "9ee2ede44af5f76515a5ab42dcddc8a7299c6354",
+  "sdk_source_baseline": "36d1157f22504b39f77587f3ea325d36216f4ec3",
+  "integrated_sdk_path": "../../crates/avm-contract-sdk",
+  "compiler_policy": "SDK 0.2.0 pinned compiler; no RUSTC_WRAPPER"
+}

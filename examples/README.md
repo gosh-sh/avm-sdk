@@ -12,6 +12,17 @@ The available stand commands are listed in the
 
 ## Example Set
 
+### `revenue-hub`
+
+A separate reference workspace with a fixed-share revenue vault, bound payout
+receivers, and an authenticated AccountBatch receipt ledger. It covers cumulative
+entitlement arithmetic, independent pending claims, native failure/refund/retry,
+2-of-3 timelocked governance, and coalesced state patches with per-message failures.
+
+See [Revenue Hub](revenue-hub/README.md) for 74 application regressions, a native
+output-byte probe, and the actual optimized-WASM stand/replay gate. It uses this
+repository's SDK crate directly and retains the four existing fixtures unchanged.
+
 ### `contract-a-v1`
 
 A message-isolated sender and the first version in the upgrade pair. It:

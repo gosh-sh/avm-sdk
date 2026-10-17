@@ -1,0 +1,59 @@
+name: Revenue hub regressions
+
+on:
+  push:
+    branches: [main, "examples/revenue-hub*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out SDK source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal --component clippy --component rustfmt
+          rustup target add wasm32-unknown-unknown --toolchain 1.93.0
+
+      - name: Check SDK and all example conventions
+        run: |
+          cargo +1.93.0 fmt -- --check
+          cargo +1.93.0 clippy --all-targets --locked --offline -- -D warnings
+          cargo +1.93.0 test --locked --offline
+          for manifest in examples/*/Cargo.toml; do
+            cargo +1.93.0 fmt --manifest-path "$manifest" --all -- --check
+            cargo +1.93.0 clippy --manifest-path "$manifest" --target wasm32-unknown-unknown --locked --offline -- -D warnings
+          done
+
+      - name: Download and verify immutable runtime and optimizer
+        run: |
+          bash examples/revenue-hub/scripts/install_runtime.sh
+          bash examples/revenue-hub/scripts/install_binaryen.sh
+
+      - name: Run smoke and complete revenue hub gate
+        run: |
+          runtime="$GITHUB_WORKSPACE/examples/revenue-hub/.runtime/avm-sdk-linux-x86_64"
+          AVM_LOCAL_STAND="$runtime/bin/avm-local-stand" \
+          AVM_WASMTIME_PROFILE="$runtime/profiles/wasmtime-release-profile.v1" \
+            bash scripts/smoke.sh
+          bash scripts/check-application-examples.sh "$runtime" "$GITHUB_WORKSPACE/examples/revenue-hub/.runtime/binaryen-version_133/bin/wasm-opt" revenue-hub
+
+      - name: Upload generated evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: revenue-hub-evidence
+          path: |
+            examples/revenue-hub/evidence/
+            examples/revenue-hub/experiments/compact-audit/evidence/
+          if-no-files-found: warn
+          retention-days: 30

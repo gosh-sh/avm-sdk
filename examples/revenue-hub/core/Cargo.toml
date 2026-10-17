@@ -1,0 +1,8 @@
+[package]
+name = "avm-revenue-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+avm-contract-sdk = { path = "../../../crates/avm-contract-sdk" }

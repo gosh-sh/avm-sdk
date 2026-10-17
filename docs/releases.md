@@ -42,6 +42,16 @@ current node scripts/avm-env.sh wrapper.
    the candidate. Run the historical bundle separately with its own profile/state;
    reject historical populated state under the candidate. Do not count empty
    smoke, unrun CPU matrices or source-only E2E as packaged qualification.
+   If application examples are present, also run
+   `bash "$bundle/scripts/check-application-examples.sh" "$bundle" "$optimizer"`
+   on that same isolated writable verified candidate; `$optimizer` is a verified
+   Binaryen 133 `wasm-opt` when required by an example. Retain its complete logs
+   and generated evidence with the candidate's exact source/build receipts.
+   This runs every included application's native suite, all guest builds,
+   artifact checks and actual stand journeys/replay. Failure blocks handoff.
+   The source native suites and all guest lint checks also run in
+   `manual_gates.py`; dedicated fork workflows use pinned public binaries and
+   cannot substitute for private runtime-source or candidate-package qualification.
 6. Hand exact heads, logs/hashes, findings ledger and adoption prerequisites to
    the coordinator for independent review. A review handoff is not publication.
    Resolve findings, rerun affected exact-input gates, and ensure the selected

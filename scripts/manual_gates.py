@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tomllib
 
 from release import file_digest, parse_profile, require
 
@@ -88,8 +89,23 @@ def main():
     run("sdk-clippy", ["cargo", "clippy", "--locked", "--offline", "--all-targets", "--", "-D", "warnings"], sdk)
     run("sdk-tests", ["cargo", "test", "--locked", "--offline", "--", "--test-threads=1"], sdk, tests=True)
     for manifest in sorted((sdk / "examples").glob("*/Cargo.toml")):
-        run(manifest.parent.name + "-format", ["cargo", "fmt", "--manifest-path", str(manifest), "--", "--check"], sdk)
-        run(manifest.parent.name + "-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk)
+        name = manifest.parent.name
+        run(name + "-format", ["cargo", "fmt", "--manifest-path", str(manifest), "--all", "--", "--check"], sdk)
+        # Standard single-package fixtures use an empty [workspace] boundary.
+        if tomllib.loads(manifest.read_text()).get("workspace", {}).get("members"):
+            # Nested application workspaces have native regressions and multiple
+            # guests; the default member alone does not qualify the application.
+            run(name + "-native-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--workspace", "--all-targets", "--", "-D", "warnings"], sdk)
+            run(name + "-native-tests", ["cargo", "test", "--locked", "--offline", "--manifest-path", str(manifest), "--workspace", "--", "--test-threads=1"], sdk, tests=True)
+            metadata = json.loads(run(name + "-metadata", ["cargo", "metadata", "--locked", "--offline", "--no-deps", "--format-version", "1", "--manifest-path", str(manifest)], sdk))
+            guests = sorted(p["name"] for p in metadata["packages"]
+                            if p["id"] in metadata["workspace_members"]
+                            and any("cdylib" in t["crate_types"] for t in p["targets"]))
+            require(guests, "application workspace has no WASM guests: " + name)
+            for guest in guests:
+                run(name + "-" + guest + "-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "-p", guest, "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk)
+        else:
+            run(name + "-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk)
     packages = ["avm-config", "avm-contract-sdk", "avm-contract-build", "avm-code-registry", "avm-deploy-upgrade", "avm-economics", "avm-effect-materializer", "avm-test-harness", "avm-wasm-code", "avm-wasm-executor"]
     selection = [arg for package in packages for arg in ("-p", package)]
     run("runtime-check", ["cargo", "check", "--locked", "--offline", "--all-targets", *selection])
