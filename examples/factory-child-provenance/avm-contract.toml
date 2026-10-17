@@ -1,0 +1,93 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1"
+
+[abi]
+state_root_type_id = 1
+init_input_type_id = 5
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "provenance_state"
+len = 256
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "provenance_salt"
+len = 8
+
+[[abi.types]]
+id = 3
+kind = "bytes"
+name = "provenance_relay_send_args"
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "provenance_relay_forge_args"
+len = 72
+
+[[abi.types]]
+id = 5
+kind = "fixed_bytes"
+name = "provenance_init"
+len = 65
+
+[[abi.methods]]
+name = "provenance.ping"
+
+[[abi.methods]]
+name = "factory.spawn"
+input_type_id = 2
+
+[[abi.methods]]
+name = "factory.accept"
+input_type_id = 2
+
+[[abi.methods]]
+name = "child.report"
+
+[[abi.methods]]
+name = "relay.send"
+input_type_id = 3
+
+[[abi.methods]]
+name = "relay.forge"
+input_type_id = 4
+
+[[abi.errors]]
+status_code = 1600
+name = "invalid_state"
+message = "provenance state is malformed"
+
+[[abi.errors]]
+status_code = 1601
+name = "invalid_init"
+message = "constructor data must be role u8 | factory address 64, with an 8-byte salt for a child"
+
+[[abi.errors]]
+status_code = 1602
+name = "wrong_role"
+message = "method is not available for this account's role"
+
+[[abi.errors]]
+status_code = 1603
+name = "invalid_args"
+message = "method arguments are malformed"
+
+[[abi.errors]]
+status_code = 1604
+name = "init_caller_not_factory"
+message = "a child must be deployed by the factory named in its constructor data"
+
+[[abi.errors]]
+status_code = 1605
+name = "not_a_child"
+message = "sender address does not derive from this factory's child parameters"
+
+[[abi.errors]]
+status_code = 1606
+name = "unknown_method"
+message = "method is not handled by this contract"

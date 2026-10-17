@@ -67,6 +67,22 @@ message entry point intentionally fails.
 Use it to validate `AccountBatch`, bounded batch input, large retained state,
 and narrow state patches without replacing the complete state image.
 
+### `factory-child-provenance`
+
+A factory that deploys children and accepts messages only from addresses that
+derive from itself. One package plays factory, child and relay. It:
+
+- builds the canonical deploy envelope and recomputes the child account id in
+  the contract, checked against the stand's own address quote;
+- rejects a report sent from an address that does not derive as a child;
+- includes a second code version whose child accepts any deployer, to show
+  that an address binds the package, owner, salt and constructor data but not
+  the selected code.
+
+Run `examples/factory-child-provenance/prove.sh`. It needs `jq`, builds two
+versions of the contract, and prints one verdict per case. The example README
+explains the cases and the deploy fields they rely on.
+
 ## Build An Example
 
 Install the SDK commands first, then build any example from the repository or
@@ -106,6 +122,7 @@ Use the examples as focused references:
 - start with `contract-a-v1` for a message-isolated contract;
 - add `contract-b` for internal messaging, callbacks, events, and deployment;
 - use the v1/v2 pair for upgrades;
+- use `factory-child-provenance` for contract-initiated deployment of children and what their addresses prove;
 - use `contract-batch-patch` only when batch execution and patch output are required.
 
 The source-test owner, fixed values, salts, payloads, and failure hooks are test data.
