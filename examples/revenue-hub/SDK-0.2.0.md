@@ -1,5 +1,9 @@
 # SDK 0.2.0 adaptation — 2026-10-14
 
+Historical qualification for the initial integration. The 17 October follow-up
+adds the audit mode correction and optional compact experiment; see
+[FOLLOWUP-VALIDATION.md](FOLLOWUP-VALIDATION.md) for current scope and counts.
+
 This branch merges official `main` at `36d1157f22504b39f77587f3ea325d36216f4ec3`,
 including merged PR #14. It retains the deletion of
 `.github/workflows/release-avm-dev.yml`; no retired publisher is recreated.

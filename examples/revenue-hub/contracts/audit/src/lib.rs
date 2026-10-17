@@ -50,7 +50,8 @@ fn initialize(input: MessageInput<'_>) -> HubResult<MessageOutput> {
         return Err(E_AUDIT_AUTH);
     };
     let init = deploy_data(input.message.body())?;
-    if init.len() != 1
+    if input.required_state_output_mode != StateOutputMode::FullReplace
+        || init.len() != 1
         || init[0] == 0
         || init[0] > 16
         || !input.state.is_empty()
@@ -259,7 +260,9 @@ fn isolated(input: MessageInput<'_>) -> HubResult<MessageOutput> {
 impl BatchContract for AuditLedger {
     fn process_batch(input: BatchInput<'_>) -> BatchOutput {
         let failure = |code| BatchOutput {
-            state_update: StateUpdate::DataPatchList(vec![]),
+            // Even a rejected batch must satisfy the guest ABI's mode check.
+            // Return no ledger changes, effects, or successful message statuses.
+            state_update: replacement(input.state, input.required_state_output_mode, vec![]),
             status_codes: vec![code; input.message_count() as usize],
             outbound_intents: vec![],
             event_intents: vec![],

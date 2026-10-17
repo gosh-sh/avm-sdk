@@ -1,0 +1,21 @@
+[package]
+name = "compact-audit-prototype"
+version = "0.0.0"
+edition = "2021"
+license = "MIT"
+publish = false
+[lib]
+crate-type = ["rlib", "cdylib"]
+[dependencies]
+avm-contract-sdk = { path = "../../../../crates/avm-contract-sdk" }
+avm-revenue-core = { path = "../../core" }
+[dev-dependencies]
+avm-revenue-audit = { path = "../../contracts/audit" }
+avm-revenue-vault = { path = "../../contracts/vault" }
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[workspace]

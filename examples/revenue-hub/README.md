@@ -22,10 +22,10 @@ Integration validation is recorded separately in [VALIDATION.md](VALIDATION.md).
   duplicate semantic credit. AccountBatch execution retains 65,540 bytes of state
   and coalesces changes into narrow 32-byte record patches with per-input status.
 
-There are 74 application regressions, including 4,500 generated action steps,
+There are 80 application regressions, including 4,500 generated action steps,
 10,007 one-unit deposits compared with one lump deposit, full-u128 boundary cases,
 100 failed payouts followed by retry, partial batch failures, and isolated/batch
-equivalence. The SDK's 13 native tests run separately, for 87 tests in this workflow.
+equivalence. The SDK's 13 native tests run separately, for 93 tests before the 10 separate compact-experiment cases.
 The native byte probe covers batches of 1, 8, 64, and 256 messages. Its output-byte
 comparison is not a FUEL, CPU, or throughput benchmark.
 
@@ -54,7 +54,7 @@ cargo +1.93.0 test --locked --offline
 cargo +1.93.0 test --manifest-path examples/revenue-hub/Cargo.toml --workspace --locked --offline
 ```
 
-For the full gate, use Linux x86-64-v3 with glibc >= 2.39 (Windows: WSL2), Python >= 3.11, curl, tar, and
+For the full gate, use Linux x86-64-v3 with glibc >= 2.39 (Windows: WSL2), Python >= 3.11, Node >= 18, curl, tar, and
 sha256sum. Install the pinned official runtime and Binaryen optimizer:
 
 ```bash
@@ -119,3 +119,27 @@ report can leave it behind a paid claim, and there is no recovery service.
 The current guest/profile match the verified public 0.2.0 distribution. Validation
 establishes this exact combination, not future-runtime or cross-DApp assurance.
 See [SPEC.md](docs/SPEC.md) for wire layouts, invariants, and trust assumptions.
+
+## Audit corrections and optional compact state
+
+The follow-up imports [standalone PR #1](https://github.com/h2so4nackl-code/avm-revenue-hub/pull/1)
+and [PR #2](https://github.com/h2so4nackl-code/avm-revenue-hub/pull/2), merged at
+`8ecfd240afea03d175978ef2570e632f6376f9db`. The legacy audit requires FullReplace
+at initialization and serializes rejected batches in the host-requested mode,
+without changing its persistent layout, schema, method IDs or financial rules.
+Six regressions and actual guest vectors cover the error paths; see
+[state limits](docs/STATE-LIMITS.md).
+
+[Compact audit](experiments/compact-audit/README.md) is a separate opt-in workspace
+for new installations. Normal builds continue to use the legacy audit. With
+three members, compact data is `44 + 96*3 = 332` bytes and the tested local account
+is 407 bytes. This is not an in-place migration: legacy code cannot authorize
+a direct upgrade, and existing receivers retain their original audit address.
+Offline conversion helpers do not provide migration authority. Mainnet storage
+pricing is unconfirmed; asynchronous delivery and out-of-order nonce limits remain.
+
+The complete gate also runs the compact native/official-WASM tests, disposable
+local journey, restart/replay, rent probes and legacy-upgrade rejection. Temporary
+copies rebase the unchanged in-tree guest dependency locally for fixture builds;
+the repository SDK and normal application sources are not rewritten by the harness.
+See [follow-up validation](FOLLOWUP-VALIDATION.md) for this adaptation's results.

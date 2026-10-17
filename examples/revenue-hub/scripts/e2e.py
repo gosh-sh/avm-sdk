@@ -111,17 +111,24 @@ def run(sdk,output):
             init=stand.command("init",dapp_id=DAPP);assert init["status"]=="ok"
             identities=init["identities"]
             audit=stand.deploy("audit","audit",b"\x03")
+            # The host chooses the mode from the previous *whole* account image.
+            audit_account = next(a for a in stand.command("inspect")["accounts"] if a["address"] == audit)
+            assert audit_account["canonical_byte_length"] == 65_615, audit_account
+            audit_limits = {"data_bytes": 65_540, "canonical_account_bytes": 65_615,
+                            "first_post_init_mode": "DataPatchList"}
             receivers=[stand.deploy("receiver",f"member-{i}",receiver_config(audit,i)) for i in range(3)]
             vault=stand.deploy("vault","revenue",vault_config(identities,receivers))
             # Read actual fixture init authorities rather than assume that the
             # publisher/account owner's identities are interchangeable.
             roles={value:key.replace("_","-") for key,value in identities.items()}
-            r=stand.call(audit,"hub.audit.status");audit_owner=roles[r["raw_state"][8:72]]
+            r=stand.call(audit,"hub.audit.status");assert bytes.fromhex(r["raw_executor_output"])[9] == 1
+            audit_owner=roles[r["raw_state"][8:72]]
             receiver_owners=[]
             for i,address in enumerate(receivers):
                 r=stand.call(address,"hub.receiver.status");owner=roles[r["raw_state"][:64]];receiver_owners.append(owner)
                 stand.call(address,"hub.receiver.bind",address_bytes(vault),identity=owner)
-                stand.call(audit,"hub.audit.bind",bytes([i])+address_bytes(address),identity=audit_owner)
+                binding = stand.call(audit,"hub.audit.bind",bytes([i])+address_bytes(address),identity=audit_owner)
+                assert bytes.fromhex(binding["raw_executor_output"])[9] == 1
             r=stand.call(vault,"hub.vault.deposit",value=10007)
             expect(r,received=10007,paid=0,claimable=10006,dust=1)
             stand.call(vault,"hub.vault.claim",b"\x00",identity="user",expected_status=3001)
@@ -169,7 +176,7 @@ def run(sdk,output):
             inspect=stand.command("inspect");events=stand.command("events");replay=stand.command("replay")
             assert replay["status"]=="ok" and inspect["queue"]["message_count"]==0
             for key in ["account_state_root","registry_root","cumulative_fee_shells","accepted_input_count"]:assert replay[key]==inspect[key],key
-            payload={"status":"PASS","accounting":final,"receiver_totals":actual_receipts,"audit_totals":audit_totals,"audit_counts":audit_counts,"semantic_duplicate_audit_did_not_double_credit":True,
+            payload={"status":"PASS","audit_state_limits":audit_limits,"accounting":final,"receiver_totals":actual_receipts,"audit_totals":audit_totals,"audit_counts":audit_counts,"semantic_duplicate_audit_did_not_double_credit":True,
                      "addresses":{"vault":vault,"audit":audit,"receivers":receivers},"inspect":inspect,"events":events,"replay":replay,"journal":stand.log}
             output.write_text(json.dumps(payload,indent=2)+"\n");print("Actual AVM revenue hub journey: PASS")
         except Exception:

@@ -17,5 +17,7 @@ for contract in vault receiver audit; do
 done
 cargo +1.93.0 run -p avm-revenue-tests --bin batch_probe --locked --offline > evidence/batch-probe.csv
 python3 scripts/e2e.py --sdk "$sdk"
+bash scripts/check_state_limits.sh "$sdk"
 python3 scripts/verify_artifacts.py
+bash experiments/compact-audit/scripts/verify.sh "$sdk" "$optimizer"
 echo "All revenue hub checks passed."
