@@ -1,0 +1,169 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "bytes"
+name = "vault_state"
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "vault_propose_owner_args"
+len = 36
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+name = "vault_accept_owner_args"
+len = 4
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "vault_set_pause_args"
+len = 5
+
+[[abi.methods]]
+name = "vault.topup"
+
+[[abi.methods]]
+name = "vault.propose_owner"
+input_type_id = 2
+
+[[abi.methods]]
+name = "vault.accept_owner"
+input_type_id = 3
+
+[[abi.methods]]
+name = "vault.set_pause"
+input_type_id = 4
+
+[[abi.errors]]
+status_code = 1002
+name = "unrecognized_method"
+message = "method id matches none of this contract's defined methods, and the message is not a callback"
+
+[[abi.errors]]
+status_code = 1500
+name = "invalid_caller"
+message = "wrong caller kind (Internal vs External) for the dispatched method"
+
+[[abi.errors]]
+status_code = 1501
+name = "invalid_body"
+message = "malformed, wrong-length, or improperly-shaped body for the dispatched method"
+
+[[abi.errors]]
+status_code = 1502
+name = "invalid_state"
+message = "the stored state blob failed its own defensive validation on read"
+
+[[abi.errors]]
+status_code = 1503
+name = "invalid_currency_selector"
+message = "currency_tag was not 0 or 1, or currency_id was non-zero while currency_tag was Main"
+
+[[abi.errors]]
+status_code = 1504
+name = "invalid_amount"
+message = "a zero amount was supplied to WITHDRAW"
+
+[[abi.errors]]
+status_code = 1505
+name = "insufficient_balance"
+message = "a withdraw amount exceeds the caller's tracked ledger balance for that currency"
+
+[[abi.errors]]
+status_code = 1506
+name = "deposits_paused"
+message = "a DEPOSIT call arrived while the deposits-paused flag is set"
+
+[[abi.errors]]
+status_code = 1508
+name = "ledger_capacity_exceeded"
+message = "a genuinely new deposit row would exceed MAX_LEDGER_ENTRIES"
+
+[[abi.errors]]
+status_code = 1509
+name = "pending_capacity_exceeded"
+message = "a withdrawal request would exceed the global or the per-depositor pending-withdrawal cap"
+
+[[abi.errors]]
+status_code = 1510
+name = "withdrawal_not_found"
+message = "no outstanding pending record exists for the referenced withdrawal id"
+
+[[abi.errors]]
+status_code = 1513
+name = "invalid_callback"
+message = "a callback's own caller does not match the referenced pending record's depositor"
+
+[[abi.errors]]
+status_code = 1514
+name = "unauthorized_owner"
+message = "caller's pubkey does not match the stored owner_pubkey for an owner-only method"
+
+[[abi.errors]]
+status_code = 1515
+name = "unauthorized_pending_owner"
+message = "caller's pubkey does not match the stored pending_owner_pubkey, or no rotation is currently proposed"
+
+[[abi.errors]]
+status_code = 1516
+name = "invalid_pause_flags"
+message = "a SET_PAUSE call set a reserved bit beyond bit 0"
+
+[[abi.errors]]
+status_code = 1518
+name = "upgrade_not_supported"
+message = "method_id == CODE_UPGRADE_METHOD_ID"
+
+[[abi.errors]]
+status_code = 1519
+name = "shell_not_custodied"
+message = "a DEPOSIT call's extra includes an entry with currency_id == 2"
+
+[[abi.errors]]
+status_code = 1520
+name = "cross_dapp_caller_forbidden"
+message = "the caller's own dapp_id does not match the vault's own dapp_id"
+
+[[abi.errors]]
+status_code = 1522
+name = "withdrawal_id_exhausted"
+message = "next_withdrawal_id would overflow u32 on checked_add"
+
+[[abi.errors]]
+status_code = 1524
+name = "stale_admin_sequence"
+message = "an owner/pending-owner call's supplied expected_admin_seq does not exactly match the header's current admin_seq"
+
+[[abi.errors]]
+status_code = 1526
+name = "topup_requires_shell_only"
+message = "a TOPUP_METHOD_ID call carried a non-zero value_main, a non-SHELL extra entry, or no extra entries at all"
+
+[[abi.errors]]
+status_code = 1527
+name = "admin_sequence_exhausted"
+message = "admin_seq would overflow u32 on checked_add"
+
+[[abi.errors]]
+status_code = 1528
+name = "vault_underfunded"
+message = "the vault's own current SHELL holding is below MIN_OPERATIONAL_SHELL at the start of a WITHDRAW call"
+
+[[abi.errors]]
+status_code = 1529
+name = "ledger_amount_overflow"
+message = "crediting an amount to a ledger row would overflow u128 - either a DEPOSIT's amount(s), accounting for that row's outstanding pending amount too (entire message rejected atomically), or a withdrawal-callback restore crediting a pending record's amount back (practically unreachable in both cases)"
+
+[[abi.errors]]
+status_code = 1530
+name = "event_encoding_failed"
+message = "encode_event_fields returned an error while building a PROPOSE_OWNER/ACCEPT_OWNER/SET_PAUSE event; provably unreachable for this contract's fixed, single-field event, kept as an explicit failure path rather than a silent default"
