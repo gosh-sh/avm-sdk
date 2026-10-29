@@ -1,0 +1,51 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "bytes"
+name = "actor_state"
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+len = 80
+name = "actor_forward_deposit_args"
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+len = 101
+name = "actor_forward_withdraw_args"
+
+[[abi.methods]]
+name = "actor.forward_deposit"
+input_type_id = 3
+
+[[abi.methods]]
+name = "actor.forward_withdraw"
+input_type_id = 4
+
+[[abi.errors]]
+status_code = 1700
+name = "invalid_caller"
+message = "forward requires an external caller; the payout receiver requires an internal caller"
+
+[[abi.errors]]
+status_code = 1701
+name = "invalid_forward_args"
+message = "forward body must be exactly 80 bytes (actor.forward_deposit) or 101 bytes (actor.forward_withdraw): destination dapp id (32) + account id (32) + outbound method id (8) + outbound callback method id (8), plus the vault's own 21-byte WITHDRAW body for the withdraw variant"
+
+[[abi.errors]]
+status_code = 1702
+name = "payout_rejected"
+message = "this actor instance was built with AVM_E2E_ACTOR_REJECT_PAYOUT set, so it deliberately fails every inbound payout (method id 0 from an internal caller)"
+
+[[abi.errors]]
+status_code = 1703
+name = "unrecognized_method"
+message = "method id matches neither the forward dispatch (external caller) nor the payout receiver (internal caller, method id 0), and the message is not a callback"

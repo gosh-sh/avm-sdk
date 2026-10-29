@@ -67,6 +67,29 @@ message entry point intentionally fails.
 Use it to validate `AccountBatch`, bounded batch input, large retained state,
 and narrow state patches without replacing the complete state image.
 
+### `multi-currency-vault`
+
+A deposit/withdraw custodial vault with its own full spec/threat-model/
+review trail (not a minimal SDK teaching fixture like the examples
+above — see its own `README.md`, `SPEC.md`, `docs/THREAT_MODEL.md`, and
+`REVIEW.md`). It:
+
+- accepts `DEPOSIT`/`WITHDRAW` for a main currency plus any number of
+  distinct "extra" currencies, keyed by depositor account and currency;
+- resolves every withdrawal through a real callback (Settle on success,
+  Restore on failure), never assuming either outcome;
+- supports owner-gated pause and two-step owner rotation
+  (`PROPOSE_OWNER`/`ACCEPT_OWNER`);
+- explicitly rejects a code upgrade — no upgrade path exists in v1.
+
+Use it as a reference for a stateful ledger contract with asynchronous
+callback-based settlement, under a documented threat model and a
+from-scratch spec/test/review trail. It ships its own local-stand E2E
+script (`multi-currency-vault/scripts/e2e_journey.sh`) and a small
+test-only helper contract (`multi-currency-vault/e2e-actor/`) the script
+needs because this vault's own `DEPOSIT`/`WITHDRAW` require an internal
+caller.
+
 ## Build An Example
 
 Install the SDK commands first, then build any example from the repository or
