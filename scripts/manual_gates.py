@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tomllib
 
 from release import file_digest, parse_profile, require
 
@@ -39,6 +40,19 @@ def clean(root):
     require(not subprocess.check_output(["git", "-C", str(root), "status", "--porcelain", "--untracked-files=all"]), f"dirty source: {root}")
 
 
+def example_environment(source, manifest, evidence, run):
+    environment = os.environ.copy()
+    environment.pop("AVM_CONTRACT_BINDINGS", None)
+    metadata = manifest.parent / "avm-contract.toml"
+    if metadata.is_file() and tomllib.loads(metadata.read_text()).get("bindings", {}).get("enabled"):
+        bindings = evidence / (manifest.parent.name + "-bindings.rs")
+        run(manifest.parent.name + "-bindings", ["cargo", "run", "--quiet", "--locked", "--offline",
+            "-p", "avm-contract-build", "--bin", "avm-contract-build", "--", "bindings",
+            "--manifest-path", str(manifest)], source, stdout_file=bindings)
+        environment["AVM_CONTRACT_BINDINGS"] = str(bindings)
+    return environment
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path)
@@ -57,11 +71,16 @@ def main():
     result = {"schema": "gosh.avm-sdk.gates.v1", "source_commit": head(source),
               "sdk_commit": head(sdk), "passed": False, "gates": []}
 
-    def run(label, argv, cwd=source, tests=False, exact=None, python_tests=False):
+    def run(label, argv, cwd=source, tests=False, exact=None, python_tests=False,
+            environment=None, stdout_file=None):
         log = evidence / (label + ".log")
         (evidence / "current.json").write_text(json.dumps({"gate": label, "pid": os.getpid(), "completed": len(result["gates"]), "source_commit": result["source_commit"], "sdk_commit": result["sdk_commit"]}) + "\n")
         with log.open("wb") as stream:
-            process = subprocess.run(argv, cwd=cwd, stdout=stream, stderr=subprocess.STDOUT)
+            if stdout_file is None:
+                process = subprocess.run(argv, cwd=cwd, env=environment, stdout=stream, stderr=subprocess.STDOUT)
+            else:
+                with stdout_file.open("wb") as generated:
+                    process = subprocess.run(argv, cwd=cwd, env=environment, stdout=generated, stderr=stream)
         text = log.read_text(errors="replace")
         counts = [int(n) for n in re.findall(r"test result: ok\. (\d+) passed", text)]
         matched = sum(counts)
@@ -75,6 +94,9 @@ def main():
                                 "exit_code": process.returncode, "rust_tests_passed": matched,
                                 "exact_selector": exact, "passed": passed,
                                 "log_sha256": file_digest(log)})
+        if stdout_file is not None:
+            result["gates"][-1]["stdout_file"] = stdout_file.name
+            result["gates"][-1]["stdout_sha256"] = file_digest(stdout_file)
         (evidence / "gates.json").write_text(json.dumps(result, indent=2) + "\n")
         require(passed, f"gate failed: {label}; see {log}")
         return text
@@ -89,7 +111,8 @@ def main():
     run("sdk-tests", ["cargo", "test", "--locked", "--offline", "--", "--test-threads=1"], sdk, tests=True)
     for manifest in sorted((sdk / "examples").glob("*/Cargo.toml")):
         run(manifest.parent.name + "-format", ["cargo", "fmt", "--manifest-path", str(manifest), "--", "--check"], sdk)
-        run(manifest.parent.name + "-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk)
+        environment = example_environment(source, manifest, evidence, run)
+        run(manifest.parent.name + "-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk, environment=environment)
     packages = ["avm-config", "avm-contract-sdk", "avm-contract-build", "avm-code-registry", "avm-deploy-upgrade", "avm-economics", "avm-effect-materializer", "avm-test-harness", "avm-wasm-code", "avm-wasm-executor"]
     selection = [arg for package in packages for arg in ("-p", package)]
     run("runtime-check", ["cargo", "check", "--locked", "--offline", "--all-targets", *selection])
