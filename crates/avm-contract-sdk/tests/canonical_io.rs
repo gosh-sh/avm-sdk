@@ -20,7 +20,6 @@ fn acmi_decode_and_acmo_encode_cover_all_effect_sections() {
     assert_eq!(input.caller, Caller::Internal(source));
     assert_eq!(input.destination, destination);
     assert_eq!(input.selected_code_id, [0x44; 32]);
-    assert_eq!(input.balance_main, 500);
     assert_eq!(input.state, b"old-state");
     assert_eq!(input.message.method_id(), 77);
     assert_eq!(input.message.body(), b"call");
@@ -36,6 +35,7 @@ fn acmi_decode_and_acmo_encode_cover_all_effect_sections() {
     assert_eq!(
         input.extra.into_iter().collect::<Vec<_>>(),
         vec![
+            CurrencyAmount { currency_id: 0, amount: 500 },
             CurrencyAmount { currency_id: 2, amount: 3 },
             CurrencyAmount { currency_id: 9, amount: 10 },
         ]
@@ -57,9 +57,11 @@ fn acmi_decode_and_acmo_encode_cover_all_effect_sections() {
         outbound_intents: vec![OutboundIntent {
             input_index: 0,
             destination: address(0x50, 0x51),
-            value_main: 7,
             fuel_fee_shells: 8,
-            extra: vec![CurrencyAmount { currency_id: 2, amount: 9 }],
+            extra: vec![
+                CurrencyAmount { currency_id: 0, amount: 7 },
+                CurrencyAmount { currency_id: 2, amount: 9 },
+            ],
             method_id: 88,
             body: b"out".to_vec(),
         }],
@@ -93,6 +95,10 @@ fn acbi_decode_and_acbo_encode_preserve_indexes_and_statuses() {
     let input = decode_batch_input(&input_bytes).expect("canonical ACBI must decode");
     assert_eq!(input.message_count(), 2);
     assert_eq!(
+        input.extra.into_iter().collect::<Vec<_>>(),
+        vec![CurrencyAmount { currency_id: 0, amount: 500 }]
+    );
+    assert_eq!(
         input
             .messages()
             .map(|message| message.expect("validated message").method_id())
@@ -106,9 +112,8 @@ fn acbi_decode_and_acbo_encode_preserve_indexes_and_statuses() {
         outbound_intents: vec![OutboundIntent {
             input_index: 0,
             destination: address(0x80, 0x81),
-            value_main: 1,
             fuel_fee_shells: 0,
-            extra: Vec::new(),
+            extra: vec![CurrencyAmount { currency_id: 0, amount: 1 }],
             method_id: 3,
             body: Vec::new(),
         }],
@@ -204,20 +209,19 @@ fn internal_message(
     body: &[u8],
     with_event_read: bool,
 ) -> Vec<u8> {
-    let mut bytes = vec![0; 192];
+    let mut bytes = vec![0; 176];
     bytes[0] = 0;
     bytes[1] = flags | if with_event_read { 0x08 } else { 0 };
-    bytes[2..4].copy_from_slice(&1u16.to_le_bytes());
+    bytes[2..4].copy_from_slice(&2u16.to_le_bytes());
     bytes[4..8].copy_from_slice(&(body.len() as u32).to_le_bytes());
     bytes[8..16].copy_from_slice(&method_id.to_le_bytes());
-    bytes[16..32].copy_from_slice(&5u128.to_le_bytes());
-    bytes[32..48].copy_from_slice(&6u128.to_le_bytes());
-    bytes[48..56].copy_from_slice(&7u64.to_le_bytes());
-    bytes[56..60].copy_from_slice(&8u32.to_le_bytes());
-    bytes[64..96].copy_from_slice(&source.dapp_id);
-    bytes[96..128].copy_from_slice(&source.account_id);
-    bytes[128..160].copy_from_slice(&destination.dapp_id);
-    bytes[160..192].copy_from_slice(&destination.account_id);
+    bytes[16..32].copy_from_slice(&6u128.to_le_bytes());
+    bytes[32..40].copy_from_slice(&7u64.to_le_bytes());
+    bytes[40..44].copy_from_slice(&8u32.to_le_bytes());
+    bytes[48..80].copy_from_slice(&source.dapp_id);
+    bytes[80..112].copy_from_slice(&source.account_id);
+    bytes[112..144].copy_from_slice(&destination.dapp_id);
+    bytes[144..176].copy_from_slice(&destination.account_id);
     if flags & 0x04 != 0 {
         bytes.extend_from_slice(&99u64.to_le_bytes());
     }
@@ -228,6 +232,8 @@ fn internal_message(
         bytes.extend_from_slice(&[0x91; 32]);
         bytes.extend_from_slice(&92u64.to_le_bytes());
     }
+    bytes.extend_from_slice(&0u32.to_le_bytes());
+    bytes.extend_from_slice(&5u128.to_le_bytes());
     bytes.extend_from_slice(&2u32.to_le_bytes());
     bytes.extend_from_slice(&3u128.to_le_bytes());
     bytes.extend_from_slice(body);
@@ -256,8 +262,9 @@ fn message_input(
     bytes.extend_from_slice(&[0x44; 32]);
     bytes.push(mode);
     bytes.extend_from_slice(&[0; 7]);
+    bytes.extend_from_slice(&3u16.to_le_bytes());
+    bytes.extend_from_slice(&0u32.to_le_bytes());
     bytes.extend_from_slice(&500u128.to_le_bytes());
-    bytes.extend_from_slice(&2u16.to_le_bytes());
     bytes.extend_from_slice(&2u32.to_le_bytes());
     bytes.extend_from_slice(&3u128.to_le_bytes());
     bytes.extend_from_slice(&9u32.to_le_bytes());
@@ -283,8 +290,9 @@ fn batch_input(destination: AccountAddress, messages: &[Vec<u8>]) -> Vec<u8> {
     bytes.extend_from_slice(&[0x44; 32]);
     bytes.push(0);
     bytes.extend_from_slice(&[0; 7]);
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&0u32.to_le_bytes());
     bytes.extend_from_slice(&500u128.to_le_bytes());
-    bytes.extend_from_slice(&0u16.to_le_bytes());
     bytes.extend_from_slice(&3u32.to_le_bytes());
     bytes.extend_from_slice(b"old");
     bytes.extend_from_slice(&(messages.len() as u32).to_le_bytes());

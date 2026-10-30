@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["core", "contracts/vesting", "contracts/receiver", "tests"]
+default-members = ["contracts/vesting"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.86.0"
+license-file = "LICENSE"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

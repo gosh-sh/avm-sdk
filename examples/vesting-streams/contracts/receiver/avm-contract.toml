@@ -1,0 +1,80 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "bb389cd09772138d3026133543ed4aba4c9f3922925287a0ab7a22cd23e2900d"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+name = "state"
+kind = "fixed_bytes"
+len = 368
+
+[[abi.types]]
+id = 2
+name = "config"
+kind = "fixed_bytes"
+len = 2
+
+[[abi.types]]
+id = 3
+name = "index"
+kind = "fixed_bytes"
+len = 1
+
+[[abi.types]]
+id = 4
+name = "payment"
+kind = "fixed_bytes"
+len = 26
+
+[[abi.types]]
+id = 5
+name = "address"
+kind = "fixed_bytes"
+len = 64
+
+[[abi.types]]
+id = 6
+name = "amount"
+kind = "u128"
+
+[[abi.types]]
+id = 7
+name = "counter"
+kind = "u64"
+
+[[abi.methods]]
+name = "stream.receiver.deploy"
+input_type_id = 2
+
+[[abi.methods]]
+name = "stream.receiver.receive"
+input_type_id = 4
+
+[[abi.methods]]
+name = "stream.receiver.bind"
+input_type_id = 5
+
+[[abi.methods]]
+name = "stream.receiver.reject"
+input_type_id = 3
+
+[[abi.methods]]
+name = "stream.receiver.status"
+
+[[abi.errors]]
+status_code = 4100
+name = "unauthorized"
+message = "unauthorized"
+
+[[abi.errors]]
+status_code = 4101
+name = "invalid_receipt"
+message = "invalid receipt"
+
+[[abi.errors]]
+status_code = 4102
+name = "delivery_rejected"
+message = "delivery rejected"

@@ -16,7 +16,7 @@ const STATE_BYTES: usize = 4 + STATE_PAYLOAD_BYTES;
 const COUNTER_OFFSET: usize = 4;
 const COUNTER_BYTES: usize = 8;
 const INTERNAL_PATCH_BODY: [u8; 16] = [0x42; 16];
-const VALUE_MAIN: u128 = 37;
+const VALUE_ECC0: u128 = 37;
 const EXTRA_CURRENCY_ID: u32 = 7;
 const EXTRA_CURRENCY_AMOUNT: u128 = 11;
 
@@ -56,11 +56,13 @@ impl BatchContract for BatchPatchContract {
             return failure();
         };
         let mut extra = message.extra.iter();
+        let Some(ecc0) = extra.next() else { return failure() };
         let Some(currency) = extra.next() else { return failure() };
         if message.source == input.destination
             || message.source.dapp_id != input.destination.dapp_id
             || message.destination != input.destination
-            || message.value_main != VALUE_MAIN
+            || ecc0.currency_id != 0
+            || ecc0.amount != VALUE_ECC0
             || message.fuel_fee_shells != 1
             || currency.currency_id != EXTRA_CURRENCY_ID
             || currency.amount != EXTRA_CURRENCY_AMOUNT

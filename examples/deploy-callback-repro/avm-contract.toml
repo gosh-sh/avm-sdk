@@ -1,0 +1,63 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "repro_state"
+len = 1024
+
+[[abi.types]]
+id = 2
+kind = "bytes"
+name = "repro_forward_args"
+
+[[abi.types]]
+id = 3
+kind = "bytes"
+name = "repro_callback_body"
+
+[[abi.methods]]
+name = "repro.forward"
+input_type_id = 2
+
+[[abi.methods]]
+name = "repro.ping"
+
+[[abi.methods]]
+name = "repro.callback"
+input_type_id = 3
+
+[[abi.errors]]
+status_code = 1500
+name = "invalid_state"
+message = "repro state is malformed"
+
+[[abi.errors]]
+status_code = 1501
+name = "init_body_too_large"
+message = "init body does not fit the capture area"
+
+[[abi.errors]]
+status_code = 1502
+name = "invalid_forward_args"
+message = "forward expects destination 64 | method id u64 | request callback u8 | body"
+
+[[abi.errors]]
+status_code = 1503
+name = "external_caller_required"
+message = "forward must be a signed external message"
+
+[[abi.errors]]
+status_code = 1504
+name = "invalid_callback"
+message = "callback message has no callback header"
+
+[[abi.errors]]
+status_code = 1505
+name = "unknown_method"
+message = "method is not handled by the repro contract"

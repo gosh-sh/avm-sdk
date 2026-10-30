@@ -50,7 +50,6 @@ impl StateUpdate {
 pub struct OutboundIntent {
     pub input_index: u32,
     pub destination: AccountAddress,
-    pub value_main: AvmAmount,
     pub fuel_fee_shells: AvmAmount,
     pub extra: Vec<CurrencyAmount>,
     pub method_id: u64,
@@ -304,7 +303,7 @@ fn state_update_len(update: &StateUpdate) -> Result<usize, EncodeError> {
 
 fn outbound_intents_len(intents: &[OutboundIntent]) -> Result<usize, EncodeError> {
     intents.iter().try_fold(4, |total, intent| {
-        checked_len(&[total, 114, repeated_len(intent.extra.len(), 20)?, intent.body.len()])
+        checked_len(&[total, 98, repeated_len(intent.extra.len(), 20)?, intent.body.len()])
     })
 }
 
@@ -543,7 +542,6 @@ fn encode_outbound_intents(
         bytes.write(&intent.input_index.to_le_bytes())?;
         bytes.write(&intent.destination.dapp_id)?;
         bytes.write(&intent.destination.account_id)?;
-        bytes.write(&intent.value_main.to_le_bytes())?;
         bytes.write(&intent.fuel_fee_shells.to_le_bytes())?;
         bytes.write(&len_u16(intent.extra.len())?.to_le_bytes())?;
         for amount in &intent.extra {

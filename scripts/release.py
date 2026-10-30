@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shlex
 import tarfile
 import tempfile
 import uuid
@@ -274,6 +275,12 @@ def verify_tree(root, expected):
         else:
             require(path.is_dir(), "existing release contains a special file")
     require(actual == {name: digest(data) for name, data in expected.items()}, "immutable release already exists with different contents")
+    for name in expected:
+        if name in {"bin/" + binary for binary in BINARIES} or name.endswith(".sh"):
+            path = root / name
+            require(path.stat().st_mode & 0o111 == 0o111,
+                    f"missing executable permissions: {path}; restore mode 0755 on this verified file "
+                    f"with chmod 755 {shlex.quote(str(path))} and rerun the installer")
 
 
 def atomic_link(target, destination):

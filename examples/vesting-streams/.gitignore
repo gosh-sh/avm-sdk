@@ -1,0 +1,5 @@
+/target/
+/contracts/*/target/
+/.runtime/
+/evidence/
+__pycache__/

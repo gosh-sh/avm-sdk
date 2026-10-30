@@ -2,8 +2,8 @@ use crate::{
     AccountAddress, AvmAmount, CurrencyAmount, ExecutionContext, SelectedCodeId, StateOutputMode,
 };
 
-const INTERNAL_HEADER_LEN: usize = 192;
-const EXTERNAL_HEADER_LEN: usize = 208;
+const INTERNAL_HEADER_LEN: usize = 176;
+const EXTERNAL_HEADER_LEN: usize = 192;
 const EXTRA_CURRENCY_LEN: usize = 20;
 const INTERNAL_EVENT_READ_LEN: usize = 72;
 
@@ -179,7 +179,6 @@ impl ExactSizeIterator for InternalEventReadRequestIter<'_> {}
 pub struct InternalMessage<'a> {
     pub flags: u8,
     pub method_id: u64,
-    pub value_main: AvmAmount,
     pub fuel_fee_shells: AvmAmount,
     pub created_lt: u64,
     pub created_at: u32,
@@ -211,7 +210,6 @@ impl InternalMessage<'_> {
 pub struct ExternalMessage<'a> {
     pub flags: u8,
     pub method_id: u64,
-    pub value_main: AvmAmount,
     pub fuel_fee_shells: AvmAmount,
     pub nonce: u64,
     pub created_at: u32,
@@ -255,13 +253,6 @@ impl<'a> CanonicalMessage<'a> {
         match self {
             Self::Internal(message) => message.destination,
             Self::External(message) => message.destination,
-        }
-    }
-
-    pub const fn value_main(self) -> AvmAmount {
-        match self {
-            Self::Internal(message) => message.value_main,
-            Self::External(message) => message.value_main,
         }
     }
 
@@ -309,11 +300,95 @@ pub struct MessageInput<'a> {
     pub destination: AccountAddress,
     pub selected_code_id: SelectedCodeId,
     pub required_state_output_mode: StateOutputMode,
-    pub balance_main: AvmAmount,
     pub extra: CurrencyAmounts<'a>,
     pub state: &'a [u8],
     pub message: CanonicalMessage<'a>,
     pub internal_event_results: &'a [u8],
+}
+
+/// Borrowed constructor fields from the canonical ACDP deployment envelope.
+///
+/// The host owns code/hash, signature, metadata and configured-limit validation.
+/// This view checks the envelope's structural bounds without copying its code
+/// or constructor payload, and does not change `message.body()`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DeployInput<'a> {
+    package_id: [u8; 32],
+    owner_id: [u8; 32],
+    ui_name: &'a [u8],
+    salt: &'a [u8],
+    init_data: &'a [u8],
+}
+
+impl<'a> DeployInput<'a> {
+    pub const fn package_id(self) -> [u8; 32] {
+        self.package_id
+    }
+
+    pub const fn owner_id(self) -> [u8; 32] {
+        self.owner_id
+    }
+
+    pub const fn ui_name(self) -> &'a [u8] {
+        self.ui_name
+    }
+
+    pub const fn salt(self) -> &'a [u8] {
+        self.salt
+    }
+
+    pub const fn init_data(self) -> &'a [u8] {
+        self.init_data
+    }
+}
+
+impl<'a> MessageInput<'a> {
+    /// Reads this init call's constructor envelope. Ordinary calls return
+    /// `InvalidValue`; malformed or incomplete envelopes return a decode error.
+    pub fn deploy(self) -> Result<DeployInput<'a>, DecodeError> {
+        if !self.message.is_deploy() {
+            return Err(DecodeError::InvalidValue);
+        }
+        let body = self.message.body();
+        let mut tail = Reader::with_position(body, 288)?;
+        if read_fixed_at::<4>(body, 0)? != *b"ACDP" {
+            return Err(DecodeError::BadMagic);
+        }
+        let flags = read_u16_at(body, 4)?;
+        if flags & !0x3f != 0 {
+            return Err(DecodeError::UnknownTag);
+        }
+        if read_u16_at(body, 6)? != 0 || read_u16_at(body, 286)? != 0 {
+            return Err(DecodeError::NonZeroReserved);
+        }
+        let owner_key = read_fixed_at::<32>(body, 200)?;
+        let owner_key_set = flags & 0x10 != 0;
+        if owner_key_set == (owner_key == [0; 32]) || (flags & 8 != 0 && owner_key_set) {
+            return Err(DecodeError::InvalidValue);
+        }
+        let abi_len = to_usize(read_u32_at(body, 280)?)?;
+        if abi_len == 0 && read_fixed_at::<32>(body, 232)? != [0; 32] {
+            return Err(DecodeError::InvalidValue);
+        }
+        let ui_name = tail.take(usize::from(read_u16_at(body, 264)?))?;
+        let salt = tail.take(usize::from(read_u16_at(body, 266)?))?;
+        let init_data = tail.take(to_usize(read_u32_at(body, 268)?)?)?;
+        tail.take(to_usize(read_u32_at(body, 272)?)?)?;
+        tail.take(to_usize(read_u32_at(body, 276)?)?)?;
+        tail.take(abi_len)?;
+        tail.take(usize::from(read_u16_at(body, 284)?))?;
+        if flags & 0x20 != 0 {
+            tail.take(64)?;
+        }
+        tail.finish()?;
+        Ok(DeployInput {
+            package_id: read_fixed_at(body, 40)?,
+            owner_id: read_fixed_at(body, 136)?,
+            ui_name,
+            salt,
+            init_data,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -322,7 +397,6 @@ pub struct BatchInput<'a> {
     pub destination: AccountAddress,
     pub selected_code_id: SelectedCodeId,
     pub required_state_output_mode: StateOutputMode,
-    pub balance_main: AvmAmount,
     pub extra: CurrencyAmounts<'a>,
     pub state: &'a [u8],
     offsets: &'a [u8],
@@ -397,7 +471,6 @@ pub fn decode_message_input(bytes: &[u8]) -> Result<MessageInput<'_>, DecodeErro
     let selected_code_id = reader.array()?;
     let required_state_output_mode = read_state_output_mode(reader.u8()?)?;
     require_zero(reader.take(7)?)?;
-    let balance_main = reader.u128()?;
     let extra = read_currency_amounts(&mut reader)?;
     let state = reader.length_prefixed_u32()?;
     let message_bytes = reader.length_prefixed_u32()?;
@@ -433,7 +506,6 @@ pub fn decode_message_input(bytes: &[u8]) -> Result<MessageInput<'_>, DecodeErro
         destination,
         selected_code_id,
         required_state_output_mode,
-        balance_main,
         extra,
         state,
         message,
@@ -451,7 +523,6 @@ pub fn decode_batch_input(bytes: &[u8]) -> Result<BatchInput<'_>, DecodeError> {
     let selected_code_id = reader.array()?;
     let required_state_output_mode = read_state_output_mode(reader.u8()?)?;
     require_zero(reader.take(7)?)?;
-    let balance_main = reader.u128()?;
     let extra = read_currency_amounts(&mut reader)?;
     let state = reader.length_prefixed_u32()?;
     let message_count = reader.u32()?;
@@ -492,7 +563,6 @@ pub fn decode_batch_input(bytes: &[u8]) -> Result<BatchInput<'_>, DecodeError> {
         destination,
         selected_code_id,
         required_state_output_mode,
-        balance_main,
         extra,
         state,
         offsets,
@@ -524,16 +594,16 @@ fn decode_internal_message(bytes: &[u8]) -> Result<InternalMessage<'_>, DecodeEr
     {
         return Err(DecodeError::InvalidValue);
     }
-    require_zero(header.get(60..64).ok_or(DecodeError::UnexpectedEof)?)?;
+    require_zero(header.get(44..48).ok_or(DecodeError::UnexpectedEof)?)?;
     let extra_count = read_u16_at(header, 2)?;
     let body_len = to_usize(read_u32_at(header, 4)?)?;
     let source = AccountAddress {
-        dapp_id: read_array_at(header, 64)?,
-        account_id: read_array_at(header, 96)?,
+        dapp_id: read_array_at(header, 48)?,
+        account_id: read_array_at(header, 80)?,
     };
     let destination = AccountAddress {
-        dapp_id: read_array_at(header, 128)?,
-        account_id: read_array_at(header, 160)?,
+        dapp_id: read_array_at(header, 112)?,
+        account_id: read_array_at(header, 144)?,
     };
     if is_zero_address(source) || is_zero_address(destination) {
         return Err(DecodeError::InvalidValue);
@@ -606,10 +676,9 @@ fn decode_internal_message(bytes: &[u8]) -> Result<InternalMessage<'_>, DecodeEr
     Ok(InternalMessage {
         flags,
         method_id: read_u64_at(header, 8)?,
-        value_main: read_u128_at(header, 16)?,
-        fuel_fee_shells: read_u128_at(header, 32)?,
-        created_lt: read_u64_at(header, 48)?,
-        created_at: read_u32_at(header, 56)?,
+        fuel_fee_shells: read_u128_at(header, 16)?,
+        created_lt: read_u64_at(header, 32)?,
+        created_at: read_u32_at(header, 40)?,
         source,
         destination,
         callback,
@@ -629,18 +698,18 @@ fn decode_external_message(bytes: &[u8]) -> Result<ExternalMessage<'_>, DecodeEr
     {
         return Err(DecodeError::InvalidValue);
     }
-    require_zero(header.get(162..208).ok_or(DecodeError::UnexpectedEof)?)?;
-    let signature_len = read_u16_at(header, 160)?;
+    require_zero(header.get(146..192).ok_or(DecodeError::UnexpectedEof)?)?;
+    let signature_len = read_u16_at(header, 144)?;
     if signature_len != 64 {
         return Err(DecodeError::InvalidLength);
     }
     let extra_count = read_u16_at(header, 2)?;
     let body_len = to_usize(read_u32_at(header, 4)?)?;
     let destination = AccountAddress {
-        dapp_id: read_array_at(header, 64)?,
-        account_id: read_array_at(header, 96)?,
+        dapp_id: read_array_at(header, 48)?,
+        account_id: read_array_at(header, 80)?,
     };
-    let pubkey = read_array_at(header, 128)?;
+    let pubkey = read_array_at(header, 112)?;
     if is_zero_address(destination) || pubkey == [0; 32] {
         return Err(DecodeError::InvalidValue);
     }
@@ -654,11 +723,10 @@ fn decode_external_message(bytes: &[u8]) -> Result<ExternalMessage<'_>, DecodeEr
     Ok(ExternalMessage {
         flags,
         method_id: read_u64_at(header, 8)?,
-        value_main: read_u128_at(header, 16)?,
-        fuel_fee_shells: read_u128_at(header, 32)?,
-        nonce: read_u64_at(header, 48)?,
-        created_at: read_u32_at(header, 56)?,
-        expire_at: read_u32_at(header, 60)?,
+        fuel_fee_shells: read_u128_at(header, 16)?,
+        nonce: read_u64_at(header, 32)?,
+        created_at: read_u32_at(header, 40)?,
+        expire_at: read_u32_at(header, 44)?,
         destination,
         pubkey,
         extra,
@@ -799,10 +867,6 @@ impl<'a> Reader<'a> {
 
     fn u64(&mut self) -> Result<u64, DecodeError> {
         Ok(u64::from_le_bytes(self.fixed()?))
-    }
-
-    fn u128(&mut self) -> Result<u128, DecodeError> {
-        Ok(u128::from_le_bytes(self.fixed()?))
     }
 
     fn array<const N: usize>(&mut self) -> Result<[u8; N], DecodeError> {

@@ -1,0 +1,96 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "f809350910a667650f289d075e6989a5dfef9c642aa958f589375e057252ba32"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "state"
+len = 224
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "config"
+len = 88
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+name = "index"
+len = 1
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "payload"
+len = 25
+
+[[abi.types]]
+id = 5
+kind = "fixed_bytes"
+name = "nonce"
+len = 8
+
+[[abi.types]]
+id = 6
+kind = "fixed_bytes"
+name = "address"
+len = 64
+
+[[abi.types]]
+id = 7
+kind = "fixed_bytes"
+name = "index_address"
+len = 65
+
+[[abi.types]]
+id = 8
+kind = "u128"
+name = "amount"
+
+[[abi.types]]
+id = 9
+kind = "u64"
+name = "counter"
+
+[[abi.methods]]
+name = "hub.receiver.deploy"
+input_type_id = 2
+
+[[abi.methods]]
+name = "hub.receiver.receive"
+input_type_id = 4
+
+[[abi.methods]]
+name = "hub.receiver.bind"
+input_type_id = 6
+
+[[abi.methods]]
+name = "hub.receiver.reject"
+input_type_id = 3
+
+[[abi.methods]]
+name = "hub.receiver.duplicate_audit"
+input_type_id = 3
+
+[[abi.methods]]
+name = "hub.receiver.status"
+
+[[abi.errors]]
+status_code = 3100
+name = "unauthorized"
+message = "unauthorized"
+
+[[abi.errors]]
+status_code = 3101
+name = "invalid_receipt"
+message = "invalid receipt"
+
+[[abi.errors]]
+status_code = 3102
+name = "delivery_rejected"
+message = "delivery rejected"

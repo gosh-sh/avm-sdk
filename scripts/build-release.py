@@ -13,7 +13,7 @@ import subprocess
 import tarfile
 import tomllib
 
-from manual_gates import clean, head
+from manual_gates import clean, head, normalize_scratch_environment
 from release import ARCHIVE, BINARIES, ROOT, artifact_records, digest, engine_library_artifact, file_digest, parse_profile, require, verify_archive
 
 RUST_NOTICE_SHA256 = {
@@ -180,8 +180,9 @@ def identity(source, sdk):
 
 
 def build(source, sdk, output, gates):
-    require(os.environ.get("AVM_SDK_POD_QUALIFICATION") == "1", "use the bounded pod launcher")
-    require(os.sched_getaffinity(0) <= {0, 1} and os.environ.get("CARGO_BUILD_JOBS") == "2", "build requires CPUs 0-1 and jobs=2")
+    require(os.environ.get("AVM_SDK_QUALIFICATION") == "1"
+            or os.environ.get("AVM_SDK_POD_QUALIFICATION") == "1", "use a bounded qualification launcher")
+    require(len(os.sched_getaffinity(0)) == 2 and os.environ.get("CARGO_BUILD_JOBS") == "2", "build requires exactly 2 allowed CPUs and jobs=2")
     ids = identity(source, sdk)
     qualification = json.loads(gates.read_bytes())
     require(qualification.get("passed") is True and qualification.get("gates"), "combined source gates have not passed")
@@ -316,7 +317,7 @@ def package(source, sdk, build_root, output):
     files["provenance/cargo-artifacts.jsonl"] = (build_root / "cargo-artifacts.jsonl").read_bytes()
     tag = f"avm-dev-{ids['source_commit'][:12]}-sdk-{ids['sdk_commit'][:12]}"
     files["BUILD-MANIFEST.json"] = json_bytes({
-        "schema": "gosh.avm-sdk.release.v2", "bundle_version": "0.2.0", "guest_version": "0.1.1", "release_tag": tag,
+        "schema": "gosh.avm-sdk.release.v2", "bundle_version": "0.3.0", "guest_version": "0.1.1", "release_tag": tag,
         "ackinacki_repository": "gosh-sh/acki-nacki", "ackinacki_commit": ids["source_commit"],
         "sdk_repository": "gosh-sh/avm-sdk", "sdk_commit": ids["sdk_commit"],
         "wasmtime_profile_sha256": ids["profile_sha256"], "runtime_lock_sha256": ids["lock_sha256"],
@@ -343,6 +344,7 @@ def package(source, sdk, build_root, output):
 
 
 def main():
+    normalize_scratch_environment()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("build", "package"))
     parser.add_argument("--source", required=True, type=Path)

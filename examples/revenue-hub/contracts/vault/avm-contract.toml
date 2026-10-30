@@ -1,0 +1,696 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "3a33203b01d20fa6676c526f5e21f758e76dd4cdccab535d2f9b2ac7c6b345ea"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "state"
+len = 3560
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "config"
+len = 1792
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+name = "index"
+len = 1
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "payload"
+len = 25
+
+[[abi.types]]
+id = 5
+kind = "fixed_bytes"
+name = "nonce"
+len = 8
+
+[[abi.types]]
+id = 6
+kind = "fixed_bytes"
+name = "address"
+len = 64
+
+[[abi.types]]
+id = 7
+kind = "fixed_bytes"
+name = "index_address"
+len = 65
+
+[[abi.types]]
+id = 8
+kind = "u128"
+name = "amount"
+
+[[abi.types]]
+id = 9
+kind = "u64"
+name = "counter"
+
+[[abi.methods]]
+name = "hub.vault.deploy"
+input_type_id = 2
+
+[[abi.methods]]
+name = "hub.vault.deposit"
+
+[[abi.methods]]
+name = "hub.vault.claim"
+input_type_id = 3
+
+[[abi.methods]]
+name = "hub.vault.callback"
+input_type_id = 4
+
+[[abi.methods]]
+name = "hub.vault.propose"
+input_type_id = 4
+
+[[abi.methods]]
+name = "hub.vault.vote"
+input_type_id = 4
+
+[[abi.methods]]
+name = "hub.vault.execute"
+input_type_id = 5
+
+[[abi.methods]]
+name = "hub.vault.status"
+
+[[abi.methods]]
+name = "hub.vault.topup"
+
+[[abi.events]]
+name = "hub.created"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "dust"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "paid"
+
+[[abi.events.fields]]
+id = 7
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 8
+type_id = 8
+name = "pending"
+
+[[abi.events.fields]]
+id = 9
+type_id = 9
+name = "proposal"
+
+[[abi.events.fields]]
+id = 10
+type_id = 8
+name = "received"
+
+[[abi.events]]
+name = "hub.deposited"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "dust"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "paid"
+
+[[abi.events.fields]]
+id = 7
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 8
+type_id = 8
+name = "pending"
+
+[[abi.events.fields]]
+id = 9
+type_id = 9
+name = "proposal"
+
+[[abi.events.fields]]
+id = 10
+type_id = 8
+name = "received"
+
+[[abi.events]]
+name = "hub.claim_pending"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "dust"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "paid"
+
+[[abi.events.fields]]
+id = 7
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 8
+type_id = 8
+name = "pending"
+
+[[abi.events.fields]]
+id = 9
+type_id = 9
+name = "proposal"
+
+[[abi.events.fields]]
+id = 10
+type_id = 8
+name = "received"
+
+[[abi.events]]
+name = "hub.claim_settled"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "dust"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "paid"
+
+[[abi.events.fields]]
+id = 7
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 8
+type_id = 8
+name = "pending"
+
+[[abi.events.fields]]
+id = 9
+type_id = 9
+name = "proposal"
+
+[[abi.events.fields]]
+id = 10
+type_id = 8
+name = "received"
+
+[[abi.events]]
+name = "hub.claim_failed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "dust"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "paid"
+
+[[abi.events.fields]]
+id = 7
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 8
+type_id = 8
+name = "pending"
+
+[[abi.events.fields]]
+id = 9
+type_id = 9
+name = "proposal"
+
+[[abi.events.fields]]
+id = 10
+type_id = 8
+name = "received"
+
+[[abi.events]]
+name = "hub.proposed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "dust"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "paid"
+
+[[abi.events.fields]]
+id = 7
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 8
+type_id = 8
+name = "pending"
+
+[[abi.events.fields]]
+id = 9
+type_id = 9
+name = "proposal"
+
+[[abi.events.fields]]
+id = 10
+type_id = 8
+name = "received"
+
+[[abi.events]]
+name = "hub.voted"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "dust"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "paid"
+
+[[abi.events.fields]]
+id = 7
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 8
+type_id = 8
+name = "pending"
+
+[[abi.events.fields]]
+id = 9
+type_id = 9
+name = "proposal"
+
+[[abi.events.fields]]
+id = 10
+type_id = 8
+name = "received"
+
+[[abi.events]]
+name = "hub.executed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "dust"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "paid"
+
+[[abi.events.fields]]
+id = 7
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 8
+type_id = 8
+name = "pending"
+
+[[abi.events.fields]]
+id = 9
+type_id = 9
+name = "proposal"
+
+[[abi.events.fields]]
+id = 10
+type_id = 8
+name = "received"
+
+[[abi.events]]
+name = "hub.status"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "dust"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "paid"
+
+[[abi.events.fields]]
+id = 7
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 8
+type_id = 8
+name = "pending"
+
+[[abi.events.fields]]
+id = 9
+type_id = 9
+name = "proposal"
+
+[[abi.events.fields]]
+id = 10
+type_id = 8
+name = "received"
+
+[[abi.events]]
+name = "hub.fees_added"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "dust"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "held"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "paid"
+
+[[abi.events.fields]]
+id = 7
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 8
+type_id = 8
+name = "pending"
+
+[[abi.events.fields]]
+id = 9
+type_id = 9
+name = "proposal"
+
+[[abi.events.fields]]
+id = 10
+type_id = 8
+name = "received"
+
+[[abi.errors]]
+status_code = 3000
+name = "invalid_args"
+message = "invalid args"
+
+[[abi.errors]]
+status_code = 3001
+name = "unauthorized"
+message = "unauthorized"
+
+[[abi.errors]]
+status_code = 3002
+name = "invalid_state"
+message = "invalid state"
+
+[[abi.errors]]
+status_code = 3003
+name = "paused"
+message = "paused"
+
+[[abi.errors]]
+status_code = 3004
+name = "invalid_value"
+message = "invalid value"
+
+[[abi.errors]]
+status_code = 3005
+name = "claim_pending"
+message = "claim pending"
+
+[[abi.errors]]
+status_code = 3006
+name = "nothing_to_claim"
+message = "nothing to claim"
+
+[[abi.errors]]
+status_code = 3007
+name = "invalid_callback"
+message = "invalid callback"
+
+[[abi.errors]]
+status_code = 3008
+name = "overflow"
+message = "overflow"
+
+[[abi.errors]]
+status_code = 3009
+name = "insufficient_balance"
+message = "insufficient balance"
+
+[[abi.errors]]
+status_code = 3010
+name = "invalid_proposal"
+message = "invalid proposal"
+
+[[abi.errors]]
+status_code = 3011
+name = "duplicate_vote"
+message = "duplicate vote"
+
+[[abi.errors]]
+status_code = 3012
+name = "timelock"
+message = "timelock"
+
+[[abi.errors]]
+status_code = 3013
+name = "proposal_expired"
+message = "proposal expired"
+
+[[abi.errors]]
+status_code = 3014
+name = "quorum_missing"
+message = "quorum missing"

@@ -33,6 +33,8 @@ export PATH="${HOME}/.local/bin:${PATH}"
 
 - [Getting Started](docs/getting-started.md)
 - [FUEL And SHELL](docs/fuel-and-fees.md)
+- [Runtime Limits, Rent And Addresses](docs/runtime-limits.md)
+- [Source Candidate Tooling](docs/tooling-preview.md)
 - [Command-Line Reference](docs/cli-reference.md)
 - [Contract Examples](examples/README.md)
 - [Releases And Provenance](docs/releases.md)

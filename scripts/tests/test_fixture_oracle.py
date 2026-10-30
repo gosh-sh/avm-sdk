@@ -46,10 +46,11 @@ class FixtureOracleTests(unittest.TestCase):
 
     def test_full_account_body_and_index_leaf_have_independent_byte_layouts(self):
         address, selection = bytes(range(64)), bytes(range(32))
-        image = b"\0" + selection + bytes.fromhex("25000000000000000000000000000000")
-        image += b"\x02\0\x02\0\0\0" + (123).to_bytes(16, "little")
+        image = b"\0" + selection + b"\x03\0\0\0\0\0"
+        image += (37).to_bytes(16, "little")
+        image += b"\x02\0\0\0" + (123).to_bytes(16, "little")
         image += b"\x07\0\0\0" + (11).to_bytes(16, "little") + b"\x03\0\0\0abc"
-        self.assertEqual(account_image(selection, 37, {2: 123, 7: 11}, b"abc"), image)
+        self.assertEqual(account_image(selection, {0: 37, 2: 123, 7: 11}, b"abc"), image)
         leaf = address + h(image) + b"\x09\0\0\0\0\0\0\0\x01" + selection
         leaf += b"\0\0\0\0\x04\x03\x02\x01" + bytes(17)
         self.assertEqual(account_leaf(address, image, 9, 0x01020304), leaf)

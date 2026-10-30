@@ -4,6 +4,7 @@ use avm_contract_sdk::encode_event_fields;
 use avm_contract_sdk::Caller;
 use avm_contract_sdk::CanonicalMessage;
 use avm_contract_sdk::Contract;
+use avm_contract_sdk::CurrencyAmount;
 use avm_contract_sdk::EventField;
 use avm_contract_sdk::EventIntent;
 use avm_contract_sdk::EventKind;
@@ -16,7 +17,7 @@ use avm_contract_sdk::StateUpdate;
 
 const STATE_BYTES: usize = 128;
 const CAUSAL_A_STATE_BYTES: usize = 72;
-const VALUE_MAIN: u128 = 37;
+const VALUE_ECC0: u128 = 37;
 const EXTRA_CURRENCY_ID: u32 = 7;
 const EXTRA_CURRENCY_AMOUNT: u128 = 11;
 const OUTBOUND_BODY: [u8; 16] = [0x42; 16];
@@ -35,11 +36,15 @@ impl Contract for ContractB {
             return MessageOutput::success(StateUpdate::FullReplace(vec![0; STATE_BYTES]));
         };
         let mut transferred_extra = input.message.extra().iter();
+        let Some(ecc0) = transferred_extra.next() else {
+            return MessageOutput::failure(1102);
+        };
         let Some(currency) = transferred_extra.next() else {
             return MessageOutput::failure(1102);
         };
         if !input.message.is_deploy()
-            || input.message.value_main() != VALUE_MAIN
+            || ecc0.currency_id != 0
+            || ecc0.amount != VALUE_ECC0
             || currency.currency_id != EXTRA_CURRENCY_ID
             || currency.amount != EXTRA_CURRENCY_AMOUNT
             || transferred_extra.next().is_some()
@@ -55,7 +60,7 @@ impl Contract for ContractB {
                 name: "destination".into(),
                 value: EventValue::Address(input.destination),
             },
-            EventField { name: "value_main".into(), value: EventValue::U128(VALUE_MAIN) },
+            EventField { name: "value_ecc0".into(), value: EventValue::U128(VALUE_ECC0) },
         ]) {
             Ok(fields) => fields,
             Err(_) => return MessageOutput::failure(1105),
@@ -75,9 +80,8 @@ impl Contract for ContractB {
             .map(|_| OutboundIntent {
                 input_index: 0,
                 destination: source,
-                value_main: 1,
                 fuel_fee_shells: u128::from(source.dapp_id != input.destination.dapp_id),
-                extra: Vec::new(),
+                extra: vec![CurrencyAmount { currency_id: 0, amount: 1 }],
                 method_id: PAYOUT_METHOD_ID,
                 body: Vec::new(),
             })
@@ -125,10 +129,14 @@ impl Contract for ContractB {
             return MessageOutput::failure(1101);
         };
         let mut extra = input.message.extra().iter();
+        let Some(ecc0) = extra.next() else {
+            return MessageOutput::failure(1102);
+        };
         let Some(currency) = extra.next() else {
             return MessageOutput::failure(1102);
         };
-        if input.message.value_main() != VALUE_MAIN
+        if ecc0.currency_id != 0
+            || ecc0.amount != VALUE_ECC0
             || currency.currency_id != EXTRA_CURRENCY_ID
             || currency.amount != EXTRA_CURRENCY_AMOUNT
             || extra.next().is_some()
@@ -149,7 +157,6 @@ impl Contract for ContractB {
             output.outbound_intents = vec![OutboundIntent {
                 input_index: 0,
                 destination: source,
-                value_main: input.balance_main,
                 fuel_fee_shells: 0,
                 extra: input.extra.into_iter().collect(),
                 method_id: PAYOUT_METHOD_ID,
@@ -163,7 +170,7 @@ impl Contract for ContractB {
         state.extend_from_slice(&next_count.to_le_bytes());
         state.extend_from_slice(&source.dapp_id);
         state.extend_from_slice(&source.account_id);
-        state.extend_from_slice(&input.message.value_main().to_le_bytes());
+        state.extend_from_slice(&ecc0.amount.to_le_bytes());
         state.extend_from_slice(&1_u32.to_le_bytes());
         state.extend_from_slice(&currency.currency_id.to_le_bytes());
         state.extend_from_slice(&currency.amount.to_le_bytes());
@@ -183,7 +190,7 @@ impl Contract for ContractB {
                 name: "destination".into(),
                 value: EventValue::Address(input.destination),
             },
-            EventField { name: "value_main".into(), value: EventValue::U128(VALUE_MAIN) },
+            EventField { name: "value_ecc0".into(), value: EventValue::U128(VALUE_ECC0) },
         ]) {
             Ok(fields) => fields,
             Err(_) => return MessageOutput::failure(1105),
@@ -236,7 +243,6 @@ fn process_event_read(
         || read.source == input.destination
         || input.message.is_callback()
         || input.message.has_callback_request()
-        || input.message.value_main() != 0
         || input.message.extra().iter().next().is_some()
         || input.internal_event_results.get(..expected_prefix.len()) != Some(&expected_prefix)
         || input.message.body() != input.internal_event_results

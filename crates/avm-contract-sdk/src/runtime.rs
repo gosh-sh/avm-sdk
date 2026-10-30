@@ -258,18 +258,18 @@ mod tests {
 
     fn input() -> Vec<u8> {
         // Canonical ACMI with one internal message, no extras or optional sections.
-        let mut bytes = vec![0; 278];
+        let mut bytes = vec![0; 262];
         bytes[..4].copy_from_slice(b"ACMI");
         bytes[60..124].fill(1);
         bytes[156..220].fill(2);
         bytes[220..252].fill(3);
         bytes.extend_from_slice(&3u32.to_le_bytes());
         bytes.extend_from_slice(b"old");
-        bytes.extend_from_slice(&192u32.to_le_bytes());
-        let mut message = vec![0; 192];
+        bytes.extend_from_slice(&176u32.to_le_bytes());
+        let mut message = vec![0; 176];
         message[8..16].copy_from_slice(&1u64.to_le_bytes());
-        message[64..128].fill(1);
-        message[128..192].fill(2);
+        message[48..112].fill(1);
+        message[112..176].fill(2);
         bytes.extend_from_slice(&message);
         bytes.extend_from_slice(&0u32.to_le_bytes());
         decode_message_input(&bytes).unwrap();
@@ -332,16 +332,16 @@ mod tests {
     #[test]
     fn dispatch_failure_capacity_and_overflow_leave_input_owned() {
         let bytes = input();
-        let arena = GuestArena::<512>::new();
+        let arena = GuestArena::<480>::new();
         let ptr = load(&arena, &bytes);
         let len = bytes.len() as u32;
         assert_eq!(arena.allocate(0), 0);
         assert_eq!(arena.allocate(u32::MAX), 0);
-        assert_eq!(dispatch_message::<Echo, 512>(&arena, ptr, len), 0);
+        assert_eq!(dispatch_message::<Echo, 480>(&arena, ptr, len), 0);
         assert_eq!(arena.allocation_count.load(Ordering::Relaxed), 1);
         assert_eq!(arena.read(ptr, len).unwrap(), bytes);
-        assert_eq!(dispatch_init::<Echo, 512>(&arena, ptr, len), 0);
-        assert_eq!(dispatch_message::<Echo, 512>(&arena, ptr, len - 1), 0);
+        assert_eq!(dispatch_init::<Echo, 480>(&arena, ptr, len), 0);
+        assert_eq!(dispatch_message::<Echo, 480>(&arena, ptr, len - 1), 0);
         assert_eq!(arena.next.load(Ordering::Relaxed), len);
         assert!(arena.free(ptr, len));
         assert!(!arena.free(ptr, len));
@@ -378,7 +378,6 @@ mod tests {
                 output.outbound_intents.push(crate::OutboundIntent {
                     input_index: 0,
                     destination: input.destination,
-                    value_main: 0,
                     fuel_fee_shells: 1,
                     extra: Vec::new(),
                     method_id: 1,
@@ -392,7 +391,7 @@ mod tests {
         for _ in 0..10_000 {
             let output = OutputShape::process_message(decode_message_input(&bytes).unwrap());
             let expected = crate::encode_message_output(&output).unwrap();
-            assert_eq!(expected.len(), 355);
+            assert_eq!(expected.len(), 339);
             let arena = GuestArena::<1024>::new();
             let ptr = load(&arena, &bytes);
             let packed = dispatch_message::<OutputShape, 1024>(&arena, ptr, bytes.len() as u32);
@@ -400,7 +399,7 @@ mod tests {
         }
         // Each positive-control Vec grows six times (first allocation included).
         // The direct dispatch adds no Vec writes/growth; only one arena write/byte.
-        assert_eq!(crate::output::work::take(), (3_550_000, 60_000, 3_550_000));
+        assert_eq!(crate::output::work::take(), (3_390_000, 60_000, 3_390_000));
     }
 
     #[test]
@@ -425,17 +424,17 @@ mod tests {
             }
         }
         let message = input();
-        let mut bytes = vec![0; 174];
+        let mut bytes = vec![0; 158];
         bytes[..4].copy_from_slice(b"ACBI");
         bytes[52..116].fill(2);
         bytes[116..148].fill(3);
         bytes.extend_from_slice(&0u32.to_le_bytes());
         bytes.extend_from_slice(&2u32.to_le_bytes());
-        for offset in [0u32, 192, 384] {
+        for offset in [0u32, 176, 352] {
             bytes.extend_from_slice(&offset.to_le_bytes());
         }
-        bytes.extend_from_slice(&message[289..481]);
-        bytes.extend_from_slice(&message[289..481]);
+        bytes.extend_from_slice(&message[273..449]);
+        bytes.extend_from_slice(&message[273..449]);
         bytes.extend_from_slice(&0u32.to_le_bytes());
         let input = decode_batch_input(&bytes).unwrap();
         let mut output = BatchEcho::process_batch(input);
@@ -454,7 +453,6 @@ mod tests {
         output.outbound_intents.push(crate::OutboundIntent {
             input_index: 1,
             destination: input.destination,
-            value_main: 0,
             fuel_fee_shells: 0,
             extra: Vec::new(),
             method_id: 1,
@@ -509,9 +507,11 @@ mod tests {
             output.outbound_intents.push(OutboundIntent {
                 input_index: 0,
                 destination: input.destination,
-                value_main: 8,
                 fuel_fee_shells: 9,
-                extra: vec![CurrencyAmount { currency_id: 1, amount: 10 }],
+                extra: vec![
+                    CurrencyAmount { currency_id: 0, amount: 8 },
+                    CurrencyAmount { currency_id: 1, amount: 10 },
+                ],
                 method_id: 11,
                 body: vec![12; 64],
             });

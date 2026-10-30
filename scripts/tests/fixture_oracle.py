@@ -56,9 +56,9 @@ def map_root(entries, width, compact):
     return descend(rows, 0) if rows else hashed(b"EMPTY", bytes(2))
 
 
-def account_image(selection, balance, extra, data):
+def account_image(selection, extra, data):
     assert len(selection) == 32 and len(data) <= 65540
-    return (b"\0" + selection + le(balance, 16) + le(len(extra), 2)
+    return (b"\0" + selection + le(len(extra), 2)
             + b"".join(le(key, 4) + le(value, 16) for key, value in sorted(extra.items()))
             + le(len(data), 4) + data)
 
@@ -266,9 +266,9 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     offsets = [1, 2, 4, 5, 6, 7, 8] if version else [1, 2, 3, 3, 4 if batch else 3]
     assert times == [start + offset for offset in offsets] and len(transcript) == len(offsets)
 
-    def external(wire, index, pubkey, nonce, at, method, body, deploy=False, amount=0, extras=()):
+    def external(wire, index, pubkey, nonce, at, method, body, deploy=False, extras=()):
         prefix = struct.pack("<BBHIQ", 1, 3 if deploy else 1, len(extras), len(body), method)
-        prefix += le(amount, 16) + le(1, 16) + le(nonce, 8) + le(at, 4) + le(at + 3600, 4)
+        prefix += le(1, 16) + le(nonce, 8) + le(at, 4) + le(at + 3600, 4)
         prefix += addresses[index] + pubkey + le(64, 2) + bytes(46)
         prefix += b"".join(le(key, 4) + le(value, 16) for key, value in extras) + body
         assert wire[:-64] == prefix and len(wire) == len(prefix) + 64, "public external fixture input differs"
@@ -293,8 +293,11 @@ def expected_journey(bundle, label, identities, transcript, times, current):
             lt, times[transcript_index], 0, 0, int.from_bytes(h(b"avm.account.init")[:8], "little"),
             "avm.account.init", [], fields))
 
-    def account(index, selection, balance, shells, extra, data, lt, paid):
-        image = account_image(selection, balance, {2: shells, **extra}, data)
+    def account(index, selection, ecc0, shells, extra, data, lt, paid):
+        currencies = {2: shells, **extra}
+        if ecc0:
+            currencies[0] = ecc0
+        image = account_image(selection, currencies, data)
         expected["accounts"][addresses[index]] = image
         expected["account_leaves"][addresses[index]] = account_leaf(addresses[index], image, lt, start + paid)
 
@@ -319,7 +322,7 @@ def expected_journey(bundle, label, identities, transcript, times, current):
             state[48:72] = migration
         state[16] = 2 if current else 1
         account(0, selections[1] if current else selections[0], 0,
-                funded - 5 * 2 - (55 + 20 + 72) * 7, {}, bytes(state), 9, 8)
+                funded - 5 * 2 - (39 + 20 + 72) * 7, {}, bytes(state), 9, 8)
         account(1, selections[1], 0, funded, {}, bytes(72), 5, 4)
         return expected
 
@@ -329,25 +332,25 @@ def expected_journey(bundle, label, identities, transcript, times, current):
         h(b"causal.a.version")[:8] if label == "out-of-fuel" else le(0xc2c6c51bc610249d, 8))
     forward = second_address + method + handler
     external(transcript[2], 0, user, 1, start + 3,
-             int.from_bytes(h(b"causal.a.forward")[:8], "little"), forward, amount=100, extras=[(7, 40)])
-    delivered = struct.pack("<BBHI", 0, 0 if batch else 4, 1, 16) + method
-    delivered += le(37, 16) + le(1 if batch else 0, 16) + le(6, 8) + le(start + 3, 4) + bytes(4)
-    delivered += first + second_address + (b"" if batch else handler) + le(7, 4) + le(11, 16) + b"\x42" * 16
+             int.from_bytes(h(b"causal.a.forward")[:8], "little"), forward, extras=[(0, 100), (7, 40)])
+    delivered = struct.pack("<BBHI", 0, 0 if batch else 4, 2, 16) + method
+    delivered += le(1 if batch else 0, 16) + le(6, 8) + le(start + 3, 4) + bytes(4)
+    delivered += first + second_address + (b"" if batch else handler) + le(0, 4) + le(37, 16) + le(7, 4) + le(11, 16) + b"\x42" * 16
     assert transcript[3] == delivered, "complete VM-produced message differs"
     sender = bytearray(le(1, 8) + bytes(64))
-    sender_shells = funded - (55 + 20 + 72) * 2 - 2 - 1
+    sender_shells = funded - (39 + 20 + 72) * 2 - 2 - 1
     if batch:
         external(transcript[4], 1, user, 1, start + 4, int.from_bytes(method, "little"), b"")
         receiver = le(65536, 4) + le(1, 8) + bytes(65528)
         account(0, selections[0], 63, sender_shells, {7: 29}, bytes(sender), 5, 3)
-        account(1, selections[1], 37, funded - (55 + 20 + 65540) - (55 + 40 + 65540) - 2,
+        account(1, selections[1], 37, funded - (39 + 20 + 65540) - (39 + 60 + 65540) - 2,
                 {7: 11}, receiver, 8, 4)
     else:
         status = {"trap": 30, "out-of-fuel": 31, "invalid-event": 44}.get(label, 0)
-        callback = struct.pack("<BBHI", 0, 1, 1 if failure else 0, 0 if failure else 16) + handler
-        callback += le(37 if failure else 0, 16) + le(1, 16) + le(8, 8) + le(start + 3, 4) + bytes(4)
+        callback = struct.pack("<BBHI", 0, 1, 2 if failure else 0, 0 if failure else 16) + handler
+        callback += le(1, 16) + le(8, 8) + le(start + 3, 4) + bytes(4)
         callback += second_address + first + h(delivered) + first + le(status, 4)
-        callback += le(7, 4) + le(11, 16) if failure else b"\x99" * 16
+        callback += le(0, 4) + le(37, 16) + le(7, 4) + le(11, 16) if failure else b"\x99" * 16
         assert transcript[4] == callback, "complete VM-produced callback differs"
         if failure:
             receiver = bytes(128)
@@ -356,7 +359,7 @@ def expected_journey(bundle, label, identities, transcript, times, current):
             receiver = le(1, 8) + first + le(37, 16) + le(1, 4) + le(7, 4) + le(11, 16) + method + le(16, 4) + b"\x42" * 4
             for seq, kind, event_class, name, topics, fields in (
                 (0, 0, 0x71228a3dc1799631, "causal.a.forwarded", [second_address[32:]],
-                 [("count", "u64", 1), ("destination", "address", second_address), ("value_main", "u128", 37)]),
+                 [("count", "u64", 1), ("destination", "address", second_address), ("value_ecc0", "u128", 37)]),
                 (1, 1, 0x127e58f93e9d40f8, "causal.a.state", [le(1, 8)],
                  [("count", "u64", 1), ("state", "data", le(1, 8) + bytes(64))]),
             ):
@@ -367,6 +370,6 @@ def expected_journey(bundle, label, identities, transcript, times, current):
                     expected["rings"][key] = b"AIER\x01\0\0\0" + le(len(event), 4) + event
         account(0, selections[0], 100 if failure else 63, sender_shells,
                 {7: 40 if failure else 29}, bytes(sender), 9, 3)
-        account(1, selections[1], 0 if failure else 37, funded - (55 + 20 + 128),
+        account(1, selections[1], 0 if failure else 37, funded - (39 + 20 + 128),
                 {} if failure else {7: 11}, receiver, 7, 3)
     return expected

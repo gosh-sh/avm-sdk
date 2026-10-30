@@ -1,0 +1,11 @@
+[package]
+name = "avm-stream-tests"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+avm-contract-sdk = { path = "../../../crates/avm-contract-sdk" }
+avm-stream-core = { path = "../core" }
+avm-stream-vesting = { path = "../contracts/vesting" }
+avm-stream-receiver = { path = "../contracts/receiver" }

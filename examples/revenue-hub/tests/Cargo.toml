@@ -1,0 +1,29 @@
+[package]
+name = "avm-revenue-tests"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+avm-contract-sdk = { path = "../../../crates/avm-contract-sdk" }
+avm-revenue-core = { path = "../core" }
+avm-revenue-vault = { path = "../contracts/vault" }
+avm-revenue-receiver = { path = "../contracts/receiver" }
+avm-revenue-audit = { path = "../contracts/audit" }
+
+[features]
+guest-abi-check = []
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+wasmtime = { version = "=36.0.12", default-features = false, features = ["component-model", "cranelift", "gc", "gc-null", "parallel-compilation", "pooling-allocator", "runtime", "std", "threads"] }
+
+[[test]]
+name = "guest_modes"
+path = "tests/guest_modes.rs"
+harness = false
+required-features = ["guest-abi-check"]
+
+[[test]]
+name = "guest_modes_negative"
+path = "tests/guest_modes_negative.rs"
+required-features = ["guest-abi-check"]

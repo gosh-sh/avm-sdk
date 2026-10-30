@@ -1,3 +1,49 @@
+# AVM SDK 0.3.0 / guest SDK 0.1.1
+
+Account balances and message transfers now use explicit currency entries in
+`extra`. The separate `balance_main` and `value_main` fields and CLI
+`--value-main` option are removed. Currency ID 0 is accepted like any other ID.
+`fuel_fee_shells` keeps its existing meaning and fee rules.
+
+This changes the guest API, message/account encodings and execution ABI.
+Rebuild contracts with the matching SDK and recreate local stand data.
+
+Constructor inputs now expose their external or internal message envelope,
+including attached currency entries and authentication fields. CLI tooling can
+inspect and decode ABI data, show raw and decoded account state, and quote the
+deterministic deploy address before funding it.
+
+Contract builds support relocated path dependencies. If a source file was
+deleted or renamed after an earlier build, the builder rejects the stale
+generated source tree and identifies the directory to remove before retrying.
+It preserves the original sources and existing output artifacts on rejection.
+
+Reinstalling an existing SDK release now checks executable permissions before
+activating it. See [Getting Started](getting-started.md) for the CLI commands
+and [release provenance](releases.md) for bundle verification.
+
+The public deploy-callback example and CLI regression cover constructor data,
+generated dispatch, callback delivery, rejection notifications and replay.
+Caller-provided temporary directories are preserved by release tooling; generated
+source and results stay outside the installed/source checkout.
+
+This bundle uses new source/profile identities and ECC-only encodings. The guest
+crate's version remains 0.1.1; compatibility requires matching source identities
+and profile bytes, rather than the crate version alone. The immutable 0.2.0
+release remains available unchanged and can still be verified and reinstalled.
+
+Installer permission validation incorporates @h2so4nackl-code's contribution in
+[#25](https://github.com/gosh-sh/avm-sdk/pull/25), commit
+`559ae5cf26c191121787a86fece2960562b0fdb7`.
+
+The application examples incorporate the contributions of @h2so4nackl-code
+([#9](https://github.com/gosh-sh/avm-sdk/pull/9),
+[#10](https://github.com/gosh-sh/avm-sdk/pull/10),
+[#11](https://github.com/gosh-sh/avm-sdk/pull/11)) and @alandocarmo
+([#12](https://github.com/gosh-sh/avm-sdk/pull/12),
+[#26](https://github.com/gosh-sh/avm-sdk/pull/26)). Their example documentation
+preserves the original commit credits and describes the adaptation and limits.
+
 # AVM SDK 0.2.0 / guest SDK 0.1.1
 
 Contract results avoid an extra output copy, and the local stand now uses the

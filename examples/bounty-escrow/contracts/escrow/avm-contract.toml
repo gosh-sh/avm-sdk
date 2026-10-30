@@ -1,0 +1,476 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "33fbd5f4a594a9729e9c99222acc6adb905c6118a087755fbecd3507add72ca1"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "state"
+len = 2768
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "config"
+len = 360
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+name = "index_hash"
+len = 33
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "index"
+len = 1
+
+[[abi.types]]
+id = 5
+kind = "fixed_bytes"
+name = "payment_receipt"
+len = 32
+
+[[abi.types]]
+id = 6
+kind = "fixed_bytes"
+name = "address_bytes"
+len = 64
+
+[[abi.types]]
+id = 7
+kind = "u128"
+name = "amount"
+
+[[abi.types]]
+id = 8
+kind = "u64"
+name = "counter"
+
+[[abi.methods]]
+name = "bounty.escrow.deploy"
+input_type_id = 2
+
+[[abi.methods]]
+name = "bounty.escrow.fund"
+
+[[abi.methods]]
+name = "bounty.escrow.submit"
+input_type_id = 3
+
+[[abi.methods]]
+name = "bounty.escrow.approve"
+input_type_id = 3
+
+[[abi.methods]]
+name = "bounty.escrow.pay"
+input_type_id = 4
+
+[[abi.methods]]
+name = "bounty.escrow.refund"
+
+[[abi.methods]]
+name = "bounty.escrow.callback"
+input_type_id = 5
+
+[[abi.methods]]
+name = "bounty.escrow.status"
+
+[[abi.methods]]
+name = "bounty.escrow.topup"
+
+[[abi.events]]
+name = "escrow.created"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "attempt"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "funded"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "paid"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "pending"
+
+[[abi.events.fields]]
+id = 7
+type_id = 7
+name = "refunded"
+
+[[abi.events]]
+name = "escrow.status"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "attempt"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "funded"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "paid"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "pending"
+
+[[abi.events.fields]]
+id = 7
+type_id = 7
+name = "refunded"
+
+[[abi.events]]
+name = "escrow.fees_added"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "attempt"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "funded"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "paid"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "pending"
+
+[[abi.events.fields]]
+id = 7
+type_id = 7
+name = "refunded"
+
+[[abi.events]]
+name = "escrow.funded"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "attempt"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "funded"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "paid"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "pending"
+
+[[abi.events.fields]]
+id = 7
+type_id = 7
+name = "refunded"
+
+[[abi.events]]
+name = "escrow.submitted"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "attempt"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "funded"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "paid"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "pending"
+
+[[abi.events.fields]]
+id = 7
+type_id = 7
+name = "refunded"
+
+[[abi.events]]
+name = "escrow.approved"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "attempt"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "funded"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "paid"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "pending"
+
+[[abi.events.fields]]
+id = 7
+type_id = 7
+name = "refunded"
+
+[[abi.events]]
+name = "escrow.transfer_pending"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "attempt"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "funded"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "paid"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "pending"
+
+[[abi.events.fields]]
+id = 7
+type_id = 7
+name = "refunded"
+
+[[abi.events]]
+name = "escrow.transfer_settled"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "attempt"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "funded"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "paid"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "pending"
+
+[[abi.events.fields]]
+id = 7
+type_id = 7
+name = "refunded"
+
+[[abi.events]]
+name = "escrow.transfer_failed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "attempt"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "funded"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "paid"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "pending"
+
+[[abi.events.fields]]
+id = 7
+type_id = 7
+name = "refunded"
+
+[[abi.errors]]
+status_code = 2000
+name = "invalid_args"
+message = "invalid args"
+
+[[abi.errors]]
+status_code = 2001
+name = "unauthorized"
+message = "unauthorized"
+
+[[abi.errors]]
+status_code = 2002
+name = "invalid_state"
+message = "invalid state"
+
+[[abi.errors]]
+status_code = 2003
+name = "invalid_phase"
+message = "invalid phase"
+
+[[abi.errors]]
+status_code = 2004
+name = "invalid_value"
+message = "invalid value"
+
+[[abi.errors]]
+status_code = 2005
+name = "deadline"
+message = "deadline"
+
+[[abi.errors]]
+status_code = 2006
+name = "transfer_pending"
+message = "transfer pending"
+
+[[abi.errors]]
+status_code = 2007
+name = "invalid_callback"
+message = "invalid callback"
+
+[[abi.errors]]
+status_code = 2008
+name = "attempt_limit"
+message = "attempt limit"
+
+[[abi.errors]]
+status_code = 2009
+name = "insufficient_balance"
+message = "insufficient balance"

@@ -131,7 +131,6 @@ avm-local-stand call \
   --method causal.a.version \
   --args-json null \
   --identity user \
-  --value-main 0 \
   --extra-currencies '' \
   --block-time 1800000010 \
   --created-at 1800000009 \
