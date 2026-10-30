@@ -316,7 +316,7 @@ def package(source, sdk, build_root, output):
     files["provenance/cargo-artifacts.jsonl"] = (build_root / "cargo-artifacts.jsonl").read_bytes()
     tag = f"avm-dev-{ids['source_commit'][:12]}-sdk-{ids['sdk_commit'][:12]}"
     files["BUILD-MANIFEST.json"] = json_bytes({
-        "schema": "gosh.avm-sdk.release.v2", "bundle_version": "0.2.0", "guest_version": "0.1.1", "release_tag": tag,
+        "schema": "gosh.avm-sdk.release.v2", "bundle_version": "0.3.0", "guest_version": "0.1.1", "release_tag": tag,
         "ackinacki_repository": "gosh-sh/acki-nacki", "ackinacki_commit": ids["source_commit"],
         "sdk_repository": "gosh-sh/avm-sdk", "sdk_commit": ids["sdk_commit"],
         "wasmtime_profile_sha256": ids["profile_sha256"], "runtime_lock_sha256": ids["lock_sha256"],

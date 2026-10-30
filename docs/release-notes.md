@@ -1,4 +1,4 @@
-# Unreleased
+# AVM SDK 0.3.0 / guest SDK 0.1.1
 
 Account balances and message transfers now use explicit currency entries in
 `extra`. The separate `balance_main` and `value_main` fields and CLI
@@ -21,6 +21,20 @@ It preserves the original sources and existing output artifacts on rejection.
 Reinstalling an existing SDK release now checks executable permissions before
 activating it. See [Getting Started](getting-started.md) for the CLI commands
 and [release provenance](releases.md) for bundle verification.
+
+The public deploy-callback example and CLI regression cover constructor data,
+generated dispatch, callback delivery, rejection notifications and replay.
+Caller-provided temporary directories are preserved by release tooling; generated
+source and results stay outside the installed/source checkout.
+
+This bundle uses new source/profile identities and ECC-only encodings. The guest
+crate's version remains 0.1.1; compatibility requires matching source identities
+and profile bytes, rather than the crate version alone. The immutable 0.2.0
+release remains available unchanged and can still be verified and reinstalled.
+
+Installer permission validation incorporates @h2so4nackl-code's contribution in
+[#25](https://github.com/gosh-sh/avm-sdk/pull/25), commit
+`559ae5cf26c191121787a86fece2960562b0fdb7`.
 
 # AVM SDK 0.2.0 / guest SDK 0.1.1
 

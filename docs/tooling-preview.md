@@ -1,7 +1,7 @@
-# SDK tooling preview
+# SDK tooling
 
-These commands describe the unreleased source candidate. SDK 0.2.0 does not
-include these additions. Use a matching builder and local-stand binary for the
+These commands require SDK 0.3.0 or matching source-candidate tools. SDK 0.2.0
+does not include these additions. Use a matching builder and local-stand binary for the
 commands below; check the source identities recorded in the distribution.
 
 ## Constructor data

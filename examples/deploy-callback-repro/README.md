@@ -6,7 +6,7 @@ child records the caller kind and the incoming callback-request flag in `init`.
 It uses only the SDK and the deterministic WASM interface.
 
 Use matching builder, stand and profile files from one distribution or source
-candidate. The unreleased callback behavior requires matching candidate tools;
+candidate. The callback behavior requires SDK 0.3.0 or matching candidate tools;
 older SDK 0.2.0 binaries do not provide all of these paths.
 
 ```bash
