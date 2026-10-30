@@ -395,3 +395,70 @@ fn g(s: &mut [u32; 16], [a, b, c, d]: [usize; 4], x: u32, y: u32) {
 }
 
 avm_contract_sdk::export_message_contract!(FactoryChildProvenance, arena_bytes = 262_144);
+
+
+#[cfg(test)]
+mod current_policy_tests {
+    use super::*;
+
+    fn factory() -> AccountAddress {
+        AccountAddress { dapp_id: [0x11; 32], account_id: [0x22; 32] }
+    }
+
+    fn invoke(sender: AccountAddress, salt: [u8; 8]) -> MessageOutput {
+        let dst = factory();
+        let mut state = vec![0; STATE_BYTES];
+        state[0] = ROLE_FACTORY;
+        state[16..48].copy_from_slice(&[0x33; 32]);
+        let mut message = vec![0; 176];
+        message[4..8].copy_from_slice(&8u32.to_le_bytes());
+        message[8..16].copy_from_slice(&ACCEPT_METHOD_ID.to_le_bytes());
+        message[48..112].copy_from_slice(&address_bytes(sender));
+        message[112..176].copy_from_slice(&address_bytes(dst));
+        message.extend_from_slice(&salt);
+        let mut frame = b"ACMI".to_vec();
+        frame.extend_from_slice(&[0; 48]);
+        frame.extend_from_slice(&[0; 8]);
+        frame.extend_from_slice(&address_bytes(sender));
+        frame.extend_from_slice(&[0; 32]);
+        frame.extend_from_slice(&address_bytes(dst));
+        frame.extend_from_slice(&[0; 32]);
+        frame.extend_from_slice(&[0; 8]);
+        frame.extend_from_slice(&0u16.to_le_bytes());
+        frame.extend_from_slice(&(state.len() as u32).to_le_bytes());
+        frame.extend_from_slice(&state);
+        frame.extend_from_slice(&(message.len() as u32).to_le_bytes());
+        frame.extend_from_slice(&message);
+        frame.extend_from_slice(&0u32.to_le_bytes());
+        let input = avm_contract_sdk::decode_message_input(&frame).expect("current canonical fixture");
+        accept(&input)
+    }
+
+    #[test]
+    fn derived_policy_accepts_matching_address() {
+        let dst = factory();
+        let salt = [0x44; 8];
+        let sender = AccountAddress { account_id: child_account_id(&[0x33; 32], dst, &salt), ..dst };
+        assert_eq!(invoke(sender, salt).status_code, 0);
+    }
+
+    #[test]
+    fn other_package_owner_salt_and_dapp_are_rejected_without_effects() {
+        let dst = factory();
+        let salt = [0x44; 8];
+        let wrong_owner = AccountAddress { account_id: [0x23; 32], ..dst };
+        let correct = child_account_id(&[0x33; 32], dst, &salt);
+        let candidates = [
+            AccountAddress { account_id: child_account_id(&[0x34; 32], dst, &salt), ..dst },
+            AccountAddress { account_id: child_account_id(&[0x33; 32], wrong_owner, &salt), ..dst },
+            AccountAddress { account_id: child_account_id(&[0x33; 32], dst, &[0x45; 8]), ..dst },
+            AccountAddress { dapp_id: [0x12; 32], account_id: correct },
+        ];
+        for sender in candidates {
+            let output = invoke(sender, salt);
+            assert_eq!(output.status_code, NOT_A_CHILD);
+            assert!(output.state_update.is_none());
+            assert!(output.outbound_intents.is_empty() && output.event_intents.is_empty());
+        }
+    }
+}
