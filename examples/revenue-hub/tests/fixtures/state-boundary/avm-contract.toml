@@ -1,0 +1,36 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "9999999999999999999999999999999999999999999999999999999999999999"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "bytes"
+name = "state"
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+len = 4
+name = "state_length"
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+len = 1
+name = "force_mode"
+
+[[abi.methods]]
+name = "boundary.deploy"
+input_type_id = 2
+
+[[abi.methods]]
+name = "boundary.update"
+input_type_id = 3
+
+[[abi.errors]]
+status_code = 3900
+name = "invalid_fixture_input"
+message = "invalid local test fixture input"

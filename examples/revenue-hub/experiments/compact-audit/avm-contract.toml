@@ -1,0 +1,127 @@
+[descriptor]
+execution_mode = "account_batch"
+state_schema_id = "4437e300dadcfbe77b4cb5a88f59be6773293eabb61fc4d34f17d74c0deac557"
+
+[descriptor.batch]
+max_batch_messages = 256
+max_batch_state_bytes = 131072
+max_batch_input_bytes = 262144
+max_batch_output_bytes = 262144
+batch_min_fuel_fee_shells = 1
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "bytes"
+name = "state"
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "config"
+len = 1
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+name = "index"
+len = 1
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "payload"
+len = 25
+
+[[abi.types]]
+id = 5
+kind = "fixed_bytes"
+name = "nonce"
+len = 8
+
+[[abi.types]]
+id = 6
+kind = "fixed_bytes"
+name = "address"
+len = 64
+
+[[abi.types]]
+id = 7
+kind = "fixed_bytes"
+name = "index_address"
+len = 65
+
+[[abi.types]]
+id = 8
+kind = "u128"
+name = "amount"
+
+[[abi.types]]
+id = 9
+kind = "u64"
+name = "counter"
+
+[[abi.methods]]
+name = "hub.audit.deploy"
+input_type_id = 3
+
+[[abi.methods]]
+name = "hub.audit.bind"
+input_type_id = 7
+
+[[abi.methods]]
+name = "hub.audit.record"
+input_type_id = 4
+
+[[abi.methods]]
+name = "hub.audit.status"
+
+[[abi.events]]
+name = "hub.audited"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 9
+name = "member"
+
+[[abi.events.fields]]
+id = 3
+type_id = 9
+name = "nonce"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "receipts"
+
+[[abi.events.fields]]
+id = 5
+type_id = 8
+name = "total"
+
+[[abi.errors]]
+status_code = 3200
+name = "invalid_args"
+message = "invalid args"
+
+[[abi.errors]]
+status_code = 3201
+name = "unauthorized"
+message = "unauthorized"
+
+[[abi.errors]]
+status_code = 3202
+name = "receipt_replay"
+message = "receipt replay"
+
+[[abi.errors]]
+status_code = 3203
+name = "overflow"
+message = "overflow"

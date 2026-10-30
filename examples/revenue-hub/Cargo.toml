@@ -1,0 +1,11 @@
+[workspace]
+members = ["core", "contracts/vault", "contracts/receiver", "contracts/audit", "tests"]
+resolver = "2"
+default-members = ["contracts/vault"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
