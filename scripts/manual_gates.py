@@ -42,9 +42,22 @@ def head(root):
 def clean(root):
     status = subprocess.check_output(["git", "-C", str(root), "status", "--porcelain", "--untracked-files=all"])
     if status:
+        try:
+            diagnostic = subprocess.check_output(
+                ["git", "-C", str(root), "status", "--porcelain", "-z", "--untracked-files=all"],
+                stderr=subprocess.DEVNULL).decode("utf-8", errors="surrogateescape")
+        except (OSError, subprocess.CalledProcessError):
+            diagnostic = "[raw Git path diagnostics unavailable]"
+        # Mask recognized values in raw path records before escaping control
+        # bytes or Unicode. Git's C-quoted spellings are not redaction-safe.
+        for name, value in os.environ.items():
+            if len(value) >= 8 and re.search(r"TOKEN|SECRET|PASSWORD|CREDENTIAL|AUTHORIZATION|COOKIE|PRIVATE_KEY", name, re.I):
+                diagnostic = diagnostic.replace(value, "[REDACTED]")
+        rendered = "\n".join(json.dumps(record, ensure_ascii=True)[1:-1]
+                             for record in diagnostic.split("\x00") if record)
         require(not status, f"dirty source: {root}\n"
-                "git status --porcelain --untracked-files=all (bounded):\n"
-                + _failure_log_tail(status.decode("utf-8", errors="replace")))
+                "git status --porcelain -z --untracked-files=all (bounded):\n"
+                + _failure_log_tail(rendered))
 
 
 def normalize_scratch_environment():
