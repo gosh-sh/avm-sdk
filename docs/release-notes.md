@@ -1,122 +1,40 @@
-# AVM SDK 0.3.0 / guest SDK 0.1.1
+# AVM SDK 0.3.0
 
-Account balances and message transfers now use explicit currency entries in
-`extra`. The separate `balance_main` and `value_main` fields and CLI
-`--value-main` option are removed. Currency ID 0 is accepted like any other ID.
-`fuel_fee_shells` keeps its existing meaning and fee rules.
+## Changed
 
-This changes the guest API, message/account encodings and execution ABI.
-Rebuild contracts with the matching SDK and recreate local stand data.
+- **Currencies:** explicit ECC balances/transfers; removed ambiguous main-currency fields; enabled currency ID `0`.
+- **Constructors:** expose deployment data, salt and identities directly to `init`.
+- **Bindings:** generate typed dispatch and method/error IDs instead of handwritten ABI glue.
+- **CLI:** inspect ABI/account state and calculate deploy addresses before funding.
+- **Deploy callbacks:** support internal-deploy success, failed-init settlement and rejection notifications.
+- **Diagnostics:** report constructor errors, invalid timestamps and used/available FUEL.
+- **Build/install:** fix relocated dependencies, reject stale generated sources and validate executable permissions.
+- **Examples:** add bounty escrow, Revenue Hub, vesting, token and factory-child workflows.
+- **Revenue Hub checks:** replace Node.js with Rust/Wasmtime.
 
-Constructor inputs now expose their external or internal message envelope,
-including attached currency entries and authentication fields. CLI tooling can
-inspect and decode ABI data, show raw and decoded account state, and quote the
-deterministic deploy address before funding it.
+<a id="compatibility"></a>
 
-Contract builds support relocated path dependencies. If a source file was
-deleted or renamed after an earlier build, the builder rejects the stale
-generated source tree and identifies the directory to remove before retrying.
-It preserves the original sources and existing output artifacts on rejection.
+## Upgrade
 
-Reinstalling an existing SDK release now checks executable permissions before
-activating it. See [Getting Started](getting-started.md) for the CLI commands
-and [release provenance](releases.md) for bundle verification.
+- **Breaking:** encodings, ABI and profiles changed; rebuild contracts and create fresh local stand state.
+- Match SDK/profile bytes; guest crate version `0.1.1` alone does not establish compatibility.
+- Linux x86-64-v3 bundle; glibc ≥2.39, Python ≥3.11. Builds require Rust/Cargo 1.93.0, WASM target and rust-lld.
+- Bash, `gh` and `jq` are required; offline builds need a reviewed `Cargo.lock` and cached dependencies.
+- Keep 0.2.0 tools/profile/state together for replay. Examples are educational, not audited applications.
+- **Getting started:** [installation and contract builds](getting-started.md), [package verification](releases.md).
+- **Fees and limits:** `fuel_fee_shells` rules are unchanged; see [fees](fuel-and-fees.md) and [runtime limits](runtime-limits.md).
+- **Credits:** @h2so4nackl-code — [#9](https://github.com/gosh-sh/avm-sdk/pull/9), [#10](https://github.com/gosh-sh/avm-sdk/pull/10), [#11](https://github.com/gosh-sh/avm-sdk/pull/11), [#25](https://github.com/gosh-sh/avm-sdk/pull/25).
+- **Credits:** @alandocarmo — [#12](https://github.com/gosh-sh/avm-sdk/pull/12), [#26](https://github.com/gosh-sh/avm-sdk/pull/26), [callback reproducer](../examples/deploy-callback-repro).
 
-The public deploy-callback example and CLI regression cover constructor data,
-generated dispatch, callback delivery, rejection notifications and replay.
-Caller-provided temporary directories are preserved by release tooling; generated
-source and results stay outside the installed/source checkout.
+## AVM SDK 0.2.0 / guest SDK 0.1.1
 
-This bundle uses new source/profile identities and ECC-only encodings. The guest
-crate's version remains 0.1.1; compatibility requires matching source identities
-and profile bytes, rather than the crate version alone. The immutable 0.2.0
-release remains available unchanged and can still be verified and reinstalled.
+- **Guest execution:** direct guest-output encoding and faster input copying; public Rust API and wire format stayed unchanged.
+- **Runtime:** pooled allocation and deadlines preserve fresh contexts and FUEL; admission and failed-batch charging were corrected.
+- **Build/install:** pinned Rust/Cargo 1.93.0, rust-lld and reviewed `Cargo.lock`; complete package verification before activation.
+- **Upgrades:** Contract A embeds the stand owner key at build time for [owner-authorized upgrades](getting-started.md#build-a-contract).
+- **Compatibility:** CompactV1 roots/proofs, `List(Data)` EventLog commitments and profile/cache identities changed; use matching tools/profile/state and fresh local state. See [0.2 compatibility guidance](https://github.com/gosh-sh/avm-sdk/blob/0748f4f0767a26da8bc363bcb6b5585539d6970e/docs/release-notes.md#runtime-compatibility-and-reset-guidance); this is not production-reset guidance.
+- **0.2-only limits:** no internal-event reads or deploy-success callbacks; ordinary callbacks and event emission/listing worked. No production throughput, deadline or consensus-readiness guarantee.
 
-Installer permission validation incorporates @h2so4nackl-code's contribution in
-[#25](https://github.com/gosh-sh/avm-sdk/pull/25), commit
-`559ae5cf26c191121787a86fece2960562b0fdb7`.
+## Licenses
 
-The application examples incorporate the contributions of @h2so4nackl-code
-([#9](https://github.com/gosh-sh/avm-sdk/pull/9),
-[#10](https://github.com/gosh-sh/avm-sdk/pull/10),
-[#11](https://github.com/gosh-sh/avm-sdk/pull/11)) and @alandocarmo
-([#12](https://github.com/gosh-sh/avm-sdk/pull/12),
-[#26](https://github.com/gosh-sh/avm-sdk/pull/26)). Their example documentation
-preserves the original commit credits and describes the adaptation and limits.
-
-# AVM SDK 0.2.0 / guest SDK 0.1.1
-
-Contract results avoid an extra output copy, and the local stand now uses the
-updated AVM runtime.
-
-## What's Changed
-
-- **Guest execution:** results encode directly into guest output memory;
-  input copying is optimized without changing the public Rust API or wire format.
-- **Runtime:** pooled allocation and deadline cancellation preserve fresh
-  isolated contexts and FUEL. Message admission no longer truncates valid inputs
-  by cumulative reserved FUEL; failed-batch charging is corrected.
-- **Build and install:** builds enforce Rust/Cargo 1.93.0, rust-lld and a reviewed
-  `Cargo.lock`. Installation verifies the complete package before activation.
-- **Upgrades:** Contract A accepts your stand's owner key instead of the fixed
-  test key, enabling owner-authorized upgrades.
-
-## Get Started
-
-The full bundle requires Linux x86-64-v3, glibc >=2.39, Python >=3.11, Bash,
-`gh` and `jq`. Contract builds require exact Rust/Cargo 1.93.0, its
-`wasm32-unknown-unknown` target and rust-lld, plus a reviewed `Cargo.lock`.
-Offline builds also need cached dependencies. ARM, musl, macOS and Windows
-binaries are not provided.
-
-Follow [Getting Started](getting-started.md) to install and initialize the stand.
-Then build from a writable checkout with the public owner key from `init.json`:
-
-```bash
-export AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY="$(jq -er .identities.package_owner init.json)"
-avm-contract-build build --manifest-path examples/contract-a-v1/Cargo.toml
-```
-
-The key must be 64 lowercase hex digits. It is embedded at compile time; omitting
-it keeps the fixed test owner. See [building a contract](getting-started.md#build-a-contract).
-
-## Examples
-
-- [contract-a-v1](../examples/README.md#contract-a-v1) and
-  [contract-a-v2](../examples/README.md#contract-a-v2): owner-authorized upgrades.
-- [contract-b](../examples/README.md#contract-b): internal messaging,
-  ordinary-call callbacks and event emission/listing.
-- [contract-batch-patch](../examples/README.md#contract-batch-patch): update a
-  counter without replacing the full account state.
-
-These are learning fixtures, not audited applications.
-
-## Compatibility
-
-The Rust guest API, ABI and ownership rules are unchanged. Rebuilding can change
-code hashes and FUEL usage. Installation does not rebuild or upgrade contracts;
-publication, selection and migration remain explicit.
-
-**Breaking:** old local state is not migrated. Keep old tools, profile and state
-together for replay. Initialize a fresh local stand, explicitly fund its derived
-addresses and redeploy. This guidance applies only to local development and
-does not authorize a production reset.
-
-CompactV1 state trees change runtime roots/proofs; canonical `List(Data)`
-EventLog encoding changes aggregate commitments. Profile/cache identities also
-change. Use the shipped profile; do not mix profiles or compiled caches, or
-edit state headers to force acceptance. The unchanged release's
-[detailed runtime compatibility notes](https://github.com/gosh-sh/avm-sdk/blob/0748f4f0767a26da8bc363bcb6b5585539d6970e/docs/release-notes.md#runtime-compatibility-and-reset-guidance)
-remain available.
-
-**Known limitations:** guest internal-event reads are unsupported; event emission
-and listing work. Deploy success callbacks remain unresolved in
-[issue #13](https://github.com/gosh-sh/avm-sdk/issues/13). Ordinary-call callback
-tests do not establish deploy callback support. This release provides no
-production throughput, deadline or consensus-readiness guarantee.
-
-The guest SDK retains its [MIT license](../LICENSE.md). Host tools retain their
-existing terms in `licenses/Acki-Nacki-Node-LICENSE.md` in the
-[release bundle](https://github.com/gosh-sh/avm-sdk/releases/tag/avm-dev-06e96ef71006-sdk-0748f4f0767a).
-See [package contents and trust](releases.md#package-contents-and-trust) for
-manifests, provenance and third-party notices.
+- Guest SDK: [MIT](../LICENSE.md). Host-tool terms and third-party notices remain in the [verified release bundles](releases.md#package-contents-and-trust).
