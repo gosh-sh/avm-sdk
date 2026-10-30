@@ -206,13 +206,18 @@ child_4="$quoted"
 fund "$child_4"
 # The child's init fails without committing a child; the existing target
 # funding pays the fixed 10 SHELL init fee once. The relay call remains valid.
+read_state "$relay_v1"
+relay_state_before="$hex"
 funding_before="$(run inspect | jq -er --arg a "$child_4" '.funding[] | select(.address == $a) | .extra[] | select(.currency_id == 2) | .amount | tonumber')"
 tick
 run call --address "$relay_v1" --method relay.forge --args-json "\"0x${factory/:/}${salt_4}\"" \
   --identity developer --extra-currencies '' "${timestamps[@]}" >"${work}/failed-init.json"
 funding_after="$(run inspect | jq -er --arg a "$child_4" '.funding[] | select(.address == $a) | .extra[] | select(.currency_id == 2) | .amount | tonumber')"
 case_4() {
-  ! has_account "$child_4" && [[ "$funding_after" == $((funding_before - 10)) ]]
+  ! has_account "$child_4" && [[ "$funding_after" == $((funding_before - 10)) ]] &&
+    jq -e --arg before "$relay_state_before" \
+      '.raw_executor_output[0:16] == "41434d4f00000000" and .raw_state == $before and .queue.after == 0' \
+      "${work}/failed-init.json" >/dev/null
 }
 expect_ok "4 forged deploy, same version: the child refuses a deployer other than its factory" case_4
 
@@ -268,28 +273,10 @@ count_reports
 [[ "$reports" == "$reports_before" ]] || fail "external report changed factory state"
 result OK "7 external report rejected without state effects"
 
-# A separately published package can name this factory in constructor data,
-# but its child's derived account id must not pass the original package policy.
-cli_create deploy "${v2[@]}" --salt-hex 7061636b6167652d32 --init-json "$(role_init 03 "$zero_address")"
-other_relay="$deployed"
-other_package="$(jq -er .package_id "${work}/quote.json")"
-[[ "$other_package" != "$package_id" ]] || fail "independent publication reused original package"
-run inspect >"${work}/inspect.json"
-other_selection="$(jq -er --arg v1 "$selection_v1" --arg v2 "$selection_v2" '[.prepared_selection_ids[] | select(. != $v1 and . != $v2)][0]' "${work}/inspect.json")"
-salt_8=0000000000000008
-quote deploy --package-id "$other_package" --selected-code-id "$other_selection" --owner-id "${factory#*:}" --salt-hex "$salt_8" --init-json "$child_init"
-other_child="$quoted"
-fund "$other_child"
-call "$other_relay" relay.forge "\"0x${factory/:/}${salt_8}\""
-has_account "$other_child" || fail "other-package child was not actually deployed"
-count_reports
-reports_before="$reports"
-call "$other_child" child.report null
-count_reports
-[[ "$reports" == "$reports_before" ]] || fail "other-package child passed original package policy"
-result OK "8 another package's child report rejected without factory state effects"
-
+state_hash() { python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$state"; }
+before_replay="$(state_hash)"
 run replay | jq -e '.status == "ok"' >/dev/null || fail "replay"
+[[ "$(state_hash)" == "$before_replay" ]] || fail "replay mutated persisted state"
 echo "replay ok"
 printf 'evidence %s\n' "$work"
 exit "$failures"

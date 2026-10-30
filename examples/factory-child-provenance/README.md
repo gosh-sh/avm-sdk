@@ -59,11 +59,9 @@ The script builds strict and permissive versions, then checks actual WASM:
    limitation, rather than treating an unrelated failure as a security fix.
 6. A child without an upgrade path rejects upgrade.
 7. An external report is rejected without factory state effects.
-8. A child of another package is deployed, but its report is rejected by the
-   original factory's package-bound policy.
-
 Native tests independently reject changed package, owner, salt and DApp without
-effects. The script also requires replay to agree. Claims are limited to the
+effects. The script also requires replay to agree without changing persisted
+state. A real multi-package deployment is not part of this script. Claims are limited to the
 configured local stand; no network, production security or performance
 qualification is implied.
 
@@ -71,5 +69,5 @@ All balances and transfers use explicit ECC entries. The script prefunds child
 targets; their deploy messages transfer no value. The fixed init fee can be paid
 from that target balance. FUEL reserves remain separate. No unnamed main balance
 or implicit Main-to-ECC mapping is used. The script intentionally publishes two
-versions into one explicit package and also exercises an independent package;
-a populated stand is not limited to one package.
+versions into one explicit package; it does not test package reuse or general
+multi-package publication.
