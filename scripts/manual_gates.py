@@ -40,7 +40,11 @@ def head(root):
 
 
 def clean(root):
-    require(not subprocess.check_output(["git", "-C", str(root), "status", "--porcelain", "--untracked-files=all"]), f"dirty source: {root}")
+    status = subprocess.check_output(["git", "-C", str(root), "status", "--porcelain", "--untracked-files=all"])
+    if status:
+        require(not status, f"dirty source: {root}\n"
+                "git status --porcelain --untracked-files=all (bounded):\n"
+                + _failure_log_tail(status.decode("utf-8", errors="replace")))
 
 
 def normalize_scratch_environment():
