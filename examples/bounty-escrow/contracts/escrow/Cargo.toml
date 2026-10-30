@@ -1,0 +1,15 @@
+[package]
+name = "avm-bounty-escrow"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[features]
+default = ["guest"]
+guest = []
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+avm-contract-sdk = { path = "../../../../crates/avm-contract-sdk" }
