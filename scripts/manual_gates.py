@@ -78,6 +78,25 @@ def example_environment(source, manifest, evidence, run):
     return environment
 
 
+def _failure_log_tail(text, *, environment=None, max_lines=40, max_bytes=8192):
+    """Bound diagnostic output and redact known secrets and common token formats."""
+    text = re.sub(r"\x1b\][^\x07]*(?:\x07|\x1b\\)", "", text)
+    text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+    text = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", text)
+    for name, value in (os.environ if environment is None else environment).items():
+        if len(value) >= 8 and re.search(r"TOKEN|SECRET|PASSWORD|CREDENTIAL|AUTHORIZATION|COOKIE|PRIVATE_KEY", name, re.I):
+            text = text.replace(value, "[REDACTED]")
+    text = re.sub(r"-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----.*?-----END \1-----",
+                  "[REDACTED_PRIVATE_KEY]", text, flags=re.S)
+    text = re.sub(r"(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|"
+                  r"eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]+)", "[REDACTED]", text)
+    text = re.sub(r"(?im)^([^\n]*\b(?:authorization|cookie)\s*[:=]\s*)[^\r\n]*", r"\1[REDACTED]", text)
+    text = re.sub(r"(?i)\b((?:[A-Z][A-Z0-9_]*_)?(?:TOKEN|PASSWORD|SECRET|CREDENTIAL|PRIVATE_KEY)\s*[:=]\s*)"
+                  r"(?:\"[^\"]*\"|'[^']*'|[^\s]+)", r"\1[REDACTED]", text)
+    tail = "\n".join(text.splitlines()[-max_lines:])
+    return tail.encode("utf-8")[-max_bytes:].decode("utf-8", errors="ignore")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True, type=Path)
@@ -127,6 +146,9 @@ def main():
             result["gates"][-1]["stdout_file"] = stdout_file.name
             result["gates"][-1]["stdout_sha256"] = file_digest(stdout_file)
         (evidence / "gates.json").write_text(json.dumps(result, indent=2) + "\n")
+        if not passed:
+            print(f"gate={label} exit_code={process.returncode} failure log tail:", file=sys.stderr)
+            print(_failure_log_tail(text), file=sys.stderr)
         require(passed, f"gate failed: {label}; see {log}")
         return text
 
