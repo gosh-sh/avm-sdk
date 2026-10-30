@@ -16,8 +16,22 @@ sdk_home="${AVM_SDK_HOME:-${HOME}/.local/share/avm-sdk}"
 build="${AVM_CONTRACT_BUILD:-avm-contract-build}"
 stand="${AVM_LOCAL_STAND:-avm-local-stand}"
 profile="${AVM_WASMTIME_PROFILE:-${sdk_home}/current/profiles/wasmtime-release-profile.v1}"
-work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+work_parent="${PROVENANCE_OUT:-${TMPDIR:-${sdk_home}/tmp}}"
+mkdir -p "$work_parent"
+work="$(mktemp -d "${work_parent}/provenance.XXXXXXXX")"
+cleanup() {
+  if [[ "${PROVENANCE_KEEP:-0}" != 1 ]]; then
+    python3 - "$work" <<'PY'
+from pathlib import Path
+import shutil, sys
+p = Path(sys.argv[1])
+if p.name.startswith('provenance.') and (p / '.provenance-owned').is_file():
+    shutil.rmtree(p)
+PY
+  fi
+}
+touch "${work}/.provenance-owned"
+trap cleanup EXIT
 state="${work}/stand.state"
 dapp_id="1111111111111111111111111111111111111111111111111111111111111111"
 accept_method_le="41ed76d491639b31" # factory.accept 0x319b6391d476ed41, little-endian
@@ -32,7 +46,9 @@ fail() {
 run() {
   local command="$1"
   shift
-  "$stand" "$command" --state "$state" --wasmtime-profile "$profile" "$@"
+  local receipt
+  receipt="$(mktemp "${work}/receipt.XXXXXXXX.json")"
+  "$stand" "$command" --state "$state" --wasmtime-profile "$profile" "$@" | tee "$receipt"
 }
 
 tick() {
@@ -71,7 +87,8 @@ call() {
   local address="$1" method="$2" args="$3"
   tick
   run call --address "$address" --method "$method" --args-json "$args" --identity developer \
-    --value-main 0 --extra-currencies '' "${timestamps[@]}" >"${work}/call.json"
+    --extra-currencies '' "${timestamps[@]}" >"${work}/call.json"
+  [[ "$(jq -r '.raw_executor_output[0:8]' "${work}/call.json")" == 41434d4f ]] || fail "non-ACMO response"
   status="$(jq -r '.raw_executor_output[8:16]' "${work}/call.json")"
 }
 
@@ -187,15 +204,15 @@ salt_4=0000000000000004
 child_address "$salt_4" "$selection_v1"
 child_4="$quoted"
 fund "$child_4"
-# The child's init fails. The published stand then rejects the relay's whole
-# external call; a runtime with failed-init settlement may accept the call and
-# refund instead (#13). Either way the child must not exist.
+# The child's init fails without committing a child; the existing target
+# funding pays the fixed 10 SHELL init fee once. The relay call remains valid.
+funding_before="$(run inspect | jq -er --arg a "$child_4" '.funding[] | select(.address == $a) | .extra[] | select(.currency_id == 2) | .amount | tonumber')"
 tick
 run call --address "$relay_v1" --method relay.forge --args-json "\"0x${factory/:/}${salt_4}\"" \
-  --identity developer --value-main 0 --extra-currencies '' "${timestamps[@]}" \
-  >/dev/null 2>&1 || true
+  --identity developer --extra-currencies '' "${timestamps[@]}" >"${work}/failed-init.json"
+funding_after="$(run inspect | jq -er --arg a "$child_4" '.funding[] | select(.address == $a) | .extra[] | select(.currency_id == 2) | .amount | tonumber')"
 case_4() {
-  ! has_account "$child_4"
+  ! has_account "$child_4" && [[ "$funding_after" == $((funding_before - 10)) ]]
 }
 expect_ok "4 forged deploy, same version: the child refuses a deployer other than its factory" case_4
 
@@ -214,18 +231,12 @@ child_address "$salt_5" "$selection_v1"
 child_5_v1="$quoted"
 child_address "$salt_5" "$selection_v2"
 child_5="$quoted"
-if [[ "$child_5" == "$child_5_v1" ]]; then
-  result NOTE "5 the stand quotes the same child address for both code selections"
-else
-  result NOTE "5 the stand quotes a different child address for each code selection"
-fi
+[[ "$child_5" == "$child_5_v1" ]] || fail "current address identity must not bind the code version"
+result NOTE "5 the stand quotes the same child address for both code selections"
 fund "$child_5"
-# A runtime that binds the address to the code, or the owner to the deployer,
-# may refuse this deploy, and the stand may then reject the whole call.
 tick
 run call --address "$relay_v2" --method relay.forge --args-json "\"0x${factory/:/}${salt_5}\"" \
-  --identity developer --value-main 0 --extra-currencies '' "${timestamps[@]}" \
-  >/dev/null 2>&1 || true
+  --identity developer --extra-currencies '' "${timestamps[@]}" >"${work}/different-version-deploy.json"
 count_reports
 reports_before="$reports"
 forged=no
@@ -233,18 +244,11 @@ if has_account "$child_5"; then
   read_state "$child_5"
   [[ "$(slice "$hex" 176 240)" == "${relay_v2/:/}" ]] && forged=yes
 fi
-if [[ "$forged" == no ]]; then
-  result OK "5 forged deploy, version 2 of the same package: the stand does not create the child"
-else
-  call "$child_5" child.report null
-  count_reports
-  if [[ "$reports" == $((reports_before + 1)) && "$(slice "$hex" 116 180)" == "${child_5/:/}" ]]; then
-    result REPRODUCED "5 forged deploy, version 2 of the same package: the factory accepts a child" \
-      "it never deployed"
-  else
-    result OK "5 forged deploy, version 2 of the same package: the factory rejects the child"
-  fi
-fi
+[[ "$forged" == yes ]] || fail "same-package permissive child was not exercised"
+call "$child_5" child.report null
+count_reports
+[[ "$reports" == $((reports_before + 1)) && "$(slice "$hex" 116 180)" == "${child_5/:/}" ]] || fail "documented derived-address limitation changed"
+result LIMITATION "5 derived address accepts another code version's child; it does not prove current code or deployer"
 
 # 6. The factory's child cannot be moved to version 2.
 tick
@@ -256,6 +260,36 @@ case_6() {
 }
 expect_ok "6 upgrade: a child without an upgrade path keeps its version" case_6
 
+count_reports
+reports_before="$reports"
+call "$factory" factory.accept "\"0x${salt_1}\""
+[[ "$status" == 45060000 ]] || fail "external report must fail not_a_child1605"
+count_reports
+[[ "$reports" == "$reports_before" ]] || fail "external report changed factory state"
+result OK "7 external report rejected without state effects"
+
+# A separately published package can name this factory in constructor data,
+# but its child's derived account id must not pass the original package policy.
+cli_create deploy "${v2[@]}" --salt-hex 7061636b6167652d32 --init-json "$(role_init 03 "$zero_address")"
+other_relay="$deployed"
+other_package="$(jq -er .package_id "${work}/quote.json")"
+[[ "$other_package" != "$package_id" ]] || fail "independent publication reused original package"
+run inspect >"${work}/inspect.json"
+other_selection="$(jq -er --arg v1 "$selection_v1" --arg v2 "$selection_v2" '[.prepared_selection_ids[] | select(. != $v1 and . != $v2)][0]' "${work}/inspect.json")"
+salt_8=0000000000000008
+quote deploy --package-id "$other_package" --selected-code-id "$other_selection" --owner-id "${factory#*:}" --salt-hex "$salt_8" --init-json "$child_init"
+other_child="$quoted"
+fund "$other_child"
+call "$other_relay" relay.forge "\"0x${factory/:/}${salt_8}\""
+has_account "$other_child" || fail "other-package child was not actually deployed"
+count_reports
+reports_before="$reports"
+call "$other_child" child.report null
+count_reports
+[[ "$reports" == "$reports_before" ]] || fail "other-package child passed original package policy"
+result OK "8 another package's child report rejected without factory state effects"
+
 run replay | jq -e '.status == "ok"' >/dev/null || fail "replay"
 echo "replay ok"
+printf 'evidence %s\n' "$work"
 exit "$failures"

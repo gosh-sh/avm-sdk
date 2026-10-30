@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! A factory that deploys children and later accepts messages only from them.
+//! A factory's derived-address policy and its limits as a provenance check.
 //!
 //! One package plays three roles, chosen by the constructor data:
 //! - factory: `factory.spawn` deploys a child; `factory.accept` takes a report
@@ -77,23 +77,12 @@ struct FactoryChildProvenance;
 
 impl Contract for FactoryChildProvenance {
     fn init(input: MessageInput<'_>) -> MessageOutput {
-        let body = input.message.body();
-        let (Some(header), Some(ui_len), Some(salt_len), Some(init_len)) = (
-            body.get(..HEADER_BYTES),
-            read_u16(body, 264),
-            read_u16(body, 266),
-            read_u32(body, 268),
-        ) else {
+        let (Ok(deploy), Some(template)) = (input.deploy(), input.message.body().get(40..136))
+        else {
             return MessageOutput::failure(INVALID_INIT);
         };
-        let salt_at = HEADER_BYTES + ui_len;
-        let init_at = salt_at + salt_len;
-        let (Some(salt), Some(init)) = (
-            body.get(salt_at..init_at),
-            init_at.checked_add(init_len).and_then(|end| body.get(init_at..end)),
-        ) else {
-            return MessageOutput::failure(INVALID_INIT);
-        };
+        let salt = deploy.salt();
+        let init = deploy.init_data();
         if init.len() != INIT_BYTES {
             return MessageOutput::failure(INVALID_INIT);
         }
@@ -101,7 +90,7 @@ impl Contract for FactoryChildProvenance {
         state[0] = init[0];
         state[1] = u8::from(PERMISSIVE_CHILD);
         state[8..16].copy_from_slice(&input.message.method_id().to_le_bytes());
-        state[TEMPLATE].copy_from_slice(&header[40..136]);
+        state[TEMPLATE].copy_from_slice(template);
         match init[0] {
             ROLE_FACTORY | ROLE_RELAY if init[1..] == [0; 64] => {}
             ROLE_CHILD if salt.len() == SALT_BYTES => {
@@ -277,7 +266,6 @@ fn outbound(destination: AccountAddress, method_id: u64, body: Vec<u8>) -> Outbo
     OutboundIntent {
         input_index: 0,
         destination,
-        value_main: 0,
         fuel_fee_shells: 10_000,
         extra: Vec::new(),
         method_id,
@@ -307,10 +295,6 @@ fn address_from(bytes: &[u8]) -> Option<AccountAddress> {
 fn bytes_arg(body: &[u8]) -> Option<&[u8]> {
     let len = read_u32(body, 0)?;
     body.get(4..).filter(|args| args.len() == len)
-}
-
-fn read_u16(bytes: &[u8], at: usize) -> Option<usize> {
-    Some(usize::from(u16::from_le_bytes(bytes.get(at..at + 2)?.try_into().ok()?)))
 }
 
 fn read_u32(bytes: &[u8], at: usize) -> Option<usize> {
@@ -396,7 +380,6 @@ fn g(s: &mut [u32; 16], [a, b, c, d]: [usize; 4], x: u32, y: u32) {
 
 avm_contract_sdk::export_message_contract!(FactoryChildProvenance, arena_bytes = 262_144);
 
-
 #[cfg(test)]
 mod current_policy_tests {
     use super::*;
@@ -430,7 +413,8 @@ mod current_policy_tests {
         frame.extend_from_slice(&(message.len() as u32).to_le_bytes());
         frame.extend_from_slice(&message);
         frame.extend_from_slice(&0u32.to_le_bytes());
-        let input = avm_contract_sdk::decode_message_input(&frame).expect("current canonical fixture");
+        let input =
+            avm_contract_sdk::decode_message_input(&frame).expect("current canonical fixture");
         accept(&input)
     }
 
@@ -438,7 +422,8 @@ mod current_policy_tests {
     fn derived_policy_accepts_matching_address() {
         let dst = factory();
         let salt = [0x44; 8];
-        let sender = AccountAddress { account_id: child_account_id(&[0x33; 32], dst, &salt), ..dst };
+        let sender =
+            AccountAddress { account_id: child_account_id(&[0x33; 32], dst, &salt), ..dst };
         assert_eq!(invoke(sender, salt).status_code, 0);
     }
 
