@@ -54,6 +54,13 @@ def normalize_scratch_environment():
     return scratch
 
 
+def preflight_environment(scratch):
+    environment = os.environ.copy()
+    if not environment.get("AVM_TMPDIR"):
+        environment["AVM_TMPDIR"] = str(scratch)
+    return environment
+
+
 def example_environment(source, manifest, evidence, run):
     environment = os.environ.copy()
     environment.pop("AVM_CONTRACT_BINDINGS", None)
@@ -86,7 +93,7 @@ def main():
     require(args.optimizer is not None and args.optimizer.is_file()
             and os.access(args.optimizer, os.X_OK), "pass --optimizer with checksum-pinned Binaryen 133 wasm-opt")
     optimizer = args.optimizer.resolve()
-    normalize_scratch_environment()
+    scratch = normalize_scratch_environment()
     clean(source)
     clean(sdk)
     evidence.mkdir(parents=True, exist_ok=False)
@@ -123,7 +130,8 @@ def main():
         require(passed, f"gate failed: {label}; see {log}")
         return text
 
-    run("shared-avm-preflight", ["bash", "scripts/check-avm-ci-preflight.sh"])
+    run("shared-avm-preflight", ["bash", "scripts/check-avm-ci-preflight.sh"],
+        environment=preflight_environment(scratch))
     run("engine-format", ["cargo", "fmt", "-p", "avm-wasm-code", "-p", "avm-wasm-executor", "--", "--check"])
     run("guest-source-parity", ["diff", "-ru", str(sdk / "crates/avm-contract-sdk"), str(source / "node/libs/avm-contract-sdk")])
     run("profile-parity", ["cmp", str(sdk / "profiles/wasmtime-release-profile.v1"), str(source / "specs/avm-vm/wasmtime-release-profile.v1")])

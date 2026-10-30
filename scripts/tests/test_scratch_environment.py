@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from manual_gates import normalize_scratch_environment
+from manual_gates import normalize_scratch_environment, preflight_environment
 
 
 class ScratchEnvironment(unittest.TestCase):
@@ -55,6 +55,72 @@ class ScratchEnvironment(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "existing absolute writable directory"):
                     normalize_scratch_environment()
                 self.assertEqual(os.environ["TMPDIR"], value)
+
+    def preflight_child(self, environment):
+        fallback = self.root / "source-fallback"
+        fallback.mkdir(exist_ok=True)
+        program = (
+            "import json,os,tempfile; from pathlib import Path; "
+            "directory=tempfile.TemporaryDirectory(prefix='sdk-preflight-child-'); "
+            "print(json.dumps({'parent':str(Path(directory.name).parent),"
+            "'environment':{key:os.environ.get(key) for key in "
+            "('TMPDIR','TMP','TEMP','AVM_TMPDIR','AVM_SCRATCH_ROOT','CARGO_TARGET_DIR')}})); "
+            "directory.cleanup()"
+        )
+        output = subprocess.check_output([
+            "bash", "-c",
+            'export TMPDIR="${AVM_TMPDIR:-$1}" TMP="${AVM_TMPDIR:-$1}" TEMP="${AVM_TMPDIR:-$1}"; '
+            'exec "$2" -c "$3"',
+            "sdk-preflight-child", str(fallback), sys.executable, program,
+        ], env=environment, text=True)
+        return json.loads(output)
+
+    def test_preflight_child_receives_selected_scratch_when_bridge_is_absent_or_empty(self):
+        first, second, third = map(str, self.paths)
+        default = str(Path(tempfile.gettempdir()).resolve())
+        for values, expected in [
+            ((first, second, third), first),
+            (("", second, third), second),
+            (("", "", third), third),
+            (("", "", ""), default),
+            ((None, None, None), default),
+        ]:
+            for bridge in (None, ""):
+                with self.subTest(values=values, bridge=bridge), patch.dict(os.environ):
+                    for key in ("TMPDIR", "TMP", "TEMP", "AVM_TMPDIR"):
+                        os.environ.pop(key, None)
+                    for key, value in zip(("TMPDIR", "TMP", "TEMP"), values):
+                        if value is not None:
+                            os.environ[key] = value
+                    if bridge is not None:
+                        os.environ["AVM_TMPDIR"] = bridge
+                    selected = normalize_scratch_environment()
+                    before = dict(os.environ)
+                    actual = self.preflight_child(preflight_environment(selected))
+                    self.assertEqual(dict(os.environ), before)
+                    self.assertEqual(actual["parent"], expected)
+                    self.assertEqual(
+                        [actual["environment"][key] for key in ("TMPDIR", "TMP", "TEMP", "AVM_TMPDIR")],
+                        [expected] * 4,
+                    )
+
+    def test_preflight_child_preserves_explicit_overrides_without_mutating_parent(self):
+        first, second, third = map(str, self.paths)
+        values = {"TMPDIR": first, "TMP": "", "TEMP": "", "AVM_TMPDIR": second,
+                  "AVM_SCRATCH_ROOT": third, "CARGO_TARGET_DIR": str(self.root / "caller target")}
+        with patch.dict(os.environ, values):
+            selected = normalize_scratch_environment()
+            before = dict(os.environ)
+            actual = self.preflight_child(preflight_environment(selected))
+            self.assertEqual(dict(os.environ), before)
+            self.assertEqual(os.environ["TMPDIR"], first)
+            self.assertEqual(actual["parent"], second)
+            self.assertEqual(
+                [actual["environment"][key] for key in ("TMPDIR", "TMP", "TEMP", "AVM_TMPDIR")],
+                [second] * 4,
+            )
+            for key in ("AVM_SCRATCH_ROOT", "CARGO_TARGET_DIR"):
+                self.assertEqual(actual["environment"][key], values[key])
 
 
 if __name__ == "__main__":
