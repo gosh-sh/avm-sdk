@@ -1,4 +1,4 @@
-//! Application regressions against the unchanged published guest SDK 0.1.1.
+//! Application regressions against the current in-tree guest SDK.
 mod support;
 use avm_contract_sdk::{
     decode_batch_input, encode_batch_output, encode_message_output, BatchContract, Contract,

@@ -27,6 +27,6 @@ for (const row of fs.readFileSync(vectorsPath, 'utf8').trim().split('\n')) {
   cases.push({ name, entrypoint, input_bytes: input.length, output_bytes: outputLen });
 }
 fs.writeFileSync(evidencePath, JSON.stringify({ status: 'PASS',
-  scope: 'Guest ABI only; published guest SDK 0.1.1, Node WebAssembly engine',
+  scope: 'Guest ABI only; in-tree guest SDK, Node WebAssembly engine',
   wasm_sha256: crypto.createHash('sha256').update(wasm).digest('hex'), cases }, null, 2) + '\n');
 console.log(`Audit WASM/native output agreement and rejected-mode serialization: ${cases.length} PASS`);

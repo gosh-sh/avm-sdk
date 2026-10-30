@@ -1,4 +1,4 @@
-//! Canonical vectors for executing the unchanged guest ABI through actual WASM.
+//! Canonical vectors for executing the current canonical guest ABI through actual WASM.
 #[path = "../../tests/support/mod.rs"]
 mod support;
 use avm_contract_sdk::{

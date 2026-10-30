@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Black-box state-mode qualification of the pinned SDK 0.2.0 LOCAL stand.
+"""Black-box state-mode correctness checks with explicitly selected local tools.
 
-Candidate runtime is unavailable: no candidate or mainnet execution is claimed.
+No release qualification or mainnet execution is claimed.
 Uses a deliberately non-financial fixture and fresh disposable stand state.
 """
 import argparse
@@ -99,15 +99,15 @@ def run(sdk, output):
                   "balance_transition": {"previous_canonical_bytes": 65_536,
                       "incoming_new_currency_call": before, "resulting_canonical_bytes": 65_556,
                       "following_call": after},
-                  "replay_matches": True, "candidate_executed": False,
+                  "replay_matches": True, "release_qualification": False,
                   "mainnet_deployment": False, "real_funds": False}
         output.write_text(json.dumps(result, indent=2) + "\n")
-        print("SDK 0.2.0 canonical threshold/balance transition/mode mismatch/replay: PASS")
+        print("Local canonical threshold/balance transition/mode mismatch/replay: PASS")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--sdk", type=Path, required=True)
-    parser.add_argument("--output", type=Path, default=ROOT / "evidence/state-limits-sdk020.json")
+    parser.add_argument("--output", type=Path, default=ROOT / "evidence/state-limits.json")
     args = parser.parse_args()
     run(args.sdk.resolve(), args.output.resolve())

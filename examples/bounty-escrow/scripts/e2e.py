@@ -120,7 +120,7 @@ def run(sdk, output):
             stand.call(escrow, "bounty.escrow.status")
             stand.call(escrow, "bounty.escrow.fund", extra="7:1000", expected_status=2004)
             # Bind both fixtures using their observed init authority in the
-            # pinned stand. Escrow is initialized by package-owner here.
+            # selected stand. Escrow is initialized by developer here.
             for receiver,identity in [(pay,"developer"),(refund,"developer")]:
                 result = stand.call(receiver, "bounty.receiver.bind", address_bytes(escrow), identity=identity)
                 assert result["status"] == "ok", result
