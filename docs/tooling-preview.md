@@ -120,6 +120,9 @@ dynamic libraries, network access, clocks or randomness to contracts. The
 runtime continues to reject imported host functions, including BN254 imports.
 Contract code executes within the fixed deterministic core-WASM profile.
 
-An internal sender address does not prove the sender's current code or package.
-The SDK does not expose an authenticated sender-code lookup. Contract authorization
-must follow the application's explicit trust model.
+Comparing an internal sender with an expected derived address can check its
+package, owner, salt and initialization-data binding. It does not authenticate
+the sender's current selected code/version or its actual deployer. The SDK has
+no authenticated sender code-version lookup; see the
+[derived-address example](../examples/factory-child-provenance/README.md) for
+these limits. Contract authorization must follow the application's trust model.
