@@ -23,11 +23,14 @@ not estimate all fees.
 
 ## Run checks
 
-Use Rust 1.93.0, rustfmt, Clippy, `wasm32-unknown-unknown`, Python 3 and Node.
-No external Rust dependency is added. Binaryen 133 is a build tool: its existing
+Use Rust 1.93.0, rustfmt, Clippy, `wasm32-unknown-unknown` and Python 3.
+Contracts have no external Rust dependencies. The guest ABI checks reuse pinned
+Wasmtime 36.0.12 as a host-only test dependency, outside the guest WASM graph.
+Binaryen 133 is a build tool: its existing
 installer verifies a pinned archive checksum. From the SDK root:
 
 ```bash
+cargo +1.93.0 fetch --locked --manifest-path examples/revenue-hub/Cargo.toml
 bash examples/revenue-hub/scripts/install_binaryen.sh /absolute/path/to/tools
 bash examples/revenue-hub/scripts/check.sh \
   --sdk /absolute/path/to/verified/avm-sdk-linux-x86_64 \

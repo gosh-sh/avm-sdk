@@ -41,7 +41,7 @@ def main():
     run("wasm-clippy", ["cargo", "+1.93.0", "clippy", "--lib", "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
     run("build", [sdk / "bin/avm-contract-build", "build", "--manifest-path", EXP / "Cargo.toml"])
     run("optimization", ["python3", ROOT / "scripts/optimize.py", "--wasm-opt", args.optimizer.resolve(), "--out", out / "optimization.json", "--compact"])
-    run("guest-vectors", ["node", EXP / "scripts/guest_modes.mjs", EXP / "target/avm/contract.wasm", out / "guest-vectors.tsv", out / "guest-vectors.json"])
+    run("guest-vectors", ["python3", ROOT / "scripts/guest_modes.py", EXP / "target/avm/contract.wasm", out / "guest-vectors.tsv", out / "guest-vectors.json"])
     run("journey", ["python3", EXP / "scripts/e2e.py", "--sdk", sdk, "--output", out / "journey.json"])
     run("runtime-probes", ["python3", EXP / "scripts/runtime_probes.py", "--sdk", sdk, "--output", out / "runtime-probes.json"])
     artifacts = {name: hashlib.sha256((EXP / "target/avm" / name).read_bytes()).hexdigest()

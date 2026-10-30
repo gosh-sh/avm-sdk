@@ -28,7 +28,8 @@ def main():
     scratch = out / "tmp"
     scratch.mkdir(exist_ok=True)
     env = os.environ.copy()
-    env.update(TMPDIR=str(scratch), TMP=str(scratch), TEMP=str(scratch), CARGO_TARGET_DIR=str(out / "target"))
+    env.update(TMPDIR=str(scratch), TMP=str(scratch), TEMP=str(scratch), CARGO_TARGET_DIR=str(out / "target"),
+               AVM_GUEST_CHECKER_TARGET_DIR=str(out / "target"))
     runtime = out / "runtime"
     inputs = {}
     for name, source in (("bin/avm-contract-build", args.builder),
@@ -70,7 +71,9 @@ def main():
     run("state-limits", ["python3", "scripts/state_limits.py", "--sdk", runtime, "--output", out / "state-limits.json"])
     vectors = run("audit-vectors", ["cargo", "+1.93.0", "run", "-p", "avm-revenue-tests", "--bin", "audit_mode_vectors", "--locked", "--offline"])
     (out / "audit-vectors.tsv").write_text(vectors)
-    run("audit-wasm-vectors", ["node", "scripts/guest_modes.mjs", ROOT / "contracts/audit/target/avm/contract.wasm", out / "audit-vectors.tsv", out / "audit-wasm-vectors.json"])
+    run("guest-checker-negative", ["cargo", "+1.93.0", "test", "--manifest-path", ROOT / "tests/Cargo.toml",
+        "--features", "guest-abi-check", "--test", "guest_modes_negative", "--locked", "--offline"])
+    run("audit-wasm-vectors", ["python3", "scripts/guest_modes.py", ROOT / "contracts/audit/target/avm/contract.wasm", out / "audit-vectors.tsv", out / "audit-wasm-vectors.json"])
     run("compact", ["bash", "experiments/compact-audit/scripts/verify.sh", "--sdk", runtime, "--out", out / "compact", "--optimizer", args.optimizer.resolve()])
     run("journey", ["python3", "scripts/e2e.py", "--sdk", runtime, "--output", out / "journey.json"])
     (out / "summary.json").write_text(json.dumps({"status": "PASS", "scope": "local correctness only", "principal_currency_id": 0, "commands": commands, "inputs": inputs}, indent=2) + "\n")
