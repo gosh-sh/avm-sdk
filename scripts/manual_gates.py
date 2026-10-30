@@ -44,11 +44,15 @@ def example_environment(source, manifest, evidence, run):
     environment = os.environ.copy()
     environment.pop("AVM_CONTRACT_BINDINGS", None)
     metadata = manifest.parent / "avm-contract.toml"
-    if metadata.is_file() and tomllib.loads(metadata.read_text()).get("bindings", {}).get("enabled"):
+    bindings_config = tomllib.loads(metadata.read_text()).get("bindings", {}) if metadata.is_file() else {}
+    if bindings_config.get("enabled"):
         bindings = evidence / (manifest.parent.name + "-bindings.rs")
-        run(manifest.parent.name + "-bindings", ["cargo", "run", "--quiet", "--locked", "--offline",
+        command = ["cargo", "run", "--quiet", "--locked", "--offline",
             "-p", "avm-contract-build", "--bin", "avm-contract-build", "--", "bindings",
-            "--manifest-path", str(manifest)], source, stdout_file=bindings)
+            "--manifest-path", str(manifest)]
+        if bindings_config.get("dispatch"):
+            command.append("--dispatch")
+        run(manifest.parent.name + "-bindings", command, source, stdout_file=bindings)
         environment["AVM_CONTRACT_BINDINGS"] = str(bindings)
     return environment
 
