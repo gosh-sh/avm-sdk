@@ -36,6 +36,14 @@ Installer permission validation incorporates @h2so4nackl-code's contribution in
 [#25](https://github.com/gosh-sh/avm-sdk/pull/25), commit
 `559ae5cf26c191121787a86fece2960562b0fdb7`.
 
+The application examples incorporate the contributions of @h2so4nackl-code
+([#9](https://github.com/gosh-sh/avm-sdk/pull/9),
+[#10](https://github.com/gosh-sh/avm-sdk/pull/10),
+[#11](https://github.com/gosh-sh/avm-sdk/pull/11)) and @alandocarmo
+([#12](https://github.com/gosh-sh/avm-sdk/pull/12),
+[#26](https://github.com/gosh-sh/avm-sdk/pull/26)). Their example documentation
+preserves the original commit credits and describes the adaptation and limits.
+
 # AVM SDK 0.2.0 / guest SDK 0.1.1
 
 Contract results avoid an extra output copy, and the local stand now uses the

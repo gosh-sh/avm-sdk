@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run accumulated SDK release gates on the bounded qualification pod."""
+"""Run accumulated SDK release gates on a bounded qualification host."""
 
 import argparse
 import io
@@ -76,11 +76,16 @@ def main():
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--sdk", required=True, type=Path)
     parser.add_argument("--evidence", required=True, type=Path)
+    parser.add_argument("--optimizer", type=Path, help="checksum-pinned Binaryen 133 wasm-opt")
     args = parser.parse_args()
     source, sdk, evidence = args.source.resolve(), args.sdk.resolve(), args.evidence.resolve()
-    require(os.environ.get("AVM_SDK_POD_QUALIFICATION") == "1", "use the bounded pod launcher")
+    require(os.environ.get("AVM_SDK_QUALIFICATION") == "1"
+            or os.environ.get("AVM_SDK_POD_QUALIFICATION") == "1", "use a bounded qualification launcher")
     require(os.sched_getaffinity(0) <= {0, 1}, "qualification requires CPUs 0-1")
     require(os.environ.get("CARGO_BUILD_JOBS") == "2", "CARGO_BUILD_JOBS must be 2")
+    require(args.optimizer is not None and args.optimizer.is_file()
+            and os.access(args.optimizer, os.X_OK), "pass --optimizer with checksum-pinned Binaryen 133 wasm-opt")
+    optimizer = args.optimizer.resolve()
     normalize_scratch_environment()
     clean(source)
     clean(sdk)
@@ -127,6 +132,10 @@ def main():
     run("sdk-clippy", ["cargo", "clippy", "--locked", "--offline", "--all-targets", "--", "-D", "warnings"], sdk)
     run("sdk-tests", ["cargo", "test", "--locked", "--offline", "--", "--test-threads=1"], sdk, tests=True)
     for manifest in sorted((sdk / "examples").glob("*/Cargo.toml")):
+        # These workspaces own full native, guest, optimizer and application
+        # gates below; compiling a virtual root as one WASM package is invalid.
+        if manifest.parent.name in {"bounty-escrow", "revenue-hub", "vesting-streams"}:
+            continue
         run(manifest.parent.name + "-format", ["cargo", "fmt", "--manifest-path", str(manifest), "--", "--check"], sdk)
         environment = example_environment(source, manifest, evidence, run)
         run(manifest.parent.name + "-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk, environment=environment)
@@ -175,12 +184,37 @@ def main():
     archive = subprocess.check_output(["git", "-C", str(sdk), "archive", "HEAD"])
     with tarfile.open(fileobj=io.BytesIO(archive)) as snapshot:
         snapshot.extractall(consumer_sdk, filter="data")
+    (consumer_sdk / "bin").mkdir()
+    for binary in (builder, stand):
+        (consumer_sdk / "bin" / binary.name).symlink_to(binary)
     run("sdk-public-issue-paths", [sys.executable, "-B", str(sdk / "scripts/tests/sdk_issue_public_paths.py"),
         "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
         "--profile", str(profile), "--out", str(evidence / "public-issue-paths")])
     run("sdk-deploy-callback-delivery", ["bash", str(sdk / "examples/deploy-callback-repro/repro.sh"),
         "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
         "--out", str(evidence / "deploy-callback-repro")], sdk)
+    for name in ("bounty-escrow", "revenue-hub"):
+        command = ["bash", str(consumer_sdk / "examples" / name / "scripts/check.sh"),
+            "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
+            "--out", str(evidence / name)]
+        if name == "revenue-hub":
+            command.extend(("--optimizer", str(optimizer)))
+        run(name + "-application-checks", command, consumer_sdk)
+    application_environment = os.environ.copy()
+    application_environment.update(AVM_CONTRACT_BUILD=str(builder), AVM_LOCAL_STAND=str(stand),
+                                   AVM_WASMTIME_PROFILE=str(profile),
+                                   AVM_EVIDENCE_DIR=str(evidence / "vesting-streams"))
+    run("vesting-streams-application-checks", ["bash",
+        str(consumer_sdk / "examples/vesting-streams/scripts/check.sh"), str(consumer_sdk), str(optimizer)],
+        consumer_sdk, environment=application_environment)
+    application_environment.update(AVM_TOKEN_WORK=str(evidence / "fungible-token"),
+                                   PROVENANCE_OUT=str(evidence / "factory-child-provenance"), PROVENANCE_KEEP="1")
+    run("fungible-token-application-checks", ["bash",
+        str(consumer_sdk / "examples/fungible-token/stand-e2e.sh")], consumer_sdk,
+        environment=application_environment)
+    run("factory-child-provenance-application-checks", ["bash",
+        str(consumer_sdk / "examples/factory-child-provenance/prove.sh")], consumer_sdk,
+        environment=application_environment)
     cases = "deploy_init_success_executes_real_wasm_with_exact_output_and_fuel process_message_selects_real_export_with_exact_output_and_fuel process_batch_uses_the_batch_export_and_output_at_effective_cap_succeeds allocator_fuel_exhaustion_precedes_the_generic_trap_status invalid_non_null_allocator_ranges_do_not_copy_call_init_or_free output_cap_precedes_pointer_validation invalid_output_pointer_range_and_input_overlap_are_rejected_before_read_or_free output_free_non_fuel_trap_skips_input_free_and_discards_copied_output fuel_exhaustion_at_output_free_and_input_free_has_fuel_precedence successful_cleanup_copies_output_then_frees_output_before_input same_input_uses_fresh_stores_and_is_deterministic failed_attempts_also_discard_their_store_state".split()
     test("avm-wasm-executor", ["--lib"], ["tests::" + case for case in cases])
     test("avm-wasm-executor", ["--lib"], ["tests::deadline::" + case for case in "completed_controlled_exports_preserve_exact_output_status_and_fuel expired_control_starts_no_guest_or_alarm cutoff_interrupts_allocator_entrypoint_and_each_free cancelled_store_is_discarded_and_next_call_matches_fresh_execution".split()])

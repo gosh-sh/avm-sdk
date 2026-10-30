@@ -180,7 +180,8 @@ def identity(source, sdk):
 
 
 def build(source, sdk, output, gates):
-    require(os.environ.get("AVM_SDK_POD_QUALIFICATION") == "1", "use the bounded pod launcher")
+    require(os.environ.get("AVM_SDK_QUALIFICATION") == "1"
+            or os.environ.get("AVM_SDK_POD_QUALIFICATION") == "1", "use a bounded qualification launcher")
     require(os.sched_getaffinity(0) <= {0, 1} and os.environ.get("CARGO_BUILD_JOBS") == "2", "build requires CPUs 0-1 and jobs=2")
     ids = identity(source, sdk)
     qualification = json.loads(gates.read_bytes())

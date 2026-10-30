@@ -12,6 +12,23 @@ The available stand commands are listed in the
 
 ## Example Set
 
+### Application examples for SDK 0.3.0
+
+- [bounty-escrow](bounty-escrow/README.md): milestone funding, asynchronous
+  payout/refund accounting and failure/replay regressions.
+- [revenue-hub](revenue-hub/README.md): governed payouts, batch audit and compact
+  state experiments with native/WASM vectors and replay.
+- [vesting-streams](vesting-streams/README.md): grant accrual, cancellation and
+  callback accounting checked against an independent arithmetic oracle.
+- [fungible-token](fungible-token/README.md): a fixed-supply internal token ledger
+  with bounded holder slots, transfer errors and event/replay checks.
+- [factory-child-provenance](factory-child-provenance/README.md): derived-address
+  checks and their limits. A derived address does not authenticate current code.
+
+These are developer examples, not audited financial applications. They use
+explicit application assets and require matching tools/profile; an application
+asset such as currency ID 0 is separate from fee-paying SHELL at currency ID 2.
+
 ### `deploy-callback-repro` (unreleased)
 
 An executable parent/child regression for ordinary callbacks, successful
