@@ -4,6 +4,10 @@
 
 AVM has no `vmSHELL`, VM-private currency, or VM-private balance.
 
+All account balances and message transfers use `extra`, with an explicit
+`currency_id` for every entry. Currency ID 0 is valid; it has no special role.
+Entries remain sorted by ID and unique, and a zero amount is preserved.
+
 AVM uses two different units:
 
 - **FUEL** is the deterministic Wasmtime compute meter. It limits how much WASM

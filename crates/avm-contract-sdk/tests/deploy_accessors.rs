@@ -30,20 +30,20 @@ fn envelope(inline: bool) -> Vec<u8> {
 }
 
 fn frame(body: &[u8], deploy: bool, external: bool) -> Vec<u8> {
-    let mut message = vec![0; if external { 208 } else { 192 }];
+    let mut message = vec![0; if external { 192 } else { 176 }];
     message[0] = u8::from(external);
     message[1] = if deploy { 2 } else { 0 };
     if external {
         message[1] |= 1; // Signed external envelope; ingress owns signature verification.
-        message[64..96].fill(0x21);
-        message[96..128].fill(0x22);
-        message[128..160].fill(0x33);
-        message[160..162].copy_from_slice(&64u16.to_le_bytes());
+        message[48..80].fill(0x21);
+        message[80..112].fill(0x22);
+        message[112..144].fill(0x33);
+        message[144..146].copy_from_slice(&64u16.to_le_bytes());
     } else {
-        message[64..96].fill(0x11);
-        message[96..128].fill(0x12);
-        message[128..160].fill(0x21);
-        message[160..192].fill(0x22);
+        message[48..80].fill(0x11);
+        message[80..112].fill(0x12);
+        message[112..144].fill(0x21);
+        message[144..176].fill(0x22);
     }
     message[4..8].copy_from_slice(&u32::try_from(body.len()).unwrap().to_le_bytes());
     message[8..16].copy_from_slice(&1u64.to_le_bytes());
@@ -51,7 +51,7 @@ fn frame(body: &[u8], deploy: bool, external: bool) -> Vec<u8> {
     if external {
         message.extend_from_slice(&[0x91; 64]);
     }
-    let mut bytes = vec![0; 282];
+    let mut bytes = vec![0; 266];
     bytes[..4].copy_from_slice(b"ACMI");
     bytes[52] = u8::from(external);
     if external {

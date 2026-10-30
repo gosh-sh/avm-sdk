@@ -3,7 +3,7 @@ use core::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 
 use crate::input::{decode_batch_input, decode_message_input};
 use crate::output::{
-    batch_output_plan_for, message_output_plan_for, write_batch_output, write_message_output,
+    batch_output_len_for, message_output_len_for, write_batch_output, write_message_output,
     EncodeError, OutputWriter,
 };
 use crate::{BatchContract, Contract};
@@ -214,10 +214,10 @@ fn dispatch_message_inner<T: Contract, const N: usize>(
         return 0;
     }
     let output = if is_init { T::init(input) } else { T::process_message(input) };
-    let Ok(plan) = message_output_plan_for(&input, is_init, &output) else {
+    let Ok(output_len) = message_output_len_for(&input, is_init, &output) else {
         return 0;
     };
-    arena.write_output(plan.len, |writer| write_message_output(writer, &output, plan.extended))
+    arena.write_output(output_len, |writer| write_message_output(writer, &output))
 }
 
 #[doc(hidden)]
@@ -233,10 +233,10 @@ pub fn dispatch_batch<T: BatchContract, const N: usize>(
         return 0;
     };
     let output = T::process_batch(input);
-    let Ok(plan) = batch_output_plan_for(&input, &output) else {
+    let Ok(output_len) = batch_output_len_for(&input, &output) else {
         return 0;
     };
-    arena.write_output(plan.len, |writer| write_batch_output(writer, &output, plan.extended))
+    arena.write_output(output_len, |writer| write_batch_output(writer, &output))
 }
 
 #[cfg(test)]
@@ -258,18 +258,18 @@ mod tests {
 
     fn input() -> Vec<u8> {
         // Canonical ACMI with one internal message, no extras or optional sections.
-        let mut bytes = vec![0; 278];
+        let mut bytes = vec![0; 262];
         bytes[..4].copy_from_slice(b"ACMI");
         bytes[60..124].fill(1);
         bytes[156..220].fill(2);
         bytes[220..252].fill(3);
         bytes.extend_from_slice(&3u32.to_le_bytes());
         bytes.extend_from_slice(b"old");
-        bytes.extend_from_slice(&192u32.to_le_bytes());
-        let mut message = vec![0; 192];
+        bytes.extend_from_slice(&176u32.to_le_bytes());
+        let mut message = vec![0; 176];
         message[8..16].copy_from_slice(&1u64.to_le_bytes());
-        message[64..128].fill(1);
-        message[128..192].fill(2);
+        message[48..112].fill(1);
+        message[112..176].fill(2);
         bytes.extend_from_slice(&message);
         bytes.extend_from_slice(&0u32.to_le_bytes());
         decode_message_input(&bytes).unwrap();
@@ -332,16 +332,16 @@ mod tests {
     #[test]
     fn dispatch_failure_capacity_and_overflow_leave_input_owned() {
         let bytes = input();
-        let arena = GuestArena::<512>::new();
+        let arena = GuestArena::<480>::new();
         let ptr = load(&arena, &bytes);
         let len = bytes.len() as u32;
         assert_eq!(arena.allocate(0), 0);
         assert_eq!(arena.allocate(u32::MAX), 0);
-        assert_eq!(dispatch_message::<Echo, 512>(&arena, ptr, len), 0);
+        assert_eq!(dispatch_message::<Echo, 480>(&arena, ptr, len), 0);
         assert_eq!(arena.allocation_count.load(Ordering::Relaxed), 1);
         assert_eq!(arena.read(ptr, len).unwrap(), bytes);
-        assert_eq!(dispatch_init::<Echo, 512>(&arena, ptr, len), 0);
-        assert_eq!(dispatch_message::<Echo, 512>(&arena, ptr, len - 1), 0);
+        assert_eq!(dispatch_init::<Echo, 480>(&arena, ptr, len), 0);
+        assert_eq!(dispatch_message::<Echo, 480>(&arena, ptr, len - 1), 0);
         assert_eq!(arena.next.load(Ordering::Relaxed), len);
         assert!(arena.free(ptr, len));
         assert!(!arena.free(ptr, len));
@@ -378,7 +378,6 @@ mod tests {
                 output.outbound_intents.push(crate::OutboundIntent {
                     input_index: 0,
                     destination: input.destination,
-                    value_main: 0,
                     fuel_fee_shells: 1,
                     extra: Vec::new(),
                     method_id: 1,
@@ -392,7 +391,7 @@ mod tests {
         for _ in 0..10_000 {
             let output = OutputShape::process_message(decode_message_input(&bytes).unwrap());
             let expected = crate::encode_message_output(&output).unwrap();
-            assert_eq!(expected.len(), 355);
+            assert_eq!(expected.len(), 339);
             let arena = GuestArena::<1024>::new();
             let ptr = load(&arena, &bytes);
             let packed = dispatch_message::<OutputShape, 1024>(&arena, ptr, bytes.len() as u32);
@@ -400,7 +399,7 @@ mod tests {
         }
         // Each positive-control Vec grows six times (first allocation included).
         // The direct dispatch adds no Vec writes/growth; only one arena write/byte.
-        assert_eq!(crate::output::work::take(), (3_550_000, 60_000, 3_550_000));
+        assert_eq!(crate::output::work::take(), (3_390_000, 60_000, 3_390_000));
     }
 
     #[test]
@@ -417,7 +416,6 @@ mod tests {
         impl BatchContract for BatchEcho {
             fn process_batch(input: crate::BatchInput<'_>) -> crate::BatchOutput {
                 crate::BatchOutput {
-                    internal_event_read_intents: Vec::new(),
                     state_update: StateUpdate::FullReplace(input.state.to_vec()),
                     status_codes: vec![0, 1000],
                     outbound_intents: Vec::new(),
@@ -426,22 +424,22 @@ mod tests {
             }
         }
         let message = input();
-        let mut bytes = vec![0; 174];
+        let mut bytes = vec![0; 158];
         bytes[..4].copy_from_slice(b"ACBI");
         bytes[52..116].fill(2);
         bytes[116..148].fill(3);
         bytes.extend_from_slice(&0u32.to_le_bytes());
         bytes.extend_from_slice(&2u32.to_le_bytes());
-        for offset in [0u32, 192, 384] {
+        for offset in [0u32, 176, 352] {
             bytes.extend_from_slice(&offset.to_le_bytes());
         }
-        bytes.extend_from_slice(&message[289..481]);
-        bytes.extend_from_slice(&message[289..481]);
+        bytes.extend_from_slice(&message[273..449]);
+        bytes.extend_from_slice(&message[273..449]);
         bytes.extend_from_slice(&0u32.to_le_bytes());
         let input = decode_batch_input(&bytes).unwrap();
         let mut output = BatchEcho::process_batch(input);
         let expected = crate::encode_batch_output(&output).unwrap();
-        assert_eq!(batch_output_plan_for(&input, &output).unwrap().len, expected.len());
+        assert_eq!(batch_output_len_for(&input, &output).unwrap(), expected.len());
         let arena = GuestArena::<1024>::new();
         let ptr = load(&arena, &bytes);
         let packed = dispatch_batch::<BatchEcho, 1024>(&arena, ptr, bytes.len() as u32);
@@ -449,19 +447,18 @@ mod tests {
         assert_eq!(arena.read(ptr, bytes.len() as u32).unwrap(), bytes);
         output.status_codes.pop();
         output.state_update = StateUpdate::DataPatchList(Vec::new());
-        assert_eq!(batch_output_plan_for(&input, &output), Err(EncodeError::InvalidIndex));
+        assert_eq!(batch_output_len_for(&input, &output), Err(EncodeError::InvalidIndex));
         output.status_codes.push(1000);
-        assert_eq!(batch_output_plan_for(&input, &output), Err(EncodeError::StateModeMismatch));
+        assert_eq!(batch_output_len_for(&input, &output), Err(EncodeError::StateModeMismatch));
         output.outbound_intents.push(crate::OutboundIntent {
             input_index: 1,
             destination: input.destination,
-            value_main: 0,
             fuel_fee_shells: 0,
             extra: Vec::new(),
             method_id: 1,
             body: Vec::new(),
         });
-        assert_eq!(batch_output_plan_for(&input, &output), Err(EncodeError::InvalidIndex));
+        assert_eq!(batch_output_len_for(&input, &output), Err(EncodeError::InvalidIndex));
     }
 
     #[test]
@@ -482,75 +479,6 @@ mod tests {
         assert_eq!(arena.read((packed >> 32) as u32, packed as u32).unwrap(), b"exactly fits");
         assert!(arena.free((packed >> 32) as u32, packed as u32));
         assert!(arena.free(ptr, 4));
-    }
-
-    #[test]
-    fn direct_event_read_output_checks_each_outbound_once_and_writes_each_byte_once() {
-        let bytes = input();
-        let input = decode_message_input(&bytes).unwrap();
-        let mut batch_bytes = vec![0; 174];
-        batch_bytes[..4].copy_from_slice(b"ACBI");
-        batch_bytes[52..116].fill(2);
-        batch_bytes[116..148].fill(3);
-        batch_bytes.extend_from_slice(&0u32.to_le_bytes());
-        batch_bytes.extend_from_slice(&1u32.to_le_bytes());
-        for offset in [0u32, 192] {
-            batch_bytes.extend_from_slice(&offset.to_le_bytes());
-        }
-        batch_bytes.extend_from_slice(&bytes[289..481]);
-        batch_bytes.extend_from_slice(&0u32.to_le_bytes());
-        let batch_input = decode_batch_input(&batch_bytes).unwrap();
-        for with_read in [false, true] {
-            let mut output = MessageOutput::success(StateUpdate::FullReplace(vec![1; 32]));
-            for index in 0..32 {
-                output.outbound_intents.push(crate::OutboundIntent {
-                    input_index: 0,
-                    destination: input.destination,
-                    value_main: 0,
-                    fuel_fee_shells: 1000,
-                    extra: Vec::new(),
-                    method_id: 1,
-                    body: vec![index as u8; 8],
-                });
-            }
-            if with_read {
-                output.internal_event_read_intents.push(crate::InternalEventReadIntent {
-                    outbound_index: 31,
-                    requests: vec![crate::InternalEventReadRequest {
-                        source: input.destination,
-                        event_class: 17,
-                    }],
-                });
-            }
-            let expected = crate::encode_message_output(&output).unwrap();
-            crate::output::work::take();
-            crate::output::work::take_outbound_validations();
-            let plan = message_output_plan_for(&input, false, &output).unwrap();
-            let arena = GuestArena::<8192>::new();
-            let packed = arena.write_output(plan.len, |writer| {
-                write_message_output(writer, &output, plan.extended)
-            });
-            assert_eq!(arena.read((packed >> 32) as u32, packed as u32).unwrap(), expected);
-            assert_eq!(crate::output::work::take_outbound_validations(), 32);
-            assert_eq!(crate::output::work::take(), (0, 0, expected.len()));
-            let batch = crate::BatchOutput {
-                internal_event_read_intents: output.internal_event_read_intents,
-                state_update: output.state_update.unwrap(),
-                status_codes: vec![0],
-                outbound_intents: output.outbound_intents,
-                event_intents: Vec::new(),
-            };
-            let expected = crate::encode_batch_output(&batch).unwrap();
-            crate::output::work::take();
-            crate::output::work::take_outbound_validations();
-            let plan = batch_output_plan_for(&batch_input, &batch).unwrap();
-            let arena = GuestArena::<8192>::new();
-            let packed = arena
-                .write_output(plan.len, |writer| write_batch_output(writer, &batch, plan.extended));
-            assert_eq!(arena.read((packed >> 32) as u32, packed as u32).unwrap(), expected);
-            assert_eq!(crate::output::work::take_outbound_validations(), 32);
-            assert_eq!(crate::output::work::take(), (0, 0, expected.len()));
-        }
     }
 
     #[test]
@@ -579,9 +507,11 @@ mod tests {
             output.outbound_intents.push(OutboundIntent {
                 input_index: 0,
                 destination: input.destination,
-                value_main: 8,
                 fuel_fee_shells: 9,
-                extra: vec![CurrencyAmount { currency_id: 1, amount: 10 }],
+                extra: vec![
+                    CurrencyAmount { currency_id: 0, amount: 8 },
+                    CurrencyAmount { currency_id: 1, amount: 10 },
+                ],
                 method_id: 11,
                 body: vec![12; 64],
             });
@@ -601,18 +531,15 @@ mod tests {
                 expected_code_hash: [17; 32],
             });
             let expected = crate::encode_message_output(&output).unwrap();
-            let plan = message_output_plan_for(&input, false, &output).unwrap();
-            assert_eq!(plan.len, expected.len());
+            let len = message_output_len_for(&input, false, &output).unwrap();
+            assert_eq!(len, expected.len());
             let arena = GuestArena::<8192>::new();
             let live = load(&arena, &bytes);
-            let packed = arena.write_output(plan.len, |writer| {
-                write_message_output(writer, &output, plan.extended)
-            });
+            let packed = arena.write_output(len, |writer| write_message_output(writer, &output));
             assert_eq!(arena.read((packed >> 32) as u32, packed as u32).unwrap(), expected);
             assert_eq!(arena.read(live, bytes.len() as u32).unwrap(), bytes);
 
             let batch = BatchOutput {
-                internal_event_read_intents: output.internal_event_read_intents,
                 state_update: state,
                 status_codes: vec![0, 1000],
                 outbound_intents: output.outbound_intents,
@@ -620,25 +547,24 @@ mod tests {
             };
             let expected = crate::encode_batch_output(&batch).unwrap();
             let arena = GuestArena::<8192>::new();
-            let packed = arena.write_output(expected.len(), |writer| {
-                write_batch_output(writer, &batch, plan.extended)
-            });
+            let packed =
+                arena.write_output(expected.len(), |writer| write_batch_output(writer, &batch));
             assert_eq!(arena.read((packed >> 32) as u32, packed as u32).unwrap(), expected);
         }
         let mut invalid = MessageOutput::failure(7);
         invalid.callback_result_body.push(1);
         assert_eq!(
-            message_output_plan_for(&input, true, &invalid),
+            message_output_len_for(&input, true, &invalid),
             Err(EncodeError::InvalidCallback)
         );
         assert_eq!(
-            message_output_plan_for(&input, false, &invalid),
+            message_output_len_for(&input, false, &invalid),
             Err(EncodeError::InvalidStatusCode)
         );
         input.required_state_output_mode = StateOutputMode::DataPatchList;
         let mut output = MessageOutput::success(StateUpdate::FullReplace(Vec::new()));
         assert_eq!(
-            message_output_plan_for(&input, false, &output),
+            message_output_len_for(&input, false, &output),
             Err(EncodeError::UpgradeRequired)
         );
         output.code_upgrade_intent = Some(CodeUpgradeIntent {
@@ -646,7 +572,7 @@ mod tests {
             expected_code_hash: [2; 32],
         });
         assert_eq!(
-            message_output_plan_for(&input, false, &output),
+            message_output_len_for(&input, false, &output),
             Err(EncodeError::StateModeMismatch)
         );
     }

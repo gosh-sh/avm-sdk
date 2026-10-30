@@ -1,9 +1,8 @@
-# SDK tooling and event-read preview
+# SDK tooling preview
 
-This implementation branch is not a binary release. The published
-`avm-dev-06e96ef71006-sdk-0748f4f0767a` commands do not include these additions.
-Use a matching reviewed builder/runtime candidate for the commands below.
-The [published release limitations](release-notes.md#compatibility) still apply.
+These commands describe the unreleased source candidate. SDK 0.2.0 does not
+include these additions. Use a matching builder and local-stand binary for the
+commands below; check the source identities recorded in the distribution.
 
 ## Constructor data
 
@@ -62,6 +61,40 @@ message. Opaque state has a null projection; unavailable/invalid metadata or
 invalid typed data is reported in `state_decode_error` alongside raw data.
 An absent account is an error.
 
+Inspection also exposes the selected `local_config`. Attempted WASM failures
+name the VM status and report used/budgeted FUEL. See [runtime limits, rent and
+addresses](runtime-limits.md) for the local values and their scope.
+
+## Reproducible builds and reinstall checks
+
+The pinned builder gives external path dependencies stable Cargo
+identities and remaps source paths, including SDK panic locations. Identical
+sources and build inputs in different absolute directories produce identical
+WASM, code hashes, ACAB and descriptors. The build receipt records this policy
+and actual remappings. A generated tree preserves the directory layout from the
+common ancestor of the contract workspace and its path-dependency workspaces.
+It links original files and projects Cargo workspace ownership into private
+manifests. Root packages, lexical parent traversal and helper processes retain
+that layout; the resolved locked package/feature graph must remain identical.
+Original manifests and locks are not edited. Builds sharing the target namespace
+serialize through a file lock; conflicting generated entries fail with repair
+instructions. Compiler, Cargo, lockfile and wrapper validation and
+the two clean builds remain mandatory. Path normalization does not make
+different sources, build-script inputs or compiler profiles identical.
+Earlier builders can produce different code/package hashes from these same
+sources; re-quote deployment addresses after rebuilding with the candidate.
+
+If a build script reads inputs above that common ancestor, include them explicitly:
+`avm-contract-build build --manifest-path path/to/Cargo.toml --source-root path/to/source-tree`.
+The root must contain the contract and every path-dependency workspace. Keep the
+same relative source-tree layout across builds. Paths outside that tree and
+application-generated strings containing absolute paths are not normalized.
+
+Reinstall checks executable permissions as well as every installed file's
+contents. A nonexecutable command or bundled shell script causes an actionable
+failure before activation; apply the reported `chmod 755` repair and retry.
+Successful installation no longer silently accepts missing executable bits.
+
 ## Quote, fund and deploy
 
 Add `--quote-address` to the same `deploy` arguments you intend to submit. It
@@ -75,47 +108,13 @@ Constructor failures now report the returned status; contract success requires
 0. ABI errors must use codes >=1000. A block time earlier than an account's last
 storage-payment time is rejected with both times in the diagnostic.
 
-## Experimental guest event reads
+## Runtime boundaries
 
-`MessageOutput.internal_event_read_intents` and the same field on `BatchOutput`
-attach `InternalEventReadIntent { outbound_index, requests }` groups to produced
-messages, following the callback-intent pattern. Groups must have strictly
-increasing outbound indices and nonempty request lists. Keep the vector empty
-for ordinary output. Requests use proposed `ACM2`/`ACB2` formats and require the
-matching experimental runtime; published runtimes reject them. `OutboundIntent`
-literals remain compatible. Explicit `MessageOutput`/`BatchOutput` literals need
-`internal_event_read_intents: Vec::new()`; message constructors supply it.
-Canonical ordinary output bytes remain unchanged when every request list is
-empty. Lists must be strictly sorted by source DApp, source account, then numeric
-event class, without duplicates.
+These helpers use the existing canonical ABI. They do not add WASM imports,
+dynamic libraries, network access, clocks or randomness to contracts. The
+runtime continues to reject imported host functions, including BN254 imports.
+Contract code executes within the fixed deterministic core-WASM profile.
 
-The receiver obtains bounded canonical binary data through
-`MessageInput.internal_event_results`. Reads use its block-start snapshot: a
-record emitted during that block becomes visible in the next block. External
-calls cannot inject requests or results. Protocol adoption and independent
-runtime review remain prerequisites for release.
-
-The [`contract-tools` example](../examples/contract-tools/src/lib.rs) demonstrates
-constructor decoding, generated methods/errors/dispatch, a typed internal sum,
-and guest-originated event emission/read requests. Its
-[public-path gate](../scripts/tests/sdk_issue_public_paths.py) uses actual WASM
-and CLI commands, with no fabricated state or injected event-read inputs.
-
-## Deploy callbacks and remaining protocol questions
-
-The runtime candidate implements a requested, empty-body success callback after
-successful contract-initiated deploy. This differs from a callback request or
-result body emitted by `init`, which remains forbidden. Internal deploy precheck
-failures now produce status-63 callbacks or method-zero value refunds while
-retaining the parent's forwarding transition. This includes already-active
-destinations, malformed bodies and rejected deploy identity. The target account
-or placeholder is unchanged. Failures after init starts remain unsupported;
-their init-fee/refund contract needs reconciliation. The
-[`deploy-callback-repro`](../examples/deploy-callback-repro/repro.sh) checks
-success delivery and precheck failures separately, including replay. Track
-[issue #13](https://github.com/gosh-sh/avm-sdk/issues/13).
-
-There is no guest API proving an internal sender's selected code/hash, nor an
-adopted non-withdrawable DApp balance or arbitrary third-party fee payer. See
-[issue #8](https://github.com/gosh-sh/avm-sdk/issues/8)
-and [the funding explanation](fuel-and-fees.md#funding-is-a-separate-concern).
+An internal sender address does not prove the sender's current code or package.
+The SDK does not expose an authenticated sender-code lookup. Contract authorization
+must follow the application's explicit trust model.

@@ -1,3 +1,27 @@
+# Unreleased
+
+Account balances and message transfers now use explicit currency entries in
+`extra`. The separate `balance_main` and `value_main` fields and CLI
+`--value-main` option are removed. Currency ID 0 is accepted like any other ID.
+`fuel_fee_shells` keeps its existing meaning and fee rules.
+
+This changes the guest API, message/account encodings and execution ABI.
+Rebuild contracts with the matching SDK and recreate local stand data.
+
+Constructor inputs now expose their external or internal message envelope,
+including attached currency entries and authentication fields. CLI tooling can
+inspect and decode ABI data, show raw and decoded account state, and quote the
+deterministic deploy address before funding it.
+
+Contract builds support relocated path dependencies. If a source file was
+deleted or renamed after an earlier build, the builder rejects the stale
+generated source tree and identifies the directory to remove before retrying.
+It preserves the original sources and existing output artifacts on rejection.
+
+Reinstalling an existing SDK release now checks executable permissions before
+activating it. See [Getting Started](getting-started.md) for the CLI commands
+and [release provenance](releases.md) for bundle verification.
+
 # AVM SDK 0.2.0 / guest SDK 0.1.1
 
 Contract results avoid an extra output copy, and the local stand now uses the

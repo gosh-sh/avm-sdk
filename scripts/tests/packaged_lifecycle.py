@@ -45,7 +45,7 @@ def read_state(path):
     count = u32(data, position)
     position += 4
     for _ in range(count):
-        position += 64 + 16 + 8
+        position += 64 + 8
         count_extra = u32(data, position)
         position += 4 + count_extra * 20
     count = u32(data, position)
@@ -61,8 +61,8 @@ def read_state(path):
         image = data[position:position + size]
         position += size
         assert blake3(image) == account_hash
-        extras = int.from_bytes(image[49:51], "little")
-        start = 51 + 20 * extras
+        extras = int.from_bytes(image[33:35], "little")
+        start = 35 + 20 * extras
         state_size = u32(image, start)
         assert start + 4 + state_size == len(image)
         accounts[address.hex()[:64] + ":" + address.hex()[64:]] = {
@@ -209,7 +209,7 @@ class Journey:
 
     def call(self, address, method, args=None, **extra):
         return self.run("call", address=address, method=method, args_json=json.dumps(args),
-                        identity="user", value_main=extra.pop("value_main", 0),
+                        identity="user",
                         extra_currencies=extra.pop("extra_currencies", ""),
                         **self.timing(), **extra)
 
@@ -346,7 +346,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
     # FUEL exhaustion remains a separate status-31 failure-flow assertion below.
     before_unpaid = version.state.read_bytes()
     unpaid = version.run("call", expected=2, address=address, method="causal.a.version",
-                         args_json="null", identity="user", value_main=0, extra_currencies="",
+                         args_json="null", identity="user", extra_currencies="",
                          **version.timing(fee=0))
     assert unpaid["error"] == "call rejected canonical operation: local call charge failed: RouteRequiresFee", unpaid
     assert version.state.read_bytes() == before_unpaid, "unpaid external call must not publish effects"
@@ -393,7 +393,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
         method = "causal.b.receive" if callback else "causal.batch.patch"
         body = bytes.fromhex(receiver.replace(":", "")) + blake3(method.encode())[:8]
         body += blake3(b"causal.a.callback")[:8] if callback else bytes(8)
-        journey.call(sender, "causal.a.forward", "0x" + body.hex(), value_main=100, extra_currencies="7:40")
+        journey.call(sender, "causal.a.forward", "0x" + body.hex(), extra_currencies="0:100,7:40")
         accounts, ring = read_accounts(journey.state)
         state = accounts[receiver]["data"]
         if callback:
@@ -442,21 +442,21 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
         before_accounts, before_ring, before_wires = read_state(journey.state)
         before_events = journey.run("events")["events"]
         body = bytes.fromhex(receiver.replace(":", "")) + blake3(method.encode())[:8] + handler
-        called = journey.call(sender, "causal.a.forward", "0x" + body.hex(), value_main=100, extra_currencies="7:40")
+        called = journey.call(sender, "causal.a.forward", "0x" + body.hex(), extra_currencies="0:100,7:40")
         assert u32(bytes.fromhex(called["raw_executor_output"]), 4) == 0
         accounts, ring, wires = read_state(journey.state)
         assert len(wires) == len(before_wires) + 3
         delivered, callback = wires[-2:]
-        assert delivered[64:128] == bytes.fromhex(sender.replace(":", ""))
-        assert delivered[128:192] == bytes.fromhex(receiver.replace(":", ""))
-        assert callback[:4] == b"\0\1\1\0" and len(callback) == 312
+        assert delivered[48:112] == bytes.fromhex(sender.replace(":", ""))
+        assert delivered[112:176] == bytes.fromhex(receiver.replace(":", ""))
+        assert callback[:4] == b"\0\1\2\0" and len(callback) == 316
         assert callback[8:16] == handler
-        assert callback[16:32] == (37).to_bytes(16, "little")
-        assert callback[64:128] == delivered[128:192] and callback[128:192] == delivered[64:128]
-        assert callback[192:224] == blake3(delivered)
-        assert callback[224:288] == delivered[64:128]
-        assert u32(callback, 288) == status
-        assert callback[292:] == (7).to_bytes(4, "little") + (11).to_bytes(16, "little")
+        assert callback[16:32] == (1).to_bytes(16, "little")
+        assert callback[48:112] == delivered[112:176] and callback[112:176] == delivered[48:112]
+        assert callback[176:208] == blake3(delivered)
+        assert callback[208:272] == delivered[48:112]
+        assert u32(callback, 272) == status
+        assert callback[276:] == bytes(4) + (37).to_bytes(16, "little") + (7).to_bytes(4, "little") + (11).to_bytes(16, "little")
         assert accounts[receiver]["data"] == before_accounts[receiver]["data"]
         assert accounts[receiver]["selected_code_id"] == before_accounts[receiver]["selected_code_id"]
         assert accounts[sender]["data"] == (1).to_bytes(8, "little") + bytes(64)

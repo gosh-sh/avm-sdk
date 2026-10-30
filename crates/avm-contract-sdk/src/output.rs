@@ -1,8 +1,8 @@
 use alloc::{string::String, vec::Vec};
 
 use crate::{
-    AccountAddress, AvmAmount, BatchInput, CodeHash, CurrencyAmount, InternalEventReadRequest,
-    MessageInput, SelectedCodeId, StateOutputMode, CODE_UPGRADE_METHOD_ID,
+    AccountAddress, AvmAmount, BatchInput, CodeHash, CurrencyAmount, MessageInput, SelectedCodeId,
+    StateOutputMode, CODE_UPGRADE_METHOD_ID,
 };
 
 const FLAG_HAS_STATE_UPDATE: u8 = 1;
@@ -20,7 +20,6 @@ pub enum EncodeError {
     InvalidIndex,
     InvalidCallback,
     InvalidEvent,
-    InvalidEventReads,
     UpgradeForbidden,
     UpgradeRequired,
 }
@@ -51,7 +50,6 @@ impl StateUpdate {
 pub struct OutboundIntent {
     pub input_index: u32,
     pub destination: AccountAddress,
-    pub value_main: AvmAmount,
     pub fuel_fee_shells: AvmAmount,
     pub extra: Vec<CurrencyAmount>,
     pub method_id: u64,
@@ -62,15 +60,6 @@ pub struct OutboundIntent {
 pub struct CallbackIntent {
     pub outbound_index: u32,
     pub handler_method_id: u64,
-}
-
-/// Requests resolved for one produced message at its recipient's block start.
-/// Groups must have strictly increasing outbound indices and nonempty, sorted
-/// request lists. They require the experimental ACM2/ACB2 runtime ABI.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct InternalEventReadIntent {
-    pub outbound_index: u32,
-    pub requests: Vec<InternalEventReadRequest>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -102,7 +91,6 @@ pub struct MessageOutput {
     pub state_update: Option<StateUpdate>,
     pub callback_result_body: Vec<u8>,
     pub outbound_intents: Vec<OutboundIntent>,
-    pub internal_event_read_intents: Vec<InternalEventReadIntent>,
     pub callback_intents: Vec<CallbackIntent>,
     pub event_intents: Vec<EventIntent>,
     pub code_upgrade_intent: Option<CodeUpgradeIntent>,
@@ -115,7 +103,6 @@ impl MessageOutput {
             state_update: Some(state_update),
             callback_result_body: Vec::new(),
             outbound_intents: Vec::new(),
-            internal_event_read_intents: Vec::new(),
             callback_intents: Vec::new(),
             event_intents: Vec::new(),
             code_upgrade_intent: None,
@@ -128,7 +115,6 @@ impl MessageOutput {
             state_update: None,
             callback_result_body: Vec::new(),
             outbound_intents: Vec::new(),
-            internal_event_read_intents: Vec::new(),
             callback_intents: Vec::new(),
             event_intents: Vec::new(),
             code_upgrade_intent: None,
@@ -141,7 +127,6 @@ pub struct BatchOutput {
     pub state_update: StateUpdate,
     pub status_codes: Vec<u32>,
     pub outbound_intents: Vec<OutboundIntent>,
-    pub internal_event_read_intents: Vec<InternalEventReadIntent>,
     pub event_intents: Vec<EventIntent>,
 }
 
@@ -194,29 +179,23 @@ pub fn encode_batch_output(output: &BatchOutput) -> Result<Vec<u8>, EncodeError>
     encode_batch_output_inner(output, None)
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct OutputPlan {
-    pub len: usize,
-    pub extended: bool,
-}
-
-pub(crate) fn message_output_plan_for(
+pub(crate) fn message_output_len_for(
     input: &MessageInput<'_>,
     is_init: bool,
     output: &MessageOutput,
-) -> Result<OutputPlan, EncodeError> {
+) -> Result<usize, EncodeError> {
     validate_message_context(input, is_init, output)?;
-    let extended = validate_message_shape(output, Some(input.required_state_output_mode))?;
-    Ok(OutputPlan { len: message_output_len(output, extended)?, extended })
+    validate_message_shape(output, Some(input.required_state_output_mode))?;
+    message_output_len(output)
 }
 
-pub(crate) fn batch_output_plan_for(
+pub(crate) fn batch_output_len_for(
     input: &BatchInput<'_>,
     output: &BatchOutput,
-) -> Result<OutputPlan, EncodeError> {
+) -> Result<usize, EncodeError> {
     validate_batch_context(input, output)?;
-    let extended = validate_batch_shape(output, Some(input.required_state_output_mode))?;
-    Ok(OutputPlan { len: batch_output_len(output, extended)?, extended })
+    validate_batch_shape(output, Some(input.required_state_output_mode))?;
+    batch_output_len(output)
 }
 
 pub(crate) trait OutputWriter {
@@ -238,18 +217,17 @@ fn encode_message_output_inner(
     output: &MessageOutput,
     required_mode: Option<StateOutputMode>,
 ) -> Result<Vec<u8>, EncodeError> {
-    let extended = validate_message_shape(output, required_mode)?;
+    validate_message_shape(output, required_mode)?;
     let mut bytes = Vec::new();
-    write_message_output(&mut bytes, output, extended)?;
+    write_message_output(&mut bytes, output)?;
     Ok(bytes)
 }
 
 pub(crate) fn write_message_output(
     bytes: &mut impl OutputWriter,
     output: &MessageOutput,
-    extended: bool,
 ) -> Result<(), EncodeError> {
-    bytes.write(if extended { b"ACM2" } else { b"ACMO" })?;
+    bytes.write(b"ACMO")?;
     bytes.write(&output.status_code.to_le_bytes())?;
 
     let mut flags = 0;
@@ -264,12 +242,7 @@ pub(crate) fn write_message_output(
         encode_state_update(bytes, state_update)?;
     }
     push_length_prefixed_u32(bytes, &output.callback_result_body)?;
-    encode_outbound_intents(
-        bytes,
-        &output.outbound_intents,
-        &output.internal_event_read_intents,
-        extended,
-    )?;
+    encode_outbound_intents(bytes, &output.outbound_intents)?;
     bytes.write(&len_u32(output.callback_intents.len())?.to_le_bytes())?;
     for callback in &output.callback_intents {
         bytes.write(&callback.outbound_index.to_le_bytes())?;
@@ -287,29 +260,23 @@ fn encode_batch_output_inner(
     output: &BatchOutput,
     required_mode: Option<StateOutputMode>,
 ) -> Result<Vec<u8>, EncodeError> {
-    let extended = validate_batch_shape(output, required_mode)?;
+    validate_batch_shape(output, required_mode)?;
     let mut bytes = Vec::new();
-    write_batch_output(&mut bytes, output, extended)?;
+    write_batch_output(&mut bytes, output)?;
     Ok(bytes)
 }
 
 pub(crate) fn write_batch_output(
     bytes: &mut impl OutputWriter,
     output: &BatchOutput,
-    extended: bool,
 ) -> Result<(), EncodeError> {
-    bytes.write(if extended { b"ACB2" } else { b"ACBO" })?;
+    bytes.write(b"ACBO")?;
     encode_state_update(bytes, &output.state_update)?;
     bytes.write(&len_u32(output.status_codes.len())?.to_le_bytes())?;
     for status_code in &output.status_codes {
         bytes.write(&status_code.to_le_bytes())?;
     }
-    encode_outbound_intents(
-        bytes,
-        &output.outbound_intents,
-        &output.internal_event_read_intents,
-        extended,
-    )?;
+    encode_outbound_intents(bytes, &output.outbound_intents)?;
     encode_event_intents(bytes, &output.event_intents)?;
     Ok(())
 }
@@ -334,21 +301,9 @@ fn state_update_len(update: &StateUpdate) -> Result<usize, EncodeError> {
     }
 }
 
-fn outbound_intents_len(
-    intents: &[OutboundIntent],
-    reads: &[InternalEventReadIntent],
-    extended: bool,
-) -> Result<usize, EncodeError> {
-    let prefix = if extended {
-        let read_bytes = reads.iter().try_fold(0, |total, group| {
-            checked_len(&[total, repeated_len(group.requests.len(), 72)?])
-        })?;
-        checked_len(&[4, repeated_len(intents.len(), 4)?, read_bytes])?
-    } else {
-        4
-    };
-    intents.iter().try_fold(prefix, |total, intent| {
-        checked_len(&[total, 114, repeated_len(intent.extra.len(), 20)?, intent.body.len()])
+fn outbound_intents_len(intents: &[OutboundIntent]) -> Result<usize, EncodeError> {
+    intents.iter().try_fold(4, |total, intent| {
+        checked_len(&[total, 98, repeated_len(intent.extra.len(), 20)?, intent.body.len()])
     })
 }
 
@@ -362,17 +317,13 @@ fn event_intents_len(intents: &[EventIntent]) -> Result<usize, EncodeError> {
     })
 }
 
-fn message_output_len(output: &MessageOutput, extended: bool) -> Result<usize, EncodeError> {
+fn message_output_len(output: &MessageOutput) -> Result<usize, EncodeError> {
     checked_len(&[
         9,
         output.state_update.as_ref().map(state_update_len).transpose()?.unwrap_or(0),
         4,
         output.callback_result_body.len(),
-        outbound_intents_len(
-            &output.outbound_intents,
-            &output.internal_event_read_intents,
-            extended,
-        )?,
+        outbound_intents_len(&output.outbound_intents)?,
         4,
         repeated_len(output.callback_intents.len(), 12)?,
         event_intents_len(&output.event_intents)?,
@@ -380,17 +331,13 @@ fn message_output_len(output: &MessageOutput, extended: bool) -> Result<usize, E
     ])
 }
 
-fn batch_output_len(output: &BatchOutput, extended: bool) -> Result<usize, EncodeError> {
+fn batch_output_len(output: &BatchOutput) -> Result<usize, EncodeError> {
     checked_len(&[
         4,
         state_update_len(&output.state_update)?,
         4,
         repeated_len(output.status_codes.len(), 4)?,
-        outbound_intents_len(
-            &output.outbound_intents,
-            &output.internal_event_read_intents,
-            extended,
-        )?,
+        outbound_intents_len(&output.outbound_intents)?,
         event_intents_len(&output.event_intents)?,
     ])
 }
@@ -398,7 +345,7 @@ fn batch_output_len(output: &BatchOutput, extended: bool) -> Result<usize, Encod
 fn validate_message_shape(
     output: &MessageOutput,
     required_mode: Option<StateOutputMode>,
-) -> Result<bool, EncodeError> {
+) -> Result<(), EncodeError> {
     validate_status_code(output.status_code)?;
     if output.status_code == 0 {
         let update = output.state_update.as_ref().ok_or(EncodeError::MissingStateUpdate)?;
@@ -408,7 +355,6 @@ fn validate_message_shape(
     } else if output.state_update.is_some()
         || !output.callback_result_body.is_empty()
         || !output.outbound_intents.is_empty()
-        || !output.internal_event_read_intents.is_empty()
         || !output.callback_intents.is_empty()
         || !output.event_intents.is_empty()
         || output.code_upgrade_intent.is_some()
@@ -418,8 +364,6 @@ fn validate_message_shape(
 
     validate_state_update(output.state_update.as_ref())?;
     validate_outbound_intents(&output.outbound_intents)?;
-    validate_read_intents(&output.internal_event_read_intents, output.outbound_intents.len())?;
-    let extended = !output.internal_event_read_intents.is_empty();
     validate_event_intents(&output.event_intents)?;
     let mut seen = Vec::new();
     for callback in &output.callback_intents {
@@ -438,13 +382,13 @@ fn validate_message_shape(
     {
         return Err(EncodeError::InvalidIndex);
     }
-    Ok(extended)
+    Ok(())
 }
 
 fn validate_batch_shape(
     output: &BatchOutput,
     required_mode: Option<StateOutputMode>,
-) -> Result<bool, EncodeError> {
+) -> Result<(), EncodeError> {
     if required_mode.is_some_and(|mode| mode != output.state_update.mode()) {
         return Err(EncodeError::StateModeMismatch);
     }
@@ -453,10 +397,7 @@ fn validate_batch_shape(
         validate_status_code(*status_code)?;
     }
     validate_outbound_intents(&output.outbound_intents)?;
-    validate_read_intents(&output.internal_event_read_intents, output.outbound_intents.len())?;
-    let extended = !output.internal_event_read_intents.is_empty();
-    validate_event_intents(&output.event_intents)?;
-    Ok(extended)
+    validate_event_intents(&output.event_intents)
 }
 
 fn validate_message_context(
@@ -539,39 +480,11 @@ fn validate_state_update(update: Option<&StateUpdate>) -> Result<(), EncodeError
 fn validate_outbound_intents(intents: &[OutboundIntent]) -> Result<(), EncodeError> {
     len_u32(intents.len())?;
     for intent in intents {
-        #[cfg(test)]
-        work::outbound_validation();
         if intent.destination.dapp_id == [0; 32] || intent.destination.account_id == [0; 32] {
             return Err(EncodeError::InvalidIndex);
         }
         validate_extra(&intent.extra)?;
         len_u32(intent.body.len())?;
-    }
-    Ok(())
-}
-
-fn validate_read_intents(
-    groups: &[InternalEventReadIntent],
-    outbound_count: usize,
-) -> Result<(), EncodeError> {
-    let mut previous = None;
-    for group in groups {
-        if usize::try_from(group.outbound_index).ok().is_none_or(|index| index >= outbound_count)
-            || previous.is_some_and(|index| index >= group.outbound_index)
-            || group.requests.is_empty()
-        {
-            return Err(EncodeError::InvalidEventReads);
-        }
-        previous = Some(group.outbound_index);
-        len_u16(group.requests.len())?;
-        if group.requests.windows(2).any(|pair| {
-            let key = |read: &InternalEventReadRequest| {
-                (read.source.dapp_id, read.source.account_id, read.event_class)
-            };
-            key(&pair[0]) >= key(&pair[1])
-        }) {
-            return Err(EncodeError::InvalidEventReads);
-        }
     }
     Ok(())
 }
@@ -623,38 +536,17 @@ fn encode_state_update(
 fn encode_outbound_intents(
     bytes: &mut impl OutputWriter,
     intents: &[OutboundIntent],
-    read_groups: &[InternalEventReadIntent],
-    extended: bool,
 ) -> Result<(), EncodeError> {
     bytes.write(&len_u32(intents.len())?.to_le_bytes())?;
-    let mut next_read_group = 0;
-    for (index, intent) in intents.iter().enumerate() {
+    for intent in intents {
         bytes.write(&intent.input_index.to_le_bytes())?;
         bytes.write(&intent.destination.dapp_id)?;
         bytes.write(&intent.destination.account_id)?;
-        bytes.write(&intent.value_main.to_le_bytes())?;
         bytes.write(&intent.fuel_fee_shells.to_le_bytes())?;
         bytes.write(&len_u16(intent.extra.len())?.to_le_bytes())?;
         for amount in &intent.extra {
             bytes.write(&amount.currency_id.to_le_bytes())?;
             bytes.write(&amount.amount.to_le_bytes())?;
-        }
-        if extended {
-            let requests = read_groups
-                .get(next_read_group)
-                .filter(|group| usize::try_from(group.outbound_index).ok() == Some(index))
-                .map(|group| {
-                    next_read_group += 1;
-                    group.requests.as_slice()
-                })
-                .unwrap_or(&[]);
-            bytes.write(&len_u16(requests.len())?.to_le_bytes())?;
-            bytes.write(&0u16.to_le_bytes())?;
-            for read in requests {
-                bytes.write(&read.source.dapp_id)?;
-                bytes.write(&read.source.account_id)?;
-                bytes.write(&read.event_class.to_le_bytes())?;
-            }
         }
         bytes.write(&intent.method_id.to_le_bytes())?;
         push_length_prefixed_u32(bytes, &intent.body)?;
@@ -798,15 +690,6 @@ pub(crate) mod work {
 
     std::thread_local! {
         static WRITES: Cell<(usize, usize, usize)> = const { Cell::new((0, 0, 0)) };
-        static OUTBOUND_VALIDATIONS: Cell<usize> = const { Cell::new(0) };
-    }
-
-    pub(super) fn outbound_validation() {
-        OUTBOUND_VALIDATIONS.with(|count| count.set(count.get() + 1));
-    }
-
-    pub(crate) fn take_outbound_validations() -> usize {
-        OUTBOUND_VALIDATIONS.with(|count| count.replace(0))
     }
 
     pub(super) fn vec_write(bytes: usize, grew: bool) {

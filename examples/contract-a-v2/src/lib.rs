@@ -14,7 +14,7 @@ use avm_contract_sdk::CODE_UPGRADE_METHOD_ID;
 
 const STATE_BYTES: usize = 72;
 const FORWARD_ARGS_BYTES: usize = 80;
-const VALUE_MAIN: u128 = 37;
+const VALUE_ECC0: u128 = 37;
 const EXTRA_CURRENCY_ID: u32 = 7;
 const EXTRA_CURRENCY_AMOUNT: u128 = 11;
 const OUTBOUND_BODY: [u8; 16] = [0x42; 16];
@@ -117,12 +117,11 @@ impl Contract for ContractA {
         output.outbound_intents = vec![OutboundIntent {
             input_index: 0,
             destination,
-            value_main: VALUE_MAIN,
             fuel_fee_shells: u128::from(destination.dapp_id != input.destination.dapp_id),
-            extra: vec![CurrencyAmount {
-                currency_id: EXTRA_CURRENCY_ID,
-                amount: EXTRA_CURRENCY_AMOUNT,
-            }],
+            extra: vec![
+                CurrencyAmount { currency_id: 0, amount: VALUE_ECC0 },
+                CurrencyAmount { currency_id: EXTRA_CURRENCY_ID, amount: EXTRA_CURRENCY_AMOUNT },
+            ],
             method_id,
             body: if is_deploy { deploy_body.to_vec() } else { Vec::from(OUTBOUND_BODY) },
         }];
@@ -146,8 +145,7 @@ fn process_version_probe(input: MessageInput<'_>) -> MessageOutput {
     match input.caller {
         Caller::External(_) => next_state[16] = VERSION_MARKER,
         Caller::Internal(_)
-            if input.message.value_main() != 0
-                || input.message.extra().iter().any(|currency| currency.amount != 0) => {}
+            if input.message.extra().iter().any(|currency| currency.amount != 0) => {}
         Caller::Internal(_) => return MessageOutput::failure(1003),
     }
     MessageOutput::success(StateUpdate::FullReplace(next_state))
