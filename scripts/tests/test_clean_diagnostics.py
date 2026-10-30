@@ -120,5 +120,52 @@ class CleanDiagnosticsTests(unittest.TestCase):
                     self.assertFalse(output.exists(), "dirty input must stop before gates or builds")
 
 
+    def test_git_quoted_paths_and_both_rename_names_redact_before_rendering(self):
+        values = ('synthetic-"secret-123456', 'synthetic-secret-é-123456',
+                  'synthetic-secret-\\-123456', 'synthetic-secret-\t-123456',
+                  'synthetic-secret-\n-123456', 'synthetic-secret-\x1b-123456')
+        for quote_path in ("true", "false"):
+            self.git(self.repo, "config", "core.quotePath", quote_path)
+            for index, secret in enumerate(values):
+                prefix = f"quoted-{quote_path}-{index}-"
+                (self.repo / (prefix + secret + ".txt")).write_text("PRIVATE_CONTENTS")
+                before = self.git(self.repo, "status", "--porcelain", "--untracked-files=all")
+                with self.subTest(quote_path=quote_path, case=index), \
+                        mock.patch.dict(os.environ, {"TEST_CLEAN_TOKEN": secret}):
+                    message = self.rejection()
+                    line = next(line for line in message.splitlines() if prefix in line)
+                    self.assertIn("[REDACTED]", line)
+                    self.assertNotIn(secret, message)
+                    self.assertNotIn("PRIVATE_CONTENTS", message)
+                    self.assertNotIn("\x1b", message)
+                    self.assertNotIn("\x00", message)
+                    self.assertLessEqual(len(message.encode("utf-8")), 9000)
+                self.assertEqual(self.git(self.repo, "status", "--porcelain", "--untracked-files=all"), before)
+        old_secret, new_secret = 'old-"secret-é-123456', 'new-\\secret-\t-123456'
+        old_name, new_name = old_secret + ".txt", new_secret + ".txt"
+        (self.repo / old_name).write_text("PRIVATE_RENAME_CONTENTS")
+        self.git(self.repo, "add", "--", old_name)
+        self.git(self.repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                 "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+                 "commit", "--quiet", "-m", "rename fixture")
+        self.git(self.repo, "mv", "--", old_name, new_name)
+        before = self.git(self.repo, "status", "--porcelain", "--untracked-files=all")
+        with mock.patch.dict(os.environ, {"TEST_OLD_TOKEN": old_secret, "TEST_NEW_TOKEN": new_secret}):
+            message = self.rejection()
+        self.assertNotIn(old_secret, message)
+        self.assertNotIn(new_secret, message)
+        self.assertGreaterEqual(message.count("[REDACTED]"), 2)
+        self.assertNotIn("PRIVATE_RENAME_CONTENTS", message)
+        self.assertEqual(self.git(self.repo, "status", "--porcelain", "--untracked-files=all"), before)
+
+    def test_dirty_input_still_raises_value_error_when_raw_diagnostics_fail(self):
+        with mock.patch.object(manual_gates.subprocess, "check_output",
+                               side_effect=[b'?? "synthetic-\\\"secret.txt"\n',
+                                            subprocess.CalledProcessError(1, ["git"])]):
+            message = self.rejection()
+        self.assertIn("dirty source:", message)
+        self.assertNotIn("synthetic-", message)
+
+
 if __name__ == "__main__":
     unittest.main()
