@@ -13,7 +13,7 @@ import subprocess
 import tarfile
 import tomllib
 
-from manual_gates import clean, head
+from manual_gates import clean, head, normalize_scratch_environment
 from release import ARCHIVE, BINARIES, ROOT, artifact_records, digest, engine_library_artifact, file_digest, parse_profile, require, verify_archive
 
 RUST_NOTICE_SHA256 = {
@@ -343,6 +343,7 @@ def package(source, sdk, build_root, output):
 
 
 def main():
+    normalize_scratch_environment()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("build", "package"))
     parser.add_argument("--source", required=True, type=Path)

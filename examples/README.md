@@ -12,6 +12,13 @@ The available stand commands are listed in the
 
 ## Example Set
 
+### `deploy-callback-repro` (unreleased)
+
+An executable parent/child regression for ordinary callbacks, successful
+internal-deploy callbacks and pre-init rejection notifications. It checks exact
+callback counts, transferred-SHELL refunds, unchanged receiver effects and
+replay using matching tools. See its [instructions](deploy-callback-repro/README.md).
+
 ### `contract-a-v1`
 
 A message-isolated sender and the first version in the upgrade pair. It:

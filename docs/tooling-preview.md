@@ -110,6 +110,11 @@ storage-payment time is rejected with both times in the diagnostic.
 
 ## Runtime boundaries
 
+The [deploy callback example](../examples/deploy-callback-repro/README.md)
+exercises ordinary callbacks, requested successful-deploy callbacks and pre-init
+rejection notifications with matching candidate tools. It accepts explicit tool,
+profile and output paths and leaves the source checkout unchanged.
+
 These helpers use the existing canonical ABI. They do not add WASM imports,
 dynamic libraries, network access, clocks or randomness to contracts. The
 runtime continues to reject imported host functions, including BN254 imports.

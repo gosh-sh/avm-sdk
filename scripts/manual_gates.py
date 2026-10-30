@@ -2,12 +2,15 @@
 """Run accumulated SDK release gates on the bounded qualification pod."""
 
 import argparse
+import io
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+import tarfile
+import tempfile
 import tomllib
 
 from release import file_digest, parse_profile, require
@@ -40,6 +43,17 @@ def clean(root):
     require(not subprocess.check_output(["git", "-C", str(root), "status", "--porcelain", "--untracked-files=all"]), f"dirty source: {root}")
 
 
+def normalize_scratch_environment():
+    selected = next((os.environ[key] for key in ("TMPDIR", "TMP", "TEMP") if os.environ.get(key)), None)
+    scratch = Path(selected if selected is not None else tempfile.gettempdir())
+    require(scratch.is_absolute() and scratch.is_dir() and os.access(scratch, os.W_OK),
+            "temporary directory must be an existing absolute writable directory")
+    scratch = scratch.resolve()
+    for key in ("TMPDIR", "TMP", "TEMP"):
+        os.environ[key] = str(scratch)
+    return scratch
+
+
 def example_environment(source, manifest, evidence, run):
     environment = os.environ.copy()
     environment.pop("AVM_CONTRACT_BINDINGS", None)
@@ -67,8 +81,7 @@ def main():
     require(os.environ.get("AVM_SDK_POD_QUALIFICATION") == "1", "use the bounded pod launcher")
     require(os.sched_getaffinity(0) <= {0, 1}, "qualification requires CPUs 0-1")
     require(os.environ.get("CARGO_BUILD_JOBS") == "2", "CARGO_BUILD_JOBS must be 2")
-    for key in ("TMPDIR", "TMP", "TEMP"):
-        require(os.environ.get(key) == "/media/futurizt/AVM/tmp", f"invalid {key}")
+    normalize_scratch_environment()
     clean(source)
     clean(sdk)
     evidence.mkdir(parents=True, exist_ok=False)
@@ -149,6 +162,25 @@ def main():
     test("avm-contract-sdk", ["--test", "canonical_io"])
     test("avm-contract-sdk", ["--lib"], ["runtime::tests::" + case for case in "input_copy_preserves_bytes_and_live_bounds_at_chunk_boundaries dispatch_preserves_live_input_and_lifo_output_ownership dispatch_failure_capacity_and_overflow_leave_input_owned direct_dispatch_writes_once_without_the_vec_growth_path batch_dispatch_preserves_count_mode_and_failed_index_checks bounded_writer_failures_release_only_the_output_reservation direct_message_sections_and_batch_match_the_public_serializer".split()])
     test("avm-contract-build", ["--test", "reproducible_build"])
+    for target_name in ("sdk_issue_abi", "sdk_issue_bindings", "sdk_issue_diagnostics", "sdk_issue_dispatch_wasm"):
+        test("avm-contract-build", ["--test", target_name])
+    test("avm-contract-sdk", ["--test", "deploy_accessors"])
+    run("candidate-tools", ["cargo", "build", "--locked", "--offline", "-p", "avm-contract-build",
+        "--bin", "avm-contract-build", "-p", "avm-test-harness", "--bin", "avm-local-stand"])
+    target = Path(os.environ.get("CARGO_TARGET_DIR") or source / "target").resolve()
+    builder, stand = target / "debug/avm-contract-build", target / "debug/avm-local-stand"
+    profile = source / "specs/avm-vm/wasmtime-release-profile.v1"
+    consumer_sdk = evidence / "consumer-sdk"
+    consumer_sdk.mkdir()
+    archive = subprocess.check_output(["git", "-C", str(sdk), "archive", "HEAD"])
+    with tarfile.open(fileobj=io.BytesIO(archive)) as snapshot:
+        snapshot.extractall(consumer_sdk, filter="data")
+    run("sdk-public-issue-paths", [sys.executable, "-B", str(sdk / "scripts/tests/sdk_issue_public_paths.py"),
+        "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
+        "--profile", str(profile), "--out", str(evidence / "public-issue-paths")])
+    run("sdk-deploy-callback-delivery", ["bash", str(sdk / "examples/deploy-callback-repro/repro.sh"),
+        "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
+        "--out", str(evidence / "deploy-callback-repro")], sdk)
     cases = "deploy_init_success_executes_real_wasm_with_exact_output_and_fuel process_message_selects_real_export_with_exact_output_and_fuel process_batch_uses_the_batch_export_and_output_at_effective_cap_succeeds allocator_fuel_exhaustion_precedes_the_generic_trap_status invalid_non_null_allocator_ranges_do_not_copy_call_init_or_free output_cap_precedes_pointer_validation invalid_output_pointer_range_and_input_overlap_are_rejected_before_read_or_free output_free_non_fuel_trap_skips_input_free_and_discards_copied_output fuel_exhaustion_at_output_free_and_input_free_has_fuel_precedence successful_cleanup_copies_output_then_frees_output_before_input same_input_uses_fresh_stores_and_is_deterministic failed_attempts_also_discard_their_store_state".split()
     test("avm-wasm-executor", ["--lib"], ["tests::" + case for case in cases])
     test("avm-wasm-executor", ["--lib"], ["tests::deadline::" + case for case in "completed_controlled_exports_preserve_exact_output_status_and_fuel expired_control_starts_no_guest_or_alarm cutoff_interrupts_allocator_entrypoint_and_each_free cancelled_store_is_discarded_and_next_call_matches_fresh_execution".split()])
