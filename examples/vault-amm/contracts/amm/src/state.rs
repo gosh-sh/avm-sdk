@@ -92,13 +92,18 @@ impl Config {
 
     pub fn encode(&self) -> Vec<u8> {
         let mut bytes = vec![0; CONFIG_BYTES];
-        put(&mut bytes, 0, &self.admin);
-        put(&mut bytes, 32, &self.currency[0].to_le_bytes());
-        put(&mut bytes, 36, &self.currency[1].to_le_bytes());
-        put(&mut bytes, 40, &self.swap_fee_bps.to_le_bytes());
-        put(&mut bytes, 42, &self.protocol_fee_bps.to_le_bytes());
-        put(&mut bytes, 48, &self.fuel_reserve.to_le_bytes());
+        self.write_to(&mut bytes);
         bytes
+    }
+
+    /// Writes the wire form into the first `CONFIG_BYTES` of `bytes`.
+    fn write_to(&self, bytes: &mut [u8]) {
+        put(bytes, 0, &self.admin);
+        put(bytes, 32, &self.currency[0].to_le_bytes());
+        put(bytes, 36, &self.currency[1].to_le_bytes());
+        put(bytes, 40, &self.swap_fee_bps.to_le_bytes());
+        put(bytes, 42, &self.protocol_fee_bps.to_le_bytes());
+        put(bytes, 48, &self.fuel_reserve.to_le_bytes());
     }
 }
 
@@ -346,7 +351,7 @@ impl State {
 
     pub fn encode(&self) -> Vec<u8> {
         let mut bytes = vec![0; STATE_BYTES];
-        put(&mut bytes, 0, &self.config.encode());
+        self.config.write_to(&mut bytes);
         bytes[OFF_FLAGS] = u8::from(self.paused);
         for side in 0..2 {
             put(&mut bytes, OFF_RESERVES + side * 16, &self.reserve[side].to_le_bytes());
