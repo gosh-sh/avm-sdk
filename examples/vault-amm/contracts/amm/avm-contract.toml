@@ -361,18 +361,18 @@ name = "amount"
 
 [[abi.errors]]
 status_code = 3000
-name = "invalid_args"
-message = "bad args"
+name = "args"
+message = "args"
 
 [[abi.errors]]
 status_code = 3001
 name = "unauthorized"
-message = "unauthorized"
+message = "auth"
 
 [[abi.errors]]
 status_code = 3002
-name = "invalid_state"
-message = "bad state"
+name = "state"
+message = "state"
 
 [[abi.errors]]
 status_code = 3003
@@ -381,13 +381,13 @@ message = "paused"
 
 [[abi.errors]]
 status_code = 3004
-name = "invalid_value"
-message = "bad value"
+name = "value"
+message = "value"
 
 [[abi.errors]]
 status_code = 3005
 name = "deadline"
-message = "deadline"
+message = "late"
 
 [[abi.errors]]
 status_code = 3006
@@ -396,33 +396,33 @@ message = "slippage"
 
 [[abi.errors]]
 status_code = 3007
-name = "insufficient_balance"
-message = "low balance"
+name = "balance"
+message = "balance"
 
 [[abi.errors]]
 status_code = 3008
 name = "no_liquidity"
-message = "no liquidity"
+message = "no pool"
 
 [[abi.errors]]
 status_code = 3009
-name = "transfer_pending"
-message = "payout pending"
+name = "pending"
+message = "pending"
 
 [[abi.errors]]
 status_code = 3010
-name = "invalid_callback"
-message = "bad callback"
+name = "callback"
+message = "callback"
 
 [[abi.errors]]
 status_code = 3011
 name = "capacity"
-message = "capacity"
+message = "full"
 
 [[abi.errors]]
 status_code = 3012
 name = "insolvent"
-message = "insolvent"
+message = "funds"
 
 [[abi.errors]]
 status_code = 3013
@@ -432,9 +432,9 @@ message = "overflow"
 [[abi.errors]]
 status_code = 3014
 name = "invariant"
-message = "invariant"
+message = "k fell"
 
 [[abi.errors]]
 status_code = 3015
 name = "zero_output"
-message = "zero output"
+message = "zero"
