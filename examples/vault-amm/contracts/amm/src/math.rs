@@ -115,17 +115,15 @@ pub fn mul_div_ceil(a: u128, b: u128, c: u128) -> Option<u128> {
 /// `floor(sqrt(a * b))`, always representable in `u128`.
 pub fn sqrt_product(a: u128, b: u128) -> u128 {
     let target = mul_wide(a, b);
-    let (mut low, mut high) = (0u128, u128::MAX);
-    while low < high {
-        let span = high - low;
-        let mid = low + (span >> 1) + (span & 1);
-        if mul_wide(mid, mid) <= target {
-            low = mid;
-        } else {
-            high = mid - 1;
+    // Bit-by-bit: the root of a 256-bit product has at most 128 bits.
+    let mut root = 0u128;
+    for bit in (0..128).rev() {
+        let candidate = root | (1u128 << bit);
+        if mul_wide(candidate, candidate) <= target {
+            root = candidate;
         }
     }
-    low
+    root
 }
 
 /// Compares `a * b` with `c * d` without overflow.
