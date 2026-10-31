@@ -9,7 +9,8 @@ amounts. Conservation, checked by the fuzz test after every step:
 
 ## Pricing
 `in_f = floor(in·(10000−fee)/10000)`; `out = floor(r_out·in_f/(r_in+in_f))`.
-Exact-out: `need = ceil(r_in·out/(r_out−out))`, `in = ceil(need·10000/(10000−fee))`.
+`math::swap_in` (exact-out: `need = ceil(r_in·out/(r_out−out))`, `in = ceil(need·10000/(10000−fee))`)
+is kept and tested, but the contract does not expose it.
 All products use a 256-bit intermediate (`math.rs`), validated against Python
 big integers (`scripts/gen_vectors.py`, 2450 vectors incl. overflow/liquidity edges).
 

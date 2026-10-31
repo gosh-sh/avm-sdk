@@ -24,6 +24,9 @@ The available stand commands are listed in the
   with bounded holder slots, transfer errors and event/replay checks.
 - [factory-child-provenance](factory-child-provenance/README.md): derived-address
   checks and their limits. A derived address does not authenticate current code.
+- [vault-amm](vault-amm/README.md): a constant-product market maker for two ECC
+  currencies with an internal ledger, acknowledged payouts with bounce handling,
+  an arithmetic oracle and a scripted local-stand journey.
 
 These are developer examples, not audited financial applications. They use
 explicit application assets and require matching tools/profile; an application
