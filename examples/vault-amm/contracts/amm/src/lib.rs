@@ -111,8 +111,10 @@ impl Ev {
 /// Validates the next state and wraps it, with its event, into a success output.
 fn finish(state: &State, event: Ev) -> Result<MessageOutput> {
     state.validate()?;
-    let Ev { name, topics, mut fields } = event;
-    fields.sort_by(|a, b| a.name.as_bytes().cmp(b.name.as_bytes()));
+    let Ev { name, topics, fields } = event;
+    // Every event adds its fields in strictly ascending name order, as the SDK
+    // requires, so no runtime sort is needed.
+    debug_assert!(fields.windows(2).all(|pair| pair[0].name.as_bytes() < pair[1].name.as_bytes()));
     let fields_binary = encode_event_fields(&fields).map_err(|_| ERR_STATE)?;
     let event_class =
         ids::EVENTS.iter().find(|(known, _)| *known == name).map(|(_, id)| *id).ok_or(ERR_STATE)?;
