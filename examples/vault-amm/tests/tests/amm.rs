@@ -143,7 +143,6 @@ fn identifiers_are_unique_nonzero_and_cover_every_event() {
         ids::ADD_LIQUIDITY,
         ids::REMOVE_LIQUIDITY,
         ids::SWAP_EXACT_IN,
-        ids::SWAP_EXACT_OUT,
         ids::WITHDRAW,
         ids::CALLBACK,
         ids::COLLECT_FEES,
@@ -419,18 +418,6 @@ fn exact_input_swaps_match_the_independent_oracle() {
 }
 
 #[test]
-fn exact_output_swaps_charge_the_rounded_up_price() {
-    let mut sim = seeded(30, 0);
-    accepted(&sim.deposit(BOB, 20_000, 0));
-    failure(&sim.swap_exact_out(BOB, 0, 9_000, 9_109), ERR_SLIPPAGE);
-    accepted(&sim.swap_exact_out(BOB, 0, 9_000, 9_110));
-    assert_eq!(sim.ledger(BOB), ([20_000 - 9_110, 9_000], 0));
-    failure(&sim.swap_exact_out(BOB, 0, 2_000_000, u128::MAX), ERR_NO_LIQUIDITY);
-    failure(&sim.swap_exact_out(BOB, 0, 0, 1), ERR_ARGS);
-    sim.assert_accounting();
-}
-
-#[test]
 fn the_protocol_fee_is_skimmed_from_the_swap_fee_only() {
     let mut sim = seeded(30, 5_000);
     accepted(&sim.deposit(BOB, 10_000, 0));
@@ -484,11 +471,7 @@ fn trades_never_lower_the_invariant() {
     for (index, amount) in [1u128, 2, 3, 7, 999, 1_000, 12_345, 100_000, 400_000].iter().enumerate()
     {
         let direction = (index % 2) as u8;
-        let output = if index % 3 == 0 {
-            sim.swap_exact_out(BOB, direction, *amount, u128::MAX)
-        } else {
-            sim.swap_exact_in(BOB, direction, *amount, 0)
-        };
+        let output = sim.swap_exact_in(BOB, direction, *amount, 0);
         if output.status_code == 0 {
             let next = product(&sim.pool());
             assert!(next >= k, "k fell from {k} to {next} on swap #{index}");
@@ -757,7 +740,6 @@ fn pausing_blocks_new_activity_but_never_exits() {
     failure(&sim.deposit(BOB, 1, 0), ERR_PAUSED);
     failure(&sim.add_liquidity(BOB, (1_000, 1_000), (0, 0), NEVER), ERR_PAUSED);
     failure(&sim.swap_exact_in(BOB, 0, 100, 0), ERR_PAUSED);
-    failure(&sim.swap_exact_out(BOB, 0, 10, u128::MAX), ERR_PAUSED);
     accepted(&sim.remove_liquidity(BOB, 1, (0, 0), NEVER));
     accepted(&sim.withdraw(ALICE, C0, 100, addr(5)));
     accepted(&sim.settle(addr(5), Settle::Bounced(vec![(C0, 100)])));

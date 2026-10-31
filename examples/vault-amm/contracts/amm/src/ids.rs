@@ -5,7 +5,6 @@ pub const DEPOSIT: u64 = 0x3296de3c9b4ed5a5;
 pub const ADD_LIQUIDITY: u64 = 0xcbe088fea77d0854;
 pub const REMOVE_LIQUIDITY: u64 = 0x052a7afb119314a1;
 pub const SWAP_EXACT_IN: u64 = 0xa20c34d15e04d9bc;
-pub const SWAP_EXACT_OUT: u64 = 0x03df4aedc172aaed;
 pub const WITHDRAW: u64 = 0x8d1ac8144549021d;
 pub const CALLBACK: u64 = 0xaec33f338a2ec78f;
 pub const COLLECT_FEES: u64 = 0x61d75dd8ab02cb27;

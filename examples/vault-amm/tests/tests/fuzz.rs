@@ -63,8 +63,7 @@ fn run(seed: u64, steps: usize) {
                 let shares = if lp == 0 { 1 } else { u128::from(rng.below(lp as u64).max(1)) };
                 sim.remove_liquidity(actor, shares, (0, 0), NEVER)
             }
-            4 | 5 => sim.swap_exact_in(actor, direction, rng.amount(), 0),
-            6 => sim.swap_exact_out(actor, direction, rng.amount(), u128::MAX),
+            4..=6 => sim.swap_exact_in(actor, direction, rng.amount(), 0),
             7 | 8 => {
                 let currency = [C0, C1][rng.below(2) as usize];
                 let recipient = addr(10 + rng.below(6) as u8);

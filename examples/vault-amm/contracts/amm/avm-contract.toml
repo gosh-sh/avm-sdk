@@ -89,10 +89,6 @@ name = "vault.amm.swap_exact_in"
 input_type_id = 5
 
 [[abi.methods]]
-name = "vault.amm.swap_exact_out"
-input_type_id = 5
-
-[[abi.methods]]
 name = "vault.amm.withdraw"
 input_type_id = 6
 
