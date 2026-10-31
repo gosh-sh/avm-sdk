@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["contracts/amm", "contracts/receiver", "tests"]
+default-members = ["contracts/amm"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"

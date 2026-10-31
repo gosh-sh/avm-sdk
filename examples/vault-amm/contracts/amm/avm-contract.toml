@@ -1,0 +1,440 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "960d2c13cfa557f6a576f0c6552596a145493209e1628a4007581f9d3b33e962"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "state"
+len = 4376
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "config"
+len = 64
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+name = "add_liquidity_args"
+len = 68
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "remove_liquidity_args"
+len = 52
+
+[[abi.types]]
+id = 5
+kind = "fixed_bytes"
+name = "swap_args"
+len = 37
+
+[[abi.types]]
+id = 6
+kind = "fixed_bytes"
+name = "withdraw_args"
+len = 84
+
+[[abi.types]]
+id = 7
+kind = "fixed_bytes"
+name = "set_params_args"
+len = 5
+
+[[abi.types]]
+id = 8
+kind = "u128"
+name = "amount"
+
+[[abi.types]]
+id = 9
+kind = "u64"
+name = "counter"
+
+[[abi.types]]
+id = 10
+kind = "fixed_bytes"
+name = "holder_key"
+len = 32
+
+[[abi.types]]
+id = 11
+kind = "fixed_bytes"
+name = "payout_receipt"
+len = 32
+
+[[abi.methods]]
+name = "vault.amm.deploy"
+input_type_id = 2
+
+[[abi.methods]]
+name = "vault.amm.deposit"
+
+[[abi.methods]]
+name = "vault.amm.add_liquidity"
+input_type_id = 3
+
+[[abi.methods]]
+name = "vault.amm.remove_liquidity"
+input_type_id = 4
+
+[[abi.methods]]
+name = "vault.amm.swap_exact_in"
+input_type_id = 5
+
+[[abi.methods]]
+name = "vault.amm.withdraw"
+input_type_id = 6
+
+[[abi.methods]]
+name = "vault.amm.callback"
+input_type_id = 11
+
+[[abi.methods]]
+name = "vault.amm.collect_fees"
+
+[[abi.methods]]
+name = "vault.amm.set_params"
+input_type_id = 7
+
+[[abi.methods]]
+name = "vault.amm.topup"
+
+[[abi.events]]
+name = "amm.created"
+
+[[abi.events.fields]]
+id = 1
+type_id = 10
+name = "admin"
+
+[[abi.events.fields]]
+id = 2
+type_id = 9
+name = "currency0"
+
+[[abi.events.fields]]
+id = 3
+type_id = 9
+name = "currency1"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "fee_bps"
+
+[[abi.events.fields]]
+id = 5
+type_id = 9
+name = "protocol_bps"
+
+[[abi.events]]
+name = "amm.deposited"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount0"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "amount1"
+
+[[abi.events.fields]]
+id = 3
+type_id = 10
+name = "holder"
+
+[[abi.events]]
+name = "amm.liquidity_added"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount0"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "amount1"
+
+[[abi.events.fields]]
+id = 3
+type_id = 10
+name = "holder"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "lp_total"
+
+[[abi.events.fields]]
+id = 5
+type_id = 8
+name = "shares"
+
+[[abi.events]]
+name = "amm.liquidity_removed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount0"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "amount1"
+
+[[abi.events.fields]]
+id = 3
+type_id = 10
+name = "holder"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "lp_total"
+
+[[abi.events.fields]]
+id = 5
+type_id = 8
+name = "shares"
+
+[[abi.events]]
+name = "amm.swapped"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount_in"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "amount_out"
+
+[[abi.events.fields]]
+id = 3
+type_id = 9
+name = "direction"
+
+[[abi.events.fields]]
+id = 4
+type_id = 10
+name = "holder"
+
+[[abi.events.fields]]
+id = 5
+type_id = 8
+name = "protocol_fee"
+
+[[abi.events.fields]]
+id = 6
+type_id = 8
+name = "reserve0"
+
+[[abi.events.fields]]
+id = 7
+type_id = 8
+name = "reserve1"
+
+[[abi.events]]
+name = "amm.withdraw_pending"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 9
+name = "currency"
+
+[[abi.events.fields]]
+id = 3
+type_id = 10
+name = "holder"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "id"
+
+[[abi.events]]
+name = "amm.withdraw_settled"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 9
+name = "currency"
+
+[[abi.events.fields]]
+id = 3
+type_id = 10
+name = "holder"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "id"
+
+[[abi.events]]
+name = "amm.withdraw_failed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 9
+name = "currency"
+
+[[abi.events.fields]]
+id = 3
+type_id = 10
+name = "holder"
+
+[[abi.events.fields]]
+id = 4
+type_id = 9
+name = "id"
+
+[[abi.events]]
+name = "amm.fees_collected"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount0"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "amount1"
+
+[[abi.events.fields]]
+id = 3
+type_id = 10
+name = "holder"
+
+[[abi.events]]
+name = "amm.params_changed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 9
+name = "fee_bps"
+
+[[abi.events.fields]]
+id = 2
+type_id = 9
+name = "paused"
+
+[[abi.events.fields]]
+id = 3
+type_id = 9
+name = "protocol_bps"
+
+[[abi.events]]
+name = "amm.fees_added"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "amount"
+
+[[abi.errors]]
+status_code = 3000
+name = "args"
+message = "args"
+
+[[abi.errors]]
+status_code = 3001
+name = "unauthorized"
+message = "auth"
+
+[[abi.errors]]
+status_code = 3002
+name = "state"
+message = "state"
+
+[[abi.errors]]
+status_code = 3003
+name = "paused"
+message = "paused"
+
+[[abi.errors]]
+status_code = 3004
+name = "value"
+message = "value"
+
+[[abi.errors]]
+status_code = 3005
+name = "deadline"
+message = "late"
+
+[[abi.errors]]
+status_code = 3006
+name = "slippage"
+message = "slippage"
+
+[[abi.errors]]
+status_code = 3007
+name = "balance"
+message = "balance"
+
+[[abi.errors]]
+status_code = 3008
+name = "no_liquidity"
+message = "no pool"
+
+[[abi.errors]]
+status_code = 3009
+name = "pending"
+message = "pending"
+
+[[abi.errors]]
+status_code = 3010
+name = "callback"
+message = "callback"
+
+[[abi.errors]]
+status_code = 3011
+name = "capacity"
+message = "full"
+
+[[abi.errors]]
+status_code = 3012
+name = "insolvent"
+message = "funds"
+
+[[abi.errors]]
+status_code = 3013
+name = "overflow"
+message = "overflow"
+
+[[abi.errors]]
+status_code = 3014
+name = "invariant"
+message = "k fell"
+
+[[abi.errors]]
+status_code = 3015
+name = "zero_output"
+message = "zero"
