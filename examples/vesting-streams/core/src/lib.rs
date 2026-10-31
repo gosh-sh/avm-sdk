@@ -95,7 +95,7 @@ pub fn vested(
     }
     let duration = u128::from(end - start);
     let elapsed = now - start;
-    let elapsed = u128::from(if step == 0 { elapsed } else { (elapsed / step) * step });
+    let elapsed = u128::from(elapsed.checked_div(step).map_or(elapsed, |periods| periods * step));
     (total / duration)
         .checked_mul(elapsed)
         .and_then(|v| v.checked_add((total % duration) * elapsed / duration))

@@ -77,7 +77,7 @@ impl Ledger {
         let count = u32::from_le_bytes(state.get(8..12)?.try_into().ok()?);
         let count = usize::try_from(count).ok().filter(|count| *count <= HOLDER_SLOTS)?;
         let mut holders = Vec::with_capacity(count);
-        for slot in state[HEADER_BYTES..].chunks_exact(SLOT_BYTES).take(count) {
+        for slot in state[HEADER_BYTES..].as_chunks::<SLOT_BYTES>().0.iter().take(count) {
             let key = slot.get(..32)?.try_into().ok()?;
             let balance = u64::from_le_bytes(slot.get(32..)?.try_into().ok()?);
             holders.push((key, balance));
@@ -92,7 +92,7 @@ impl Ledger {
         state[..8].copy_from_slice(&self.supply.to_le_bytes());
         let count = u32::try_from(self.holders.len()).unwrap_or(u32::MAX);
         state[8..12].copy_from_slice(&count.to_le_bytes());
-        let slots = state[HEADER_BYTES..].chunks_exact_mut(SLOT_BYTES);
+        let slots = state[HEADER_BYTES..].as_chunks_mut::<SLOT_BYTES>().0.iter_mut();
         for (slot, (key, balance)) in slots.zip(&self.holders) {
             slot[..32].copy_from_slice(key);
             slot[32..].copy_from_slice(&balance.to_le_bytes());
