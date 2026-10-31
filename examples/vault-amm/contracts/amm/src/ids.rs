@@ -9,7 +9,6 @@ pub const WITHDRAW: u64 = 0x8d1ac8144549021d;
 pub const CALLBACK: u64 = 0xaec33f338a2ec78f;
 pub const COLLECT_FEES: u64 = 0x61d75dd8ab02cb27;
 pub const SET_PARAMS: u64 = 0xe79460b6e03c3acc;
-pub const STATUS: u64 = 0x274d5da1fc805626;
 pub const TOPUP: u64 = 0x8818c9096aafa6d6;
 pub const RECEIVER_BIND: u64 = 0x36dcb2300ff7ba5a;
 pub const RECEIVER_REJECT: u64 = 0x9d0c606fc6c027be;
@@ -24,7 +23,6 @@ pub const EVENT_WITHDRAW_SETTLED: u64 = 0xc4a48a1f83bccf3a;
 pub const EVENT_WITHDRAW_FAILED: u64 = 0x40a1949b602014e9;
 pub const EVENT_FEES_COLLECTED: u64 = 0xd57f60977e3b50ef;
 pub const EVENT_PARAMS_CHANGED: u64 = 0x69b5af0e6c7dd570;
-pub const EVENT_STATUS: u64 = 0xa94b505f3afe2819;
 pub const EVENT_FEES_ADDED: u64 = 0xad8e1d8998833dbd;
 
 /// Event name to class lookup used by the emitter.
@@ -39,6 +37,5 @@ pub const EVENTS: &[(&str, u64)] = &[
     ("amm.withdraw_failed", EVENT_WITHDRAW_FAILED),
     ("amm.fees_collected", EVENT_FEES_COLLECTED),
     ("amm.params_changed", EVENT_PARAMS_CHANGED),
-    ("amm.status", EVENT_STATUS),
     ("amm.fees_added", EVENT_FEES_ADDED),
 ];

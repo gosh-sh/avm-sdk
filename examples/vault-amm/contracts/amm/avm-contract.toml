@@ -104,9 +104,6 @@ name = "vault.amm.set_params"
 input_type_id = 7
 
 [[abi.methods]]
-name = "vault.amm.status"
-
-[[abi.methods]]
 name = "vault.amm.topup"
 
 [[abi.events]]
@@ -353,44 +350,6 @@ name = "paused"
 id = 3
 type_id = 9
 name = "protocol_bps"
-
-[[abi.events]]
-name = "amm.status"
-
-[[abi.events.fields]]
-id = 1
-type_id = 8
-name = "fees0"
-
-[[abi.events.fields]]
-id = 2
-type_id = 8
-name = "fees1"
-
-[[abi.events.fields]]
-id = 3
-type_id = 8
-name = "lp_total"
-
-[[abi.events.fields]]
-id = 4
-type_id = 9
-name = "ops"
-
-[[abi.events.fields]]
-id = 5
-type_id = 9
-name = "paused"
-
-[[abi.events.fields]]
-id = 6
-type_id = 8
-name = "reserve0"
-
-[[abi.events.fields]]
-id = 7
-type_id = 8
-name = "reserve1"
 
 [[abi.events]]
 name = "amm.fees_added"
