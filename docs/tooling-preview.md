@@ -10,8 +10,9 @@ The current source candidate builds contracts with exact Rust/Cargo 1.99.1
 and `-Ctarget-feature=+wide-arithmetic`. Its LLVM 23 backend fixes an earlier
 wide-integer lowering bug; emitting an instruction alone does not prove correct
 arithmetic. The candidate includes a native-integer semantic regression.
-Until Rust 1.101 the target feature emits a compiler warning; the builder
-retains its pinned compiler and all existing reproducibility checks.
+Until Rust 1.101 the target feature emits a compiler warning. The builder records
+the observed warning once in `target/avm-build-provenance.txt`, along with its
+pinned compiler and existing reproducibility evidence.
 
 Core-WASM V2 enables `i64.add128`, `i64.sub128`, `i64.mul_wide_s` and
 `i64.mul_wide_u`. Imports and previously forbidden proposals stay disabled.

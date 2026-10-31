@@ -21,18 +21,27 @@ Published SDK 0.3.0 uses the earlier profile and guest compiler; follow the
 documentation included with the exact installed bundle. Native runtime build
 identities are recorded independently in its profile and provenance.
 
-## Quick Start
+## Use a matching bundle
 
 Requirements: Linux x86-64-v3, the binary's declared GNU libc version, Bash,
 Python 3.11+, `gh`, `jq`, and Rust/Cargo 1.99.1 with the wasm32 target.
-The repository and release downloads are public. See the release manifest for
-measured ELF dependencies and [release notes](docs/release-notes.md) for limits.
+Use the tools, profile and documentation from the same bundle. The published
+0.3.0 bundle uses the earlier guest compiler and profile. These source-candidate
+instructions require a matching Core-WASM V2 bundle; installing the current
+latest 0.3.0 release does not provide those tools.
+
+Set `RELEASE_TAG` to the matching immutable published tag before downloading:
 
 ```bash
-./scripts/install.sh
+./scripts/install.sh "${RELEASE_TAG:?set the matching immutable release tag}"
 export PATH="${HOME}/.local/bin:${PATH}"
 ./scripts/smoke.sh
 ```
+
+A prepared local bundle can be verified and installed with
+[`release.py install`](docs/releases.md#install-a-prepared-local-bundle).
+See its manifest for measured ELF dependencies and the
+[release notes](docs/release-notes.md) for limits.
 
 ## Documentation
 

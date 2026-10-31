@@ -1,5 +1,11 @@
 # Getting Started
 
+These instructions describe the Core-WASM V2 source candidate. Use its matching
+builder, local stand and profile bundle. Published SDK 0.3.0 uses the earlier
+compiler/profile; follow the documentation inside that installed release.
+A [prepared local bundle](releases.md#install-a-prepared-local-bundle) can be
+installed before a matching release is published.
+
 ## Prerequisites
 
 - Linux x86-64-v3 with the GLIBC version listed for the actual release binaries;
@@ -12,9 +18,12 @@ The installer places the selected release under
 `${AVM_SDK_BIN_DIR:-$HOME/.local/bin}`.
 
 ```bash
-./scripts/install.sh
+./scripts/install.sh "${RELEASE_TAG:?set the matching immutable release tag}"
 export PATH="${HOME}/.local/bin:${PATH}"
 ```
+
+Choose the matching immutable `RELEASE_TAG`; an unqualified install command
+selects the latest published release, which can precede this source candidate.
 
 ## Initialize The Stand
 
@@ -51,9 +60,17 @@ cp -R examples/contract-a-v1 examples/my-avm-contract
 export AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY="$(jq -er .identities.package_owner init.json)"
 # Keep the supplied lock, or explicitly resolve/review dependencies after edits:
 # cargo +1.99.1 generate-lockfile --manifest-path examples/my-avm-contract/Cargo.toml
-avm-contract-build build \
+env RUSTUP_TOOLCHAIN=1.99.1 \
+  CARGO="$(rustup which --toolchain 1.99.1 cargo)" \
+  RUSTC="$(rustup which --toolchain 1.99.1 rustc)" \
+  avm-contract-build build \
   --manifest-path examples/my-avm-contract/Cargo.toml
 ```
+
+The per-command environment selects the guest compiler even when the calling
+shell or native Cargo test uses Rust 1.93.0. Native runtime tools retain their
+separate 1.93.0 build identity. The builder rejects a different guest compiler,
+Cargo version or compiler wrapper before compilation.
 
 Artifacts:
 
