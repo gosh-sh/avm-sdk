@@ -192,20 +192,6 @@ fn check_solvency(state: &State, balance: CurrencyAmounts<'_>) -> Result<()> {
     Ok(())
 }
 
-/// Folds the elapsed time at the pre-trade price into the TWAP accumulators.
-fn accrue(state: &mut State, now: u32) {
-    if !state.live() || now <= state.last_ts {
-        return;
-    }
-    let elapsed = u128::from(now - state.last_ts);
-    let q64 = 1u128 << 64;
-    let price0 = math::mul_div_floor(state.reserve[1], q64, state.reserve[0]).unwrap_or(u128::MAX);
-    let price1 = math::mul_div_floor(state.reserve[0], q64, state.reserve[1]).unwrap_or(u128::MAX);
-    state.cumulative[0] = state.cumulative[0].wrapping_add(price0.wrapping_mul(elapsed));
-    state.cumulative[1] = state.cumulative[1].wrapping_add(price1.wrapping_mul(elapsed));
-    state.last_ts = now;
-}
-
 fn price_error(error: math::PriceError) -> u32 {
     match error {
         math::PriceError::InvalidInput => ERR_ARGS,
@@ -355,7 +341,6 @@ fn add_liquidity(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> R
     if desired0 == 0 || desired1 == 0 {
         return Err(ERR_ARGS);
     }
-    accrue(state, now);
     let first = !state.live();
     let (amount0, amount1, shares) = if first {
         let root = math::sqrt_product(desired0, desired1);
@@ -396,9 +381,6 @@ fn add_liquidity(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> R
     state.reserve[1] = state.reserve[1].checked_add(amount1).ok_or(ERR_OVERFLOW)?;
     let minted = if first { shares.checked_add(MINIMUM_LIQUIDITY) } else { Some(shares) };
     state.lp_total = state.lp_total.checked_add(minted.ok_or(ERR_OVERFLOW)?).ok_or(ERR_OVERFLOW)?;
-    if first {
-        state.last_ts = now;
-    }
     bump(state);
     Ok(Ev::new("amm.liquidity_added")
         .topic(actor)
@@ -424,7 +406,6 @@ fn remove_liquidity(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -
     if state.accounts[index].lp < shares {
         return Err(ERR_BALANCE);
     }
-    accrue(state, now);
     let amount0 =
         math::mul_div_floor(shares, state.reserve[0], state.lp_total).ok_or(ERR_OVERFLOW)?;
     let amount1 =
@@ -498,7 +479,6 @@ fn swap(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> Result<Ev>
         account.balance[side_in].checked_sub(amount_in).ok_or(ERR_BALANCE)?;
     account.balance[side_out] =
         account.balance[side_out].checked_add(amount_out).ok_or(ERR_OVERFLOW)?;
-    accrue(state, now);
     state.reserve[side_in] = new_reserve_in;
     state.reserve[side_out] = new_reserve_out;
     state.fees[side_in] = state.fees[side_in].checked_add(protocol_cut).ok_or(ERR_OVERFLOW)?;

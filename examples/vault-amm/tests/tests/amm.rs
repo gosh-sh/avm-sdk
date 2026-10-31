@@ -315,7 +315,6 @@ fn first_liquidity_mints_the_root_and_locks_the_minimum() {
     assert_eq!(pool.lp_total, 1_000_000);
     assert_eq!(sim.ledger(ALICE), ([0, 0], 999_000));
     assert_eq!(pool.locked_liquidity(), MINIMUM_LIQUIDITY);
-    assert_eq!(pool.last_ts, 100);
     sim.assert_accounting();
     // Asymmetric seed: sqrt(5e5 * 2e6) = 1e6.
     let mut sim = Sim::new(config(30, 0));
@@ -489,27 +488,6 @@ fn fee_changes_apply_to_later_swaps_only() {
     accepted(&sim.swap_exact_in(BOB, 0, 10_000, 0));
     // No fee: floor(1e6 * 10_000 / 1_010_000) = 9_900.
     assert_eq!(sim.ledger(BOB).0[1], 9_900);
-}
-
-// ----------------------------------------------------------------- TWAP ---
-
-#[test]
-fn the_price_accumulators_use_the_pre_trade_price() {
-    let mut sim = Sim::new(config(30, 0));
-    sim.seed(ALICE, 1_000_000, 4_000_000);
-    accepted(&sim.deposit(BOB, 10_000, 0));
-    sim.advance(50);
-    accepted(&sim.swap_exact_in(BOB, 0, 1_000, 0));
-    let pool = sim.pool();
-    assert_eq!(pool.last_ts, 150);
-    assert_eq!(pool.cumulative[0], (4u128 << 64) * 50);
-    assert_eq!(pool.cumulative[1], (1u128 << 62) * 50);
-    // Time that does not advance, or runs backwards, adds nothing and never underflows.
-    let before = pool.cumulative;
-    sim.time = 90;
-    accepted(&sim.swap_exact_in(BOB, 0, 1_000, 0));
-    assert_eq!(sim.pool().cumulative, before);
-    assert_eq!(sim.pool().last_ts, 150);
 }
 
 // ------------------------------------------------------------- payouts ---
@@ -787,6 +765,7 @@ fn status_is_read_only_and_topup_only_takes_shell() {
 const OFF_FLAGS: usize = 64;
 const OFF_RESERVES: usize = 72;
 const OFF_LP_TOTAL: usize = 136;
+const OFF_RESERVED: usize = 152;
 const OFF_SEQ: usize = 200;
 const OFF_RECEIPT_POS: usize = 208;
 const OFF_RECEIPTS: usize = 216;
@@ -814,6 +793,8 @@ fn the_decoder_rejects_every_non_canonical_state() {
         ("reserve zeroed while live", set(OFF_RESERVES, &[0; 16])),
         ("LP supply off by one", set(OFF_LP_TOTAL, &1_001u128.to_le_bytes())),
         ("LP supply below the locked minimum", set(OFF_LP_TOTAL, &1u128.to_le_bytes())),
+        ("reserved bytes (first)", set(OFF_RESERVED, &[1])),
+        ("reserved bytes (last)", set(OFF_RESERVED + 39, &[1])),
         ("receipt count without a receipt", set(OFF_RECEIPT_POS, &2u64.to_le_bytes())),
         ("receipt slot written but empty", set(OFF_RECEIPTS, &[0; 32])),
         ("stray receipt", set(OFF_RECEIPTS + 5 * 32, &[9; 32])),
