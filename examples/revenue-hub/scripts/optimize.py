@@ -3,7 +3,7 @@
 from pathlib import Path
 import argparse,hashlib,json,subprocess,tempfile
 ROOT=Path(__file__).resolve().parents[1]
-FLAGS=["-Oz","--enable-bulk-memory","--enable-sign-ext","--enable-nontrapping-float-to-int",
+FLAGS=["-Oz","--enable-wide-arithmetic","--enable-bulk-memory","--enable-sign-ext","--enable-nontrapping-float-to-int",
        "--enable-mutable-globals","--enable-multivalue","--enable-reference-types","--strip-debug"]
 def run(binary, output, compact=False):
     version=subprocess.check_output([str(binary),"--version"],text=True).strip()
