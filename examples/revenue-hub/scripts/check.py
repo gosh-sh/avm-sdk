@@ -55,23 +55,23 @@ def main():
             raise SystemExit(f"{label} failed; see {out / (label + '.log')}")
         return result.stdout
 
-    run("format", ["cargo", "+1.93.0", "fmt", "--all", "--", "--check"])
-    run("native-clippy", ["cargo", "+1.93.0", "clippy", "--workspace", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"])
-    run("native-tests", ["cargo", "+1.93.0", "test", "--workspace", "--locked", "--offline"])
+    run("format", ["cargo", "+1.99.1", "fmt", "--all", "--", "--check"])
+    run("native-clippy", ["cargo", "+1.99.1", "clippy", "--workspace", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"])
+    run("native-tests", ["cargo", "+1.99.1", "test", "--workspace", "--locked", "--offline"])
     for contract in ("vault", "receiver", "audit"):
         run("build-" + contract, [args.builder, "build", "--manifest-path", ROOT / "contracts" / contract / "Cargo.toml"])
-        run("wasm-clippy-" + contract, ["cargo", "+1.93.0", "clippy", "-p", "avm-revenue-" + contract, "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
+        run("wasm-clippy-" + contract, ["cargo", "+1.99.1", "clippy", "-p", "avm-revenue-" + contract, "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
     run("optimization", ["python3", "scripts/optimize.py", "--wasm-opt", args.optimizer.resolve(), "--out", out / "optimization.json"])
     run("canonical-ids", ["python3", "scripts/sync_ids.py", "--check"])
     run("artifact-inspection", ["python3", "scripts/verify_artifacts.py", "--out", out / "artifacts.json"])
-    run("batch-probe", ["cargo", "+1.93.0", "run", "-p", "avm-revenue-tests", "--bin", "batch_probe", "--locked", "--offline"])
-    run("state-boundary-format", ["cargo", "+1.93.0", "fmt", "--manifest-path", ROOT / "tests/fixtures/state-boundary/Cargo.toml", "--", "--check"])
-    run("state-boundary-clippy", ["cargo", "+1.93.0", "clippy", "--manifest-path", ROOT / "tests/fixtures/state-boundary/Cargo.toml", "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
+    run("batch-probe", ["cargo", "+1.99.1", "run", "-p", "avm-revenue-tests", "--bin", "batch_probe", "--locked", "--offline"])
+    run("state-boundary-format", ["cargo", "+1.99.1", "fmt", "--manifest-path", ROOT / "tests/fixtures/state-boundary/Cargo.toml", "--", "--check"])
+    run("state-boundary-clippy", ["cargo", "+1.99.1", "clippy", "--manifest-path", ROOT / "tests/fixtures/state-boundary/Cargo.toml", "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
     run("build-state-boundary", [args.builder, "build", "--manifest-path", ROOT / "tests/fixtures/state-boundary/Cargo.toml"])
     run("state-limits", ["python3", "scripts/state_limits.py", "--sdk", runtime, "--output", out / "state-limits.json"])
-    vectors = run("audit-vectors", ["cargo", "+1.93.0", "run", "-p", "avm-revenue-tests", "--bin", "audit_mode_vectors", "--locked", "--offline"])
+    vectors = run("audit-vectors", ["cargo", "+1.99.1", "run", "-p", "avm-revenue-tests", "--bin", "audit_mode_vectors", "--locked", "--offline"])
     (out / "audit-vectors.tsv").write_text(vectors)
-    run("guest-checker-negative", ["cargo", "+1.93.0", "test", "--manifest-path", ROOT / "tests/Cargo.toml",
+    run("guest-checker-negative", ["cargo", "+1.99.1", "test", "--manifest-path", ROOT / "tests/Cargo.toml",
         "--features", "guest-abi-check", "--test", "guest_modes_negative", "--locked", "--offline"])
     run("audit-wasm-vectors", ["python3", "scripts/guest_modes.py", ROOT / "contracts/audit/target/avm/contract.wasm", out / "audit-vectors.tsv", out / "audit-wasm-vectors.json"])
     run("compact", ["bash", "experiments/compact-audit/scripts/verify.sh", "--sdk", runtime, "--out", out / "compact", "--optimizer", args.optimizer.resolve()])

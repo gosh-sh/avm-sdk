@@ -35,10 +35,10 @@ def main():
         if result.returncode:
             raise SystemExit(f"{label} failed; see {out / (label + '.log')}")
 
-    run("format", ["cargo", "+1.93.0", "fmt", "--", "--check"])
-    run("native-tests", ["cargo", "+1.93.0", "test", "--locked", "--offline"])
-    run("native-clippy", ["cargo", "+1.93.0", "clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"])
-    run("wasm-clippy", ["cargo", "+1.93.0", "clippy", "--lib", "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
+    run("format", ["cargo", "+1.99.1", "fmt", "--", "--check"])
+    run("native-tests", ["cargo", "+1.99.1", "test", "--locked", "--offline"])
+    run("native-clippy", ["cargo", "+1.99.1", "clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"])
+    run("wasm-clippy", ["cargo", "+1.99.1", "clippy", "--lib", "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
     run("build", [sdk / "bin/avm-contract-build", "build", "--manifest-path", EXP / "Cargo.toml"])
     run("optimization", ["python3", ROOT / "scripts/optimize.py", "--wasm-opt", args.optimizer.resolve(), "--out", out / "optimization.json", "--compact"])
     run("guest-vectors", ["python3", ROOT / "scripts/guest_modes.py", EXP / "target/avm/contract.wasm", out / "guest-vectors.tsv", out / "guest-vectors.json"])

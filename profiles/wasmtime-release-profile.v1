@@ -1,6 +1,6 @@
 profile_encoding_version=1
 profile_id=AVM_WASMTIME_X86_64_V3_V1
-wasm_profile_id=1
+wasm_profile_id=2
 source_registry=registry+https://github.com/rust-lang/crates.io-index
 wasmtime_version=36.0.12
 wasmtime_sha256=4b4442dc12aa2473def8334f0e0f2b489be52c52507c938bbdc8be69ded4ded6
@@ -57,7 +57,7 @@ wasm_threads=false
 wasm_shared_everything_threads=false
 wasm_reference_types=false
 wasm_function_references=false
-wasm_wide_arithmetic=false
+wasm_wide_arithmetic=true
 wasm_gc=false
 wasm_simd=false
 wasm_relaxed_simd=false

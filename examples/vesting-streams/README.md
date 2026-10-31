@@ -25,7 +25,7 @@ claimed=1,100, refunded=800, held=0, pending=0, an empty queue and exact journal
 replay of roots, accepted inputs and fees. This is a local correctness fixture,
 not a network, production performance or security audit result.
 
-Use Rust 1.93.0 with rustfmt, Clippy and `wasm32-unknown-unknown`, Python 3.11+
+Use Rust 1.99.1 with rustfmt, Clippy and `wasm32-unknown-unknown`, Python 3.11+
 and a matching installed SDK/tool profile. From this example directory:
 
 ```bash

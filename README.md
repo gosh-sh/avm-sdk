@@ -16,10 +16,15 @@ Production AVM runtime source remains in the private Acki Nacki repository.
 Every release records the exact source commit and SHA-256 hashes of all shipped
 files.
 
+The current source candidate targets Core-WASM V2 and guest Rust/Cargo 1.99.1.
+Published SDK 0.3.0 uses the earlier profile and guest compiler; follow the
+documentation included with the exact installed bundle. Native runtime build
+identities are recorded independently in its profile and provenance.
+
 ## Quick Start
 
 Requirements: Linux x86-64-v3, the binary's declared GNU libc version, Bash,
-Python 3.11+, `gh`, `jq`, and Rust/Cargo 1.93.0 with the wasm32 target.
+Python 3.11+, `gh`, `jq`, and Rust/Cargo 1.99.1 with the wasm32 target.
 The repository and release downloads are public. See the release manifest for
 measured ELF dependencies and [release notes](docs/release-notes.md) for limits.
 

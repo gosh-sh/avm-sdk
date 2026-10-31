@@ -1,3 +1,11 @@
+# Core-WASM V2 source candidate
+
+- **Guest compiler:** exact Rust/Cargo 1.99.1 and `+wide-arithmetic`; LLVM 23 fixes earlier wide-integer lowering.
+- **Profile:** Core-WASM V2 adds four wide integer operators and retains the inherited instruction subset, no-import boundary and FUEL semantics.
+- **Host compiler:** native host tools retain their independent Rust/Cargo 1.93.0 build and license/provenance identities.
+- **Compatibility:** old guests using only the inherited subset remain admissible; rebuilding can change code hashes and FUEL. Keep tools, profile and retained data from one bundle together.
+- **Scope:** these source-candidate requirements do not change the immutable SDK 0.3.0 release or establish production-network/performance acceptance.
+
 # AVM SDK 0.3.0
 
 ## Changed

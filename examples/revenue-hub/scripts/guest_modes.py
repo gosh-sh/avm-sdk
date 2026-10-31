@@ -21,7 +21,7 @@ def main():
     if environment.get("AVM_GUEST_CHECKER_TARGET_DIR"):
         environment["CARGO_TARGET_DIR"] = environment["AVM_GUEST_CHECKER_TARGET_DIR"]
     subprocess.run([
-        "cargo", "+1.93.0", "test", "--locked", "--offline",
+        "cargo", "+1.99.1", "test", "--locked", "--offline",
         "--manifest-path", str(ROOT / "tests/Cargo.toml"),
         "--features", "guest-abi-check", "--test", "guest_modes", "--", str(wasm), str(vectors),
     ], cwd=ROOT, env=environment, check=True)

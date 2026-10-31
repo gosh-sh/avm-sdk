@@ -4,6 +4,28 @@ These commands require SDK 0.3.0 or matching source-candidate tools. SDK 0.2.0
 does not include these additions. Use a matching builder and local-stand binary for the
 commands below; check the source identities recorded in the distribution.
 
+## Core-WASM V2 guest builds
+
+The current source candidate builds contracts with exact Rust/Cargo 1.99.1
+and `-Ctarget-feature=+wide-arithmetic`. Its LLVM 23 backend fixes an earlier
+wide-integer lowering bug; emitting an instruction alone does not prove correct
+arithmetic. The candidate includes a native-integer semantic regression.
+Until Rust 1.101 the target feature emits a compiler warning; the builder
+retains its pinned compiler and all existing reproducibility checks.
+
+Core-WASM V2 enables `i64.add128`, `i64.sub128`, `i64.mul_wide_s` and
+`i64.mul_wide_u`. Imports and previously forbidden proposals stay disabled.
+The profile file keeps the `.v1` encoding filename while `wasm_profile_id`
+is 2. Use the tools and exact profile from the same bundle. Existing guests
+that use only the inherited instruction subset remain admissible; rebuilding
+can change WASM/code hashes and FUEL use. Profile/config hashes and prepared
+cache namespaces change, so do not mix retained state or native caches from
+different profiles. This is not a production-network migration instruction.
+
+The release profile and native build receipt separately attest host
+Rust/Cargo 1.93.0. Guest compiler requirements do not replace that native
+host-build identity, alter fees or promise a CPU/FUEL performance ratio.
+
 ## Constructor data
 
 `MessageInput.message.body()` continues to contain the complete deploy envelope.

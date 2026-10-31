@@ -23,11 +23,11 @@ the runtime enforces actual fees and route requirements.
 
 ## Run checks
 
-Use Rust 1.93.0 with rustfmt, Clippy and `wasm32-unknown-unknown`, plus Python 3.
+Use Rust 1.99.1 with rustfmt, Clippy and `wasm32-unknown-unknown`, plus Python 3.
 The workspace has no external Rust dependencies. From the SDK root:
 
 ```bash
-cargo +1.93.0 test --manifest-path examples/bounty-escrow/Cargo.toml --workspace --locked --offline
+cargo +1.99.1 test --manifest-path examples/bounty-escrow/Cargo.toml --workspace --locked --offline
 bash examples/bounty-escrow/scripts/check.sh \
   --sdk /absolute/path/to/verified/avm-sdk-linux-x86_64 \
   --out /absolute/path/to/bounty-check

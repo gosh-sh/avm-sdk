@@ -9,6 +9,15 @@ Host tools come from the recorded runtime source and its committed lockfile.
 The bundle includes the matching Wasmtime profile. Keep the tools, profile and
 local state from one release together; see [compatibility guidance](release-notes.md#compatibility).
 
+## Host and guest compiler identities
+
+The native runtime profile and `provenance/build.json` attest the host tools
+built with Rust/Cargo 1.93.0. The Core-WASM V2 candidate contract builder
+separately requires guest Rust/Cargo 1.99.1 and records those exact identities
+and `+wide-arithmetic` in `avm-build-provenance.txt`. A native host compiler
+version is not the guest compiler requirement. Keep historical release
+manifests and compiler/license evidence unchanged.
+
 ## Package contents and trust
 
 The v2 bundle contains:

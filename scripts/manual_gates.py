@@ -78,8 +78,17 @@ def preflight_environment(scratch):
     return environment
 
 
-def example_environment(source, manifest, evidence, run):
+def guest_environment():
     environment = os.environ.copy()
+    environment["RUSTUP_TOOLCHAIN"] = "1.99.1"
+    for name, tool in (("CARGO", "cargo"), ("RUSTC", "rustc")):
+        environment[name] = subprocess.check_output(
+            ["rustup", "which", "--toolchain", "1.99.1", tool], text=True).strip()
+    return environment
+
+
+def example_environment(source, manifest, evidence, run):
+    environment = guest_environment()
     environment.pop("AVM_CONTRACT_BINDINGS", None)
     metadata = manifest.parent / "avm-contract.toml"
     bindings_config = tomllib.loads(metadata.read_text()).get("bindings", {}) if metadata.is_file() else {}
@@ -175,24 +184,25 @@ def main():
     run("guest-source-parity", ["diff", "-ru", str(sdk / "crates/avm-contract-sdk"), str(source / "node/libs/avm-contract-sdk")])
     run("profile-parity", ["cmp", str(sdk / "profiles/wasmtime-release-profile.v1"), str(source / "specs/avm-vm/wasmtime-release-profile.v1")])
     run("installer-regressions", [sys.executable, "-B", "-m", "unittest", "discover", "-s", "scripts/tests", "-p", "test_*.py", "-v"], sdk, python_tests=True)
-    run("sdk-format", ["cargo", "fmt", "--", "--check"], sdk)
-    run("sdk-clippy", ["cargo", "clippy", "--locked", "--offline", "--all-targets", "--", "-D", "warnings"], sdk)
-    run("sdk-tests", ["cargo", "test", "--locked", "--offline", "--", "--test-threads=1"], sdk, tests=True)
+    guest = guest_environment()
+    run("sdk-format", [guest["CARGO"], "fmt", "--", "--check"], sdk, environment=guest)
+    run("sdk-clippy", [guest["CARGO"], "clippy", "--locked", "--offline", "--all-targets", "--", "-D", "warnings"], sdk, environment=guest)
+    run("sdk-tests", [guest["CARGO"], "test", "--locked", "--offline", "--", "--test-threads=1"], sdk, tests=True, environment=guest)
     for manifest in sorted((sdk / "examples").glob("*/Cargo.toml")):
         # These workspaces own full native, guest, optimizer and application
         # gates below; compiling a virtual root as one WASM package is invalid.
         if manifest.parent.name in {"bounty-escrow", "revenue-hub", "vesting-streams"}:
             continue
-        run(manifest.parent.name + "-format", ["cargo", "fmt", "--manifest-path", str(manifest), "--", "--check"], sdk)
+        run(manifest.parent.name + "-format", [guest["CARGO"], "fmt", "--manifest-path", str(manifest), "--", "--check"], sdk, environment=guest)
         environment = example_environment(source, manifest, evidence, run)
-        run(manifest.parent.name + "-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk, environment=environment)
+        run(manifest.parent.name + "-clippy", [guest["CARGO"], "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk, environment=environment)
     packages = ["avm-config", "avm-contract-sdk", "avm-contract-build", "avm-code-registry", "avm-deploy-upgrade", "avm-economics", "avm-effect-materializer", "avm-test-harness", "avm-wasm-code", "avm-wasm-executor"]
     selection = [arg for package in packages for arg in ("-p", package)]
     run("runtime-check", ["cargo", "check", "--locked", "--offline", "--all-targets", *selection])
     run("runtime-clippy", ["cargo", "clippy", "--locked", "--offline", "--all-targets", *selection, "--", "-D", "warnings"])
     for fixture in ("contract-b", "contract-batch-patch", "contract-a-v1"):
         manifest = source / "node/libs/avm-test-harness/tests/fixtures/e2e-standard-contract-stand" / fixture / "Cargo.toml"
-        run("runtime-" + fixture + "-clippy", ["cargo", "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"])
+        run("runtime-" + fixture + "-clippy", [guest["CARGO"], "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], environment=guest)
 
     def test(package, target, selectors=(), release=False):
         common = ["cargo", "test", "--locked", "--offline", "--message-format=json", "-p", package, *target]
@@ -236,18 +246,18 @@ def main():
         (consumer_sdk / "bin" / binary.name).symlink_to(binary)
     run("sdk-public-issue-paths", [sys.executable, "-B", str(sdk / "scripts/tests/sdk_issue_public_paths.py"),
         "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
-        "--profile", str(profile), "--out", str(evidence / "public-issue-paths")])
+        "--profile", str(profile), "--out", str(evidence / "public-issue-paths")], environment=guest)
     run("sdk-deploy-callback-delivery", ["bash", str(sdk / "examples/deploy-callback-repro/repro.sh"),
         "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
-        "--out", str(evidence / "deploy-callback-repro")], sdk)
+        "--out", str(evidence / "deploy-callback-repro")], sdk, environment=guest)
     for name in ("bounty-escrow", "revenue-hub"):
         command = ["bash", str(consumer_sdk / "examples" / name / "scripts/check.sh"),
             "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
             "--out", str(evidence / name)]
         if name == "revenue-hub":
             command.extend(("--optimizer", str(optimizer)))
-        run(name + "-application-checks", command, consumer_sdk)
-    application_environment = os.environ.copy()
+        run(name + "-application-checks", command, consumer_sdk, environment=guest)
+    application_environment = guest.copy()
     application_environment.update(AVM_CONTRACT_BUILD=str(builder), AVM_LOCAL_STAND=str(stand),
                                    AVM_WASMTIME_PROFILE=str(profile),
                                    AVM_EVIDENCE_DIR=str(evidence / "vesting-streams"))

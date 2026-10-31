@@ -5,7 +5,7 @@
 - Linux x86-64-v3 with the GLIBC version listed for the actual release binaries;
 - Bash, Python 3.11+ and GitHub CLI (the repository is public);
 - `jq`;
-- Rust/Cargo 1.93.0 with its `wasm32-unknown-unknown` target and rust-lld.
+- Rust/Cargo 1.99.1 with its `wasm32-unknown-unknown` target and rust-lld.
 
 The installer places the selected release under
 `${AVM_SDK_HOME:-$HOME/.local/share/avm-sdk}` and links its commands into
@@ -50,7 +50,7 @@ cp -R examples/contract-a-v1 examples/my-avm-contract
 # Bind the example's upgrade authority to this stand's public package-owner key.
 export AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY="$(jq -er .identities.package_owner init.json)"
 # Keep the supplied lock, or explicitly resolve/review dependencies after edits:
-# cargo +1.93.0 generate-lockfile --manifest-path examples/my-avm-contract/Cargo.toml
+# cargo +1.99.1 generate-lockfile --manifest-path examples/my-avm-contract/Cargo.toml
 avm-contract-build build \
   --manifest-path examples/my-avm-contract/Cargo.toml
 ```

@@ -267,14 +267,14 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
         assert wrong_rustc is not None, "candidate qualification requires a real different compiler"
         version = subprocess.run([str(wrong_rustc), "-vV"], capture_output=True, check=True)
         (evidence / "wrong-rustc-version.txt").write_bytes(version.stdout)
-        assert b"release: " in version.stdout and b"release: 1.93.0\n" not in version.stdout
+        assert b"release: " in version.stdout and b"release: 1.99.1\n" not in version.stdout
         negative = bundle / "examples/compiler-mismatch"
         shutil.copytree(bundle / "examples/contract-a-v1", negative, ignore=shutil.ignore_patterns("target"))
         env = os.environ.copy()
         env["RUSTC"] = str(wrong_rustc)
         result = subprocess.run([str(bundle / "bin/avm-contract-build"), "build", "--manifest-path", str(negative / "Cargo.toml")], env=env, capture_output=True)
         (evidence / "compiler-mismatch.stderr").write_bytes(result.stderr)
-        assert result.returncode != 0 and b"required rustc 1.93.0" in result.stderr
+        assert result.returncode != 0 and b"required rustc 1.99.1" in result.stderr
         assert not (negative / "target").exists()
     if incompatible_state is not None:
         before = incompatible_state.read_bytes()

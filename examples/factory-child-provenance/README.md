@@ -32,7 +32,7 @@ a general-purpose hashing or deploy-envelope library.
 ## Run
 
 Use a writable SDK checkout/export, matching `avm-contract-build`,
-`avm-local-stand`, an explicit matching `AVM_WASMTIME_PROFILE`, Rust 1.93.0,
+`avm-local-stand`, an explicit matching `AVM_WASMTIME_PROFILE`, Rust 1.99.1,
 Python 3 and `jq`:
 
 ```bash

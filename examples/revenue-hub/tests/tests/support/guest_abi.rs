@@ -1,4 +1,4 @@
-use wasmtime::{Engine, Instance, Module, Store};
+use wasmtime::{Config, Engine, Instance, Module, Store};
 
 pub fn decode_hex(text: &str) -> Result<Vec<u8>, String> {
     if !text.len().is_multiple_of(2) {
@@ -15,7 +15,9 @@ pub fn decode_hex(text: &str) -> Result<Vec<u8>, String> {
 }
 
 pub fn check_vectors(wasm: &[u8], vectors: &str) -> Result<usize, String> {
-    let engine = Engine::default();
+    let mut config = Config::new();
+    config.wasm_wide_arithmetic(true);
+    let engine = Engine::new(&config).map_err(|error| error.to_string())?;
     let module = Module::new(&engine, wasm).map_err(|error| error.to_string())?;
     if module.imports().next().is_some() {
         return Err("guest host imports are not supplied".to_owned());

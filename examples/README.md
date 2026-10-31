@@ -111,8 +111,8 @@ two builds and rejects non-reproducible output.
 For direct source checks:
 
 ```bash
-cargo +1.93.0 fmt --manifest-path examples/contract-a-v1/Cargo.toml -- --check
-cargo +1.93.0 clippy \
+cargo +1.99.1 fmt --manifest-path examples/contract-a-v1/Cargo.toml -- --check
+cargo +1.99.1 clippy \
   --manifest-path examples/contract-a-v1/Cargo.toml \
   --target wasm32-unknown-unknown -- -D warnings
 ```

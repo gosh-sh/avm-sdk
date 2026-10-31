@@ -52,12 +52,12 @@ def main():
         if result.returncode:
             raise SystemExit(f"{label} failed; see {out / (label + '.log')}")
 
-    run("format", ["cargo", "+1.93.0", "fmt", "--all", "--", "--check"])
-    run("native-clippy", ["cargo", "+1.93.0", "clippy", "--workspace", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"])
-    run("native-tests", ["cargo", "+1.93.0", "test", "--workspace", "--locked", "--offline"])
+    run("format", ["cargo", "+1.99.1", "fmt", "--all", "--", "--check"])
+    run("native-clippy", ["cargo", "+1.99.1", "clippy", "--workspace", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"])
+    run("native-tests", ["cargo", "+1.99.1", "test", "--workspace", "--locked", "--offline"])
     for contract in ("escrow", "receiver"):
         run("build-" + contract, [args.builder, "build", "--manifest-path", ROOT / "contracts" / contract / "Cargo.toml"])
-        run("wasm-clippy-" + contract, ["cargo", "+1.93.0", "clippy", "-p", "avm-bounty-" + contract, "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
+        run("wasm-clippy-" + contract, ["cargo", "+1.99.1", "clippy", "-p", "avm-bounty-" + contract, "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
     run("canonical-ids", ["python3", "scripts/sync_ids.py", "--check"])
     run("artifact-inspection", ["python3", "scripts/verify_artifacts.py", "--out", out / "artifacts.json"])
     run("journey", ["python3", "scripts/e2e.py", "--sdk", runtime, "--output", out / "journey.json"])

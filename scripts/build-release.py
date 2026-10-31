@@ -299,7 +299,7 @@ def package(source, sdk, build_root, output):
     require(file_digest(build_root / "cargo-artifacts.jsonl") == receipt["compiler_artifacts_sha256"], "Cargo artifact evidence changed")
     built = artifact_records((build_root / "cargo-artifacts.jsonl").read_bytes())
     files = {}
-    for prefix in ("crates/avm-contract-sdk", "examples", "docs", "scripts", "licenses/upstream", "README.md", "LICENSE.md", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rustfmt.toml", "profiles"):
+    for prefix in ("crates/avm-contract-sdk", "examples", "docs", "scripts", "licenses/upstream", "README.md", "LICENSE.md", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rustfmt.toml", ".cargo/config.toml", "profiles"):
         files.update(tracked_files(sdk, prefix))
     for name in BINARIES:
         data = (build_root / "bin" / name).read_bytes()
