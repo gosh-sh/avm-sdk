@@ -195,12 +195,20 @@ impl State {
 
     /// Drops empty accounts that no pending withdrawal can still refund into.
     pub fn compact(&mut self) {
-        let pending = &self.pending;
-        self.accounts.retain(|account| {
-            account.balance != [0; 2]
+        // A manual loop: `Vec::retain` instantiates two generic helpers that cost
+        // more guest bytes than this does.
+        let mut index = 0;
+        while index < self.accounts.len() {
+            let account = &self.accounts[index];
+            if account.balance != [0; 2]
                 || account.lp != 0
-                || pending.iter().any(|entry| entry.holder == account.key)
-        });
+                || self.pending.iter().any(|entry| entry.holder == account.key)
+            {
+                index += 1;
+            } else {
+                self.accounts.remove(index);
+            }
+        }
     }
 
     /// What must physically sit in the vault for one pool currency: the
