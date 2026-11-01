@@ -1,15 +1,15 @@
 # SDK tooling
 
-These commands require SDK 0.3.0 or matching source-candidate tools. SDK 0.2.0
-does not include these additions. Use a matching builder and local-stand binary for the
-commands below; check the source identities recorded in the distribution.
+This guide describes SDK 0.4.0. Use a matching builder and local-stand binary
+for the commands below; check the source identities recorded in the distribution.
+SDK 0.2.0 does not include the constructor and CLI additions described here.
 
 ## Core-WASM V2 guest builds
 
-The current source candidate builds contracts with exact Rust/Cargo 1.99.1
-and `-Ctarget-feature=+wide-arithmetic`. Its LLVM 23 backend fixes an earlier
-wide-integer lowering bug; emitting an instruction alone does not prove correct
-arithmetic. The candidate includes a native-integer semantic regression.
+SDK 0.4.0 builds contracts with exact Rust/Cargo 1.99.1 and
+`-Ctarget-feature=+wide-arithmetic`. This compiler's wide-integer lowering is
+validated against a native-integer semantic regression; emitting an instruction
+alone does not prove correct arithmetic.
 Until Rust 1.101 the target feature emits a compiler warning. The builder records
 the observed warning once in `target/avm-build-provenance.txt`, along with its
 pinned compiler and existing reproducibility evidence.
@@ -105,7 +105,7 @@ instructions. Compiler, Cargo, lockfile and wrapper validation and
 the two clean builds remain mandatory. Path normalization does not make
 different sources, build-script inputs or compiler profiles identical.
 Earlier builders can produce different code/package hashes from these same
-sources; re-quote deployment addresses after rebuilding with the candidate.
+sources; re-quote deployment addresses after rebuilding with different tools.
 
 If a build script reads inputs above that common ancestor, include them explicitly:
 `avm-contract-build build --manifest-path path/to/Cargo.toml --source-root path/to/source-tree`.
@@ -135,7 +135,7 @@ storage-payment time is rejected with both times in the diagnostic.
 
 The [deploy callback example](../examples/deploy-callback-repro/README.md)
 exercises ordinary callbacks, requested successful-deploy callbacks and pre-init
-rejection notifications with matching candidate tools. It accepts explicit tool,
+rejection notifications with matching release tools. It accepts explicit tool,
 profile and output paths and leaves the source checkout unchanged.
 
 These helpers use the existing canonical ABI. They do not add WASM imports,

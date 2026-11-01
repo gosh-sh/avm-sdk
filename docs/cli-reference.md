@@ -14,7 +14,7 @@ avm-contract-build build --manifest-path <Cargo.toml>
 
 The contract directory must contain `avm-contract.toml` and its Cargo workspace
 must have a reviewed `Cargo.lock`. Rust/Cargo 1.99.1 is enforced. Successful output is
-written to `target/avm` below that directory. The candidate builder enables
+written to `target/avm` below that directory. The SDK 0.4.0 builder enables
 `+wide-arithmetic`; its receipt records the exact guest compiler, Cargo and
 target flags. The native host compiler in the release profile is a separate
 identity and remains Rust/Cargo 1.93.0.
@@ -55,9 +55,9 @@ lowercase hex characters for the account id.
 Unknown commands, aliases, duplicate options, incomplete artifact triples, and
 options not owned by the selected command are rejected.
 
-## Source candidate additions
+## Additional tooling
 
-The unreleased source candidate adds the following tooling; these options are
+The following tooling is available in SDK 0.3.0 and later; these options are
 not available in SDK 0.2.0 binaries:
 
 - `avm-contract-build bindings --manifest-path Cargo.toml [--dispatch]` prints

@@ -1,10 +1,10 @@
 # Getting Started
 
-These instructions describe the Core-WASM V2 source candidate. Use its matching
-builder, local stand and profile bundle. Published SDK 0.3.0 uses the earlier
-compiler/profile; follow the documentation inside that installed release.
-A [prepared local bundle](releases.md#install-a-prepared-local-bundle) can be
-installed before a matching release is published.
+These instructions describe SDK 0.4.0 and Core-WASM V2. Use its matching
+builder, local stand and profile bundle. SDK 0.3.0 retains its earlier
+compiler/profile; follow the documentation inside each installed release.
+A [local bundle](releases.md#install-a-prepared-local-bundle) can also be
+verified and installed directly.
 
 ## Prerequisites
 
@@ -22,8 +22,8 @@ The installer places the selected release under
 export PATH="${HOME}/.local/bin:${PATH}"
 ```
 
-Choose the matching immutable `RELEASE_TAG`; an unqualified install command
-selects the latest published release, which can precede this source candidate.
+Choose the matching immutable `RELEASE_TAG` from the SDK 0.4.0 release page.
+An unqualified install command selects the latest published release.
 
 ## Initialize The Stand
 

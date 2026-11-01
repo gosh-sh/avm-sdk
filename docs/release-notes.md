@@ -1,10 +1,19 @@
-# Core-WASM V2 source candidate
+# AVM SDK 0.4.0
 
-- **Guest compiler:** exact Rust/Cargo 1.99.1 and `+wide-arithmetic`; LLVM 23 fixes earlier wide-integer lowering.
-- **Profile:** Core-WASM V2 adds four wide integer operators and retains the inherited instruction subset, no-import boundary and FUEL semantics.
-- **Host compiler:** native host tools retain their independent Rust/Cargo 1.93.0 build and license/provenance identities.
-- **Compatibility:** old guests using only the inherited subset remain admissible; rebuilding can change code hashes and FUEL. Keep tools, profile and retained data from one bundle together.
-- **Scope:** these source-candidate requirements do not change the immutable SDK 0.3.0 release or establish production-network/performance acceptance.
+- Use Rust/Cargo 1.99.1 for validated wide-arithmetic contract builds; native tools remain on 1.93.0.
+- Enable Core-WASM V2 wide arithmetic with a matching runtime profile.
+- Record wide-arithmetic compiler warnings in build provenance.
+- Update Revenue Hub and Vesting Streams optimizers for wide-arithmetic WASM.
+- Optimize Revenue Vault deployment size to fit the existing 65,536-byte limit.
+- Update example checks and build/install instructions for matching tool bundles.
+
+<a id="compatibility"></a>
+
+## Compatibility
+
+- Guest builds require Rust/Cargo 1.99.1; the guest crate remains version `0.1.1`.
+- Guests using the inherited instruction subset remain admissible. Rebuilding can change WASM, code hashes and FUEL use; profile/config identities and prepared-cache namespaces change. Keep tools, profile and retained data together, and create fresh local stand state for the new bundle.
+- Linux x86-64-v3 and Python 3.11+ are required; see the bundle manifest for measured GLIBC dependencies. Examples are educational, and this SDK release does not establish production-network or performance acceptance.
 
 # AVM SDK 0.3.0
 
@@ -19,8 +28,6 @@
 - **Build/install:** fix relocated dependencies, reject stale generated sources and validate executable permissions.
 - **Examples:** add bounty escrow, Revenue Hub, vesting, token and factory-child workflows.
 - **Revenue Hub checks:** replace Node.js with Rust/Wasmtime.
-
-<a id="compatibility"></a>
 
 ## Upgrade
 

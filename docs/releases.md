@@ -12,7 +12,7 @@ local state from one release together; see [compatibility guidance](release-note
 ## Host and guest compiler identities
 
 The native runtime profile and `provenance/build.json` attest the host tools
-built with Rust/Cargo 1.93.0. The Core-WASM V2 candidate contract builder
+built with Rust/Cargo 1.93.0. The SDK 0.4.0 Core-WASM V2 contract builder
 separately requires guest Rust/Cargo 1.99.1 and records those exact identities
 and `+wide-arithmetic` in `avm-build-provenance.txt`. A native host compiler
 version is not the guest compiler requirement. Keep historical release

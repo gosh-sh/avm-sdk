@@ -16,19 +16,18 @@ Production AVM runtime source remains in the private Acki Nacki repository.
 Every release records the exact source commit and SHA-256 hashes of all shipped
 files.
 
-The current source candidate targets Core-WASM V2 and guest Rust/Cargo 1.99.1.
-Published SDK 0.3.0 uses the earlier profile and guest compiler; follow the
-documentation included with the exact installed bundle. Native runtime build
-identities are recorded independently in its profile and provenance.
+SDK 0.4.0 targets Core-WASM V2 and guest Rust/Cargo 1.99.1. Follow the
+documentation included with the exact installed bundle. Native runtime tools
+retain their separate Rust/Cargo 1.93.0 build identity in the profile and
+provenance. SDK 0.3.0 retains its earlier profile and guest compiler.
 
 ## Use a matching bundle
 
 Requirements: Linux x86-64-v3, the binary's declared GNU libc version, Bash,
 Python 3.11+, `gh`, `jq`, and Rust/Cargo 1.99.1 with the wasm32 target.
-Use the tools, profile and documentation from the same bundle. The published
-0.3.0 bundle uses the earlier guest compiler and profile. These source-candidate
-instructions require a matching Core-WASM V2 bundle; installing the current
-latest 0.3.0 release does not provide those tools.
+Use the tools, profile and documentation from the same bundle. These
+instructions require the matching SDK 0.4.0 Core-WASM V2 bundle; keep older
+release tools and retained state together.
 
 Set `RELEASE_TAG` to the matching immutable published tag before downloading:
 
@@ -48,7 +47,7 @@ See its manifest for measured ELF dependencies and the
 - [Getting Started](docs/getting-started.md)
 - [FUEL And SHELL](docs/fuel-and-fees.md)
 - [Runtime Limits, Rent And Addresses](docs/runtime-limits.md)
-- [Source Candidate Tooling](docs/tooling-preview.md)
+- [SDK Tooling](docs/tooling-preview.md)
 - [Command-Line Reference](docs/cli-reference.md)
 - [Contract Examples](examples/README.md)
 - [Releases And Provenance](docs/releases.md)

@@ -1,6 +1,6 @@
 # Runtime limits, rent and deployment identity
 
-These are the **current source candidate local stand** settings. They are development
+These are the **SDK 0.4.0 local stand** settings. They are development
 configuration, not mainnet promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the
 active network configuration before estimating production costs or capacity.
@@ -133,8 +133,8 @@ for that step belong to the application.
 multiplication and pairing imports. The current core-WASM runtime admits no
 such host imports. Contracts that use BN254 must supply their own WASM
 implementation within the configured execution budget. No BN254 precompile or
-increased mainnet FUEL cap is included in this candidate.
+increased mainnet FUEL cap is included in this release.
 
 Use the configuration hash, profile and source identity of the runtime you are
-running when comparing measurements. A source candidate is not a released
+running when comparing measurements. An SDK local stand is not a production
 network configuration.
