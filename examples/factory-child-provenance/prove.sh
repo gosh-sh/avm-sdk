@@ -273,6 +273,49 @@ count_reports
 [[ "$reports" == "$reports_before" ]] || fail "external report changed factory state"
 result OK "7 external report rejected without state effects"
 
+# 8. A child the factory spawned itself is removed once rent drains it, and
+#    version 2 then takes the same address. A factory that trusts only the
+#    children it spawned would accept it too: the address is still the one it
+#    recorded.
+salt_8=0000000000000008
+child_address "$salt_8" "$selection_v1"
+child_8="$quoted"
+# A small balance, so a short idle period drains this child and no other account.
+run fund-user --address "$child_8" --shells 50000 >/dev/null
+call "$factory" factory.spawn "\"0x${salt_8}\""
+read_state "$factory"
+[[ "$status" == 00000000 && "$(slice "$hex" 180 244)" == "${child_8/:/}" ]] || fail "factory did not spawn child 8"
+call "$child_8" child.report null
+count_reports
+reports_before="$reports"
+# Rent is collected before execution when an account is next touched. A long
+# idle period drains the child's balance; delete-account then accepts it.
+drained=no
+for _ in 1 2 3; do
+  logical_time=$((logical_time + 1000))
+  tick
+  if ! run call --address "$child_8" --method provenance.ping --args-json null --identity developer \
+    --extra-currencies '' "${timestamps[@]}" >"${work}/drain.json" 2>/dev/null; then
+    jq -e '.error | test("InsufficientBalance")' "${work}/drain.json" >/dev/null && drained=yes && break
+  fi
+done
+[[ "$drained" == yes ]] || fail "rent did not drain child 8"
+run delete-account --address "$child_8" | jq -e '.status == "ok"' >/dev/null || fail "delete-account child 8"
+has_account "$child_8" && fail "deleted child 8 is still active"
+child_address "$salt_8" "$selection_v2"
+[[ "$quoted" == "$child_8" ]] || fail "version 2 quotes another address for child 8"
+fund "$child_8"
+tick
+run call --address "$relay_v2" --method relay.forge --args-json "\"0x${factory/:/}${salt_8}\"" \
+  --identity developer --extra-currencies '' "${timestamps[@]}" >"${work}/deleted-address-deploy.json"
+read_state "$child_8"
+[[ "$(slice "$hex" 176 240)" == "${relay_v2/:/}" ]] || fail "version 2 did not take the deleted address"
+call "$child_8" child.report null
+count_reports
+[[ "$reports" == $((reports_before + 1)) && "$(slice "$hex" 116 180)" == "${child_8/:/}" &&
+  "$(slice "$hex" 180 244)" == "${child_8/:/}" ]] || fail "documented deleted-address limitation changed"
+result LIMITATION "8 a spawned child deleted after rent drained it comes back as version 2 at the address the factory recorded"
+
 state_hash() { python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$state"; }
 before_replay="$(state_hash)"
 run replay | jq -e '.status == "ok"' >/dev/null || fail "replay"
