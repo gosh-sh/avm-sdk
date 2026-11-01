@@ -1,0 +1,10 @@
+[package]
+name = "avm-multisig-tests"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+avm-contract-sdk = { path = "../../../crates/avm-contract-sdk" }
+avm-multisig-treasury = { path = "../contracts/treasury", default-features = false }
+avm-treasury-payee = { path = "../contracts/payee" }

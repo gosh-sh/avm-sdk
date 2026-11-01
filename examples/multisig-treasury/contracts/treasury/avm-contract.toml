@@ -1,0 +1,398 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "81d0d60da523098edf03d2ccac00d0ccbb01671873570a63a49abed363869edb"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "state"
+len = 3136
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "propose_args"
+len = 89
+
+[[abi.types]]
+id = 3
+kind = "u64"
+name = "proposal_id"
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "payout_receipt"
+len = 32
+
+[[abi.types]]
+id = 5
+kind = "u128"
+name = "amount"
+
+[[abi.types]]
+id = 6
+kind = "u64"
+name = "counter"
+
+[[abi.types]]
+id = 7
+kind = "fixed_bytes"
+name = "owner_key"
+len = 32
+
+[[abi.methods]]
+name = "treasury.deposit"
+
+[[abi.methods]]
+name = "treasury.propose"
+input_type_id = 2
+
+[[abi.methods]]
+name = "treasury.approve"
+input_type_id = 3
+
+[[abi.methods]]
+name = "treasury.cancel"
+input_type_id = 3
+
+[[abi.methods]]
+name = "treasury.execute"
+input_type_id = 3
+
+[[abi.methods]]
+name = "treasury.freeze"
+
+[[abi.methods]]
+name = "treasury.callback"
+input_type_id = 4
+
+[[abi.events]]
+name = "msig.created"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "delay"
+
+[[abi.events.fields]]
+id = 2
+type_id = 5
+name = "fuel_reserve"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "grace"
+
+[[abi.events.fields]]
+id = 4
+type_id = 6
+name = "owners"
+
+[[abi.events.fields]]
+id = 5
+type_id = 6
+name = "threshold"
+
+[[abi.events.fields]]
+id = 6
+type_id = 6
+name = "ttl"
+
+[[abi.events]]
+name = "msig.deposited"
+
+[[abi.events.fields]]
+id = 1
+type_id = 5
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "currency"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "from"
+
+[[abi.events]]
+name = "msig.proposed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 5
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "currency"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "id"
+
+[[abi.events.fields]]
+id = 4
+type_id = 6
+name = "kind"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "proposer"
+
+[[abi.events]]
+name = "msig.approved"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "approvals"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "id"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "owner"
+
+[[abi.events]]
+name = "msig.queued"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "eta"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "expires"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "id"
+
+[[abi.events]]
+name = "msig.cancelled"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "by"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "id"
+
+[[abi.events]]
+name = "msig.frozen"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "by"
+
+[[abi.events]]
+name = "msig.unfrozen"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "id"
+
+[[abi.events]]
+name = "msig.owner_added"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "id"
+
+[[abi.events.fields]]
+id = 2
+type_id = 7
+name = "owner"
+
+[[abi.events]]
+name = "msig.owner_removed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "id"
+
+[[abi.events.fields]]
+id = 2
+type_id = 7
+name = "owner"
+
+[[abi.events]]
+name = "msig.policy_set"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "currency"
+
+[[abi.events.fields]]
+id = 2
+type_id = 5
+name = "fast_limit"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "id"
+
+[[abi.events]]
+name = "msig.transfer_pending"
+
+[[abi.events.fields]]
+id = 1
+type_id = 5
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "currency"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "id"
+
+[[abi.events]]
+name = "msig.transfer_settled"
+
+[[abi.events.fields]]
+id = 1
+type_id = 5
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "currency"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "id"
+
+[[abi.events]]
+name = "msig.transfer_failed"
+
+[[abi.events.fields]]
+id = 1
+type_id = 5
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 6
+name = "currency"
+
+[[abi.events.fields]]
+id = 3
+type_id = 6
+name = "id"
+
+[[abi.errors]]
+status_code = 4000
+name = "bad_args"
+message = "bad arguments"
+
+[[abi.errors]]
+status_code = 4001
+name = "unauthorized"
+message = "not an owner"
+
+[[abi.errors]]
+status_code = 4002
+name = "bad_state"
+message = "bad state"
+
+[[abi.errors]]
+status_code = 4003
+name = "frozen"
+message = "frozen"
+
+[[abi.errors]]
+status_code = 4004
+name = "bad_value"
+message = "bad value"
+
+[[abi.errors]]
+status_code = 4005
+name = "not_found"
+message = "not found"
+
+[[abi.errors]]
+status_code = 4006
+name = "expired"
+message = "expired"
+
+[[abi.errors]]
+status_code = 4007
+name = "timelock"
+message = "timelock active"
+
+[[abi.errors]]
+status_code = 4009
+name = "low_balance"
+message = "balance too low"
+
+[[abi.errors]]
+status_code = 4010
+name = "capacity"
+message = "table full"
+
+[[abi.errors]]
+status_code = 4011
+name = "insolvent"
+message = "low reserve"
+
+[[abi.errors]]
+status_code = 4012
+name = "bad_callback"
+message = "bad callback"
+
+[[abi.errors]]
+status_code = 4013
+name = "duplicate"
+message = "duplicate"
+
+[[abi.errors]]
+status_code = 4014
+name = "bad_threshold"
+message = "below threshold"
+
+[[abi.errors]]
+status_code = 4015
+name = "overflow"
+message = "arithmetic overflow"
+
+[[abi.errors]]
+status_code = 4016
+name = "busy"
+message = "payout in flight"
+
+[[abi.errors]]
+status_code = 4017
+name = "not_ready"
+message = "wrong state"
