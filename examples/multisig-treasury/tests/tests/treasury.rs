@@ -138,13 +138,119 @@ fn deposits_need_value_and_respect_capacity() {
     failure(&sim.deposit(OWNER_A, &[]), ERR_VALUE);
     // The body of a deposit must be empty.
     failure(&sim.call(OWNER_A, ids::DEPOSIT, &[1], &[(C7, 1)]), ERR_ARGS);
-    for currency in 20..28u32 {
+    for currency in 20..27u32 {
         accepted(&sim.deposit(OWNER_A, &[(currency, 1)]));
     }
     failure(&sim.deposit(OWNER_A, &[(C7, 1)]), ERR_CAPACITY);
+    // SHELL has a reserved slot even when third parties filled the other seven.
+    accepted(&sim.deposit(OUTSIDER, &[(SHELL_CURRENCY_ID, 100_000)]));
     // An existing currency still accepts more.
     accepted(&sim.deposit(OWNER_A, &[(20, 5)]));
     assert_eq!(sim.state().held(20), 6);
+}
+
+#[test]
+fn pending_refunds_keep_their_balance_slots_while_frozen() {
+    let mut sim = Sim::new();
+    accepted(&sim.deposit(OWNER_A, &[(SHELL_CURRENCY_ID, FUEL), (C7, 50)]));
+    let to = recipient(0);
+    let id = sim.transfer(OWNER_A, to, C7, 50);
+    accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+    assert!(sim.state().balances.is_empty(), "both principal and fuel were debited fully");
+    // Pending C7 and SHELL remain reserved even though neither has a balance row.
+    for currency in 20..26 {
+        accepted(&sim.deposit(OUTSIDER, &[(currency, 1)]));
+    }
+    failure(&sim.deposit(OUTSIDER, &[(26, 1)]), ERR_CAPACITY);
+    accepted(&sim.freeze(OWNER_A));
+    accepted(&sim.settle(to, Settle::Bounced(vec![(SHELL_CURRENCY_ID, FUEL), (C7, 50)])));
+    assert_eq!(sim.state().held(C7), 50);
+    assert_eq!(sim.state().held(SHELL_CURRENCY_ID), FUEL);
+    assert!(sim.state().pending.is_empty());
+    sim.assert_accounting();
+}
+
+#[test]
+fn successful_delivery_releases_only_the_pending_currency_reservation() {
+    let mut sim = Sim::new();
+    accepted(&sim.deposit(OWNER_A, &[(SHELL_CURRENCY_ID, FUEL), (C7, 50)]));
+    let to = recipient(0);
+    let id = sim.transfer(OWNER_A, to, C7, 50);
+    accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+    for currency in 20..26 {
+        accepted(&sim.deposit(OUTSIDER, &[(currency, 1)]));
+    }
+    let body = sim.outbox.last().unwrap().body.clone();
+    accepted(&sim.settle(to, Settle::Delivered(body)));
+    accepted(&sim.deposit(OUTSIDER, &[(26, 1)]));
+    failure(&sim.deposit(OUTSIDER, &[(27, 1)]), ERR_CAPACITY);
+    accepted(&sim.deposit(OWNER_A, &[(SHELL_CURRENCY_ID, FUEL)]));
+    sim.assert_accounting();
+}
+
+#[test]
+fn shared_pending_currencies_and_existing_balances_share_one_reservation() {
+    let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
+    for index in 0..2 {
+        let id = sim.transfer(OWNER_A, recipient(index), C7, 500_000);
+        accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+    }
+    let id = sim.transfer(OWNER_A, recipient(2), C9, 1_000_000);
+    accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+    for currency in 20..25 {
+        accepted(&sim.deposit(OUTSIDER, &[(currency, 1)]));
+    }
+    failure(&sim.deposit(OUTSIDER, &[(25, 1)]), ERR_CAPACITY);
+    accepted(&sim.deposit(OUTSIDER, &[(C7, 1), (C9, 1)]));
+    for (index, currency, amount) in [(0, C7, 500_000), (1, C7, 500_000), (2, C9, 1_000_000)] {
+        accepted(&sim.settle(recipient(index), Settle::Bounced(vec![(currency, amount)])));
+    }
+    assert_eq!(sim.state().balances.len(), 8);
+    sim.assert_accounting();
+}
+
+#[test]
+fn overcommitted_balance_reservations_are_invalid_state() {
+    let sim = Sim::new();
+    let mut state = sim.state();
+    state.balances =
+        (20..28).map(|currency| avm_multisig_treasury::Balance { currency, held: 1 }).collect();
+    assert_eq!(state.validate().err(), Some(ERR_STATE));
+    assert_eq!(State::decode(&state.encode()).err(), Some(ERR_STATE));
+    state.balances.pop();
+    assert!(state.validate().is_ok());
+    assert_eq!(State::decode(&state.encode()).unwrap().encode(), state.encode());
+}
+
+#[test]
+fn oversized_table_counts_are_rejected_even_when_the_table_is_full() {
+    let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
+    for currency in 20..25 {
+        accepted(&sim.deposit(OWNER_A, &[(currency, 1)]));
+    }
+    for currency in 20..24 {
+        set_policy(&mut sim, currency, 1, 10, 60);
+    }
+    for index in 0..4 {
+        let id = sim.transfer(OWNER_A, recipient(index), C7, 1);
+        accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+    }
+    while sim.state().proposals.len() < MAX_PROPOSALS {
+        sim.transfer(OWNER_A, recipient(10), C9, 1);
+    }
+    let good = sim.state.clone();
+    assert_eq!(State::decode(&good).unwrap().encode(), good);
+    for (offset, maximum) in [(2, 8), (3, 4), (56, 16), (57, 4)] {
+        for count in [maximum + 1, 255] {
+            let mut bad = good.clone();
+            bad[offset] = count;
+            assert_eq!(
+                State::decode(&bad).err(),
+                Some(ERR_STATE),
+                "offset {offset}, count {count}"
+            );
+        }
+    }
 }
 
 // --------------------------------------------------------------- proposing ---
@@ -759,7 +865,7 @@ fn an_underfunded_treasury_refuses_to_operate() {
 }
 
 #[test]
-fn the_decoder_rejects_every_non_canonical_state() {
+fn the_decoder_rejects_tested_non_canonical_states() {
     let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
     let id = sim.transfer(OWNER_A, recipient(0), C7, 5);
     accepted(&sim.approve(OWNER_B, id));

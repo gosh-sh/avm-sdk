@@ -13,8 +13,8 @@ rejects (the payout bounces and the proposal returns to the queue), changing
 the delay and the threshold, a `SET_POLICY` fast lane with a window limit (one
 transfer refused at the limit, a bounce that gives the allowance back, a new
 window), adding and removing an owner, cancelling, freezing and unfreezing.
-After every step the decoded treasury state is compared with what the script
-computed on its own, and the stand journal is replayed at the end.
+Selected decoded fields and expected outcomes are asserted at checkpoints; this
+is not a complete independent state oracle. The journal is replayed at the end.
 """
 import argparse
 import json
