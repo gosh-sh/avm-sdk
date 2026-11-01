@@ -9,4 +9,3 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 avm-contract-sdk = { path = "../../../../crates/avm-contract-sdk" }
-avm-multisig-treasury = { path = "../treasury", default-features = false }

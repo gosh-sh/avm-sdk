@@ -4,13 +4,13 @@
 `Open` (collecting approvals, deadline `created + ttl`) → `Queued` (approvals ≥
 threshold, `eta = queue time + delay`, deadline `eta + grace`) → `Executing`
 (transfers only, payout in flight) → removed. Cancelled and expired proposals are
-removed by `cancel`. Executing proposals cannot be cancelled.
+removed by `cancel`. Executing proposals can be neither revoked nor cancelled.
 
 ## Invariants (checked on every decode and before every state output)
 * `1 ≤ threshold ≤ owners ≤ 8`, owner keys unique and nonzero, `delay ≤ 30 d`.
 * Balances: unique currency, no zero entries (emptied entries are dropped).
-* Policies: unique currency, never SHELL, nonzero fast limit.
-* Proposals: ids strictly increasing and below `next_id`; kind 1..5; approvals only
+* Policies: unique currency, never SHELL, `fast ≤ window limit`, `spent ≤ window limit`.
+* Proposals: ids strictly increasing and below `next_id`; kind 1..7; approvals only
   from occupied owner slots (except executing proposals); `Queued` ⇒ approvals ≥
   threshold; `Open` ⇒ `eta = 0`; every `Executing` proposal has exactly one pending payout.
 * Pending payouts: unique recipients, amount > 0, never SHELL, linked to an executing proposal.
@@ -30,5 +30,6 @@ come back with an empty body. Anything else is `ERR_CALLBACK` and the payout sta
 pending. Callbacks skip the solvency check (their own value arrives with them).
 
 ## Reconciliation
-`reconcile` runs after owner removal and failed payouts: it masks approvals to current owners, reopens queued proposals that lost
+`reconcile` runs after owner removal, threshold changes, revokes and failed
+payouts: it masks approvals to current owners, reopens queued proposals that lost
 approvals and queues open ones that now have enough.

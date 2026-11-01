@@ -6,8 +6,8 @@
 mod common;
 
 use avm_multisig_treasury::{
-    KIND_ADD_OWNER, KIND_REMOVE_OWNER, KIND_SET_POLICY, KIND_TRANSFER, KIND_UNFREEZE,
-    SHELL_CURRENCY_ID,
+    KIND_ADD_OWNER, KIND_REMOVE_OWNER, KIND_SET_DELAY, KIND_SET_POLICY, KIND_SET_THRESHOLD,
+    KIND_TRANSFER, KIND_UNFREEZE, SHELL_CURRENCY_ID,
 };
 use common::*;
 
@@ -80,15 +80,30 @@ fn run(seed: u64, steps: usize) -> (usize, usize) {
                 let key = rng.pick(&CANDIDATES);
                 sim.propose(actor, KIND_REMOVE_OWNER, 0, 0, 0, key_target(key))
             }
+            35..=37 => {
+                let aux = rng.below(6) as u32;
+                sim.propose(actor, KIND_SET_THRESHOLD, 0, aux, 0, [0; 64])
+            }
+            38..=39 => {
+                let aux = rng.pick(&[0, 1, 60, DELAY, avm_multisig_treasury::MAX_DELAY + 1]);
+                sim.propose(actor, KIND_SET_DELAY, 0, aux, 0, [0; 64])
+            }
             40..=42 => {
+                let limit = u128::from(rng.below(60_000));
                 let fast = u128::from(rng.below(20_000));
-                let on = rng.pick(&[0, 1, 1, 2]);
-                sim.propose(actor, KIND_SET_POLICY, currency, on, fast, [0; 64])
+                let mut target = [0; 64];
+                target[..16].copy_from_slice(&limit.to_le_bytes());
+                let secs = rng.pick(&[0, 600, 3_600, 86_400]);
+                sim.propose(actor, KIND_SET_POLICY, currency, secs, fast, target)
             }
             43 => sim.propose(actor, KIND_UNFREEZE, 0, 0, 0, [0; 64]),
             44..=58 => {
                 let id = existing(&mut rng);
                 sim.approve(actor, id)
+            }
+            59..=62 => {
+                let id = existing(&mut rng);
+                sim.revoke(actor, id)
             }
             63..=65 => {
                 let id = existing(&mut rng);
@@ -197,7 +212,7 @@ fn the_fuzzer_reaches_governance_and_freeze_paths() {
             let owners: Vec<[u8; 32]> =
                 sim.state().owners.iter().copied().filter(|k| *k != [0; 32]).collect();
             let proposer = rng.pick(&owners);
-            let output = match rng.below(4) {
+            let output = match rng.below(6) {
                 0 => sim.propose(
                     proposer,
                     KIND_ADD_OWNER,
@@ -214,8 +229,10 @@ fn the_fuzzer_reaches_governance_and_freeze_paths() {
                     0,
                     key_target(rng.pick(&CANDIDATES)),
                 ),
-                2 => sim.freeze(proposer),
-                _ => sim.propose(proposer, KIND_UNFREEZE, 0, 0, 0, [0; 64]),
+                2 => sim.propose(proposer, KIND_SET_THRESHOLD, 0, rng.below(5) as u32, 0, [0; 64]),
+                3 => sim.freeze(proposer),
+                4 => sim.propose(proposer, KIND_UNFREEZE, 0, 0, 0, [0; 64]),
+                _ => sim.propose(proposer, KIND_SET_DELAY, 0, rng.below(2) as u32 * 60, 0, [0; 64]),
             };
             if output.status_code != 0 {
                 continue;
@@ -233,7 +250,14 @@ fn the_fuzzer_reaches_governance_and_freeze_paths() {
             sim.assert_accounting();
         }
     }
-    for name in ["msig.owner_added", "msig.owner_removed", "msig.frozen", "msig.unfrozen"] {
+    for name in [
+        "msig.owner_added",
+        "msig.owner_removed",
+        "msig.threshold_changed",
+        "msig.delay_changed",
+        "msig.frozen",
+        "msig.unfrozen",
+    ] {
         assert!(seen.contains(name), "the fuzzer never produced {name}");
     }
 }

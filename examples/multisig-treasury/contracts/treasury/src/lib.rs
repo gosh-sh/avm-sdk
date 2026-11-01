@@ -1,4 +1,5 @@
-#![forbid(unsafe_code)]
+#![cfg_attr(not(target_arch = "wasm32"), forbid(unsafe_code))]
+#![cfg_attr(target_arch = "wasm32", deny(unsafe_code), no_std)]
 
 //! Multisig treasury with a timelock, spending policies and a circuit breaker.
 //!
@@ -9,10 +10,16 @@
 //!
 //! * transfers pay a recipient through an acknowledged payout (the funds leave
 //!   only after the receiver's callback confirms or bounces them),
-//! * per-currency policies let small transfers skip the delay (fast lane),
-//! * owners and policies are changed by proposals of their own,
+//! * per-currency policies let small transfers skip the delay (fast lane) and
+//!   cap what may leave per time window,
+//! * owners, the threshold, the delay and the policies are all changed by
+//!   proposals of their own,
 //! * any single owner can freeze the treasury; only a threshold-approved
 //!   unfreeze proposal lifts it.
+
+extern crate alloc;
+
+use alloc::{vec, vec::Vec};
 
 use avm_contract_sdk::{
     encode_event_fields, AccountAddress, CallbackIntent, Caller, CanonicalMessage, Contract,
@@ -21,13 +28,16 @@ use avm_contract_sdk::{
 };
 
 pub mod ids;
+#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[allow(unsafe_code)]
+mod rt;
 pub mod state;
 
 pub use state::{
     Balance, Init, Pending, Policy, Proposal, State, KIND_ADD_OWNER, KIND_REMOVE_OWNER,
-    KIND_SET_POLICY, KIND_TRANSFER, KIND_UNFREEZE, MAX_BALANCES, MAX_OWNERS, MAX_PENDING,
-    MAX_POLICIES, MAX_PROPOSALS, NO_PROPOSER, RECEIPT_SLOTS, STATE_BYTES, STATUS_EXECUTING,
-    STATUS_OPEN, STATUS_QUEUED,
+    KIND_SET_DELAY, KIND_SET_POLICY, KIND_SET_THRESHOLD, KIND_TRANSFER, KIND_UNFREEZE,
+    MAX_BALANCES, MAX_OWNERS, MAX_PENDING, MAX_POLICIES, MAX_PROPOSALS, NO_PROPOSER, RECEIPT_SLOTS,
+    STATE_BYTES, STATUS_EXECUTING, STATUS_OPEN, STATUS_QUEUED,
 };
 
 /// SHELL (ECC 2) pays for execution; it can be deposited as FUEL but never paid out.
@@ -43,6 +53,7 @@ pub const ERR_VALUE: u32 = 4004;
 pub const ERR_NOT_FOUND: u32 = 4005;
 pub const ERR_EXPIRED: u32 = 4006;
 pub const ERR_TIMELOCK: u32 = 4007;
+pub const ERR_LIMIT: u32 = 4008;
 pub const ERR_BALANCE: u32 = 4009;
 pub const ERR_CAPACITY: u32 = 4010;
 pub const ERR_INSOLVENT: u32 = 4011;
@@ -228,6 +239,7 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
     let events = match method {
         ids::PROPOSE => propose(&mut state, slot, body, now, input.destination)?,
         ids::APPROVE => approve(&mut state, slot, id_arg(body)?, now)?,
+        ids::REVOKE => revoke(&mut state, slot, id_arg(body)?, now)?,
         ids::CANCEL => cancel(&mut state, slot, id_arg(body)?, now)?,
         ids::EXECUTE => return execute(state, slot, id_arg(body)?, now, &input),
         ids::FREEZE => freeze(&mut state, slot, body)?,
@@ -327,19 +339,33 @@ fn check_payload(state: &State, proposal: &Proposal, me: AccountAddress) -> Resu
                 return Err(ERR_THRESHOLD);
             }
         }
+        KIND_SET_THRESHOLD => {
+            if currency != 0 || amount != 0 || !all_zero(&target) {
+                return Err(ERR_ARGS);
+            }
+            if aux == 0 || aux as usize > state.owner_count() {
+                return Err(ERR_THRESHOLD);
+            }
+        }
+        KIND_SET_DELAY => {
+            if currency != 0 || amount != 0 || !all_zero(&target) || aux > MAX_DELAY {
+                return Err(ERR_ARGS);
+            }
+        }
         KIND_SET_POLICY => {
-            // amount = fast limit; aux = 1 sets the policy, aux = 0 removes it.
-            if currency == SHELL_CURRENCY_ID || !all_zero(&target) {
+            // amount = fast limit, aux = window seconds, target[..16] = window limit.
+            let limit = read_u128(&target, 0)?;
+            if currency == SHELL_CURRENCY_ID || !all_zero(&target[16..]) {
                 return Err(ERR_ARGS);
             }
             if aux == 0 {
-                if amount != 0 {
+                if amount != 0 || limit != 0 {
                     return Err(ERR_ARGS);
                 }
                 if state.policy(currency).is_none() {
                     return Err(ERR_NOT_FOUND);
                 }
-            } else if aux != 1 || amount == 0 {
+            } else if limit == 0 || amount > limit {
                 return Err(ERR_ARGS);
             }
         }
@@ -491,6 +517,25 @@ fn approve(state: &mut State, slot: usize, id: u64, now: u32) -> Result<Vec<Ev>>
     Ok(events)
 }
 
+fn revoke(state: &mut State, slot: usize, id: u64, now: u32) -> Result<Vec<Ev>> {
+    let index = find(state, id)?;
+    let proposal = state.proposals[index];
+    if proposal.status == STATUS_EXECUTING {
+        return Err(ERR_NOT_READY);
+    }
+    if proposal.approvals & (1 << slot) == 0 {
+        return Err(ERR_NOT_FOUND);
+    }
+    state.proposals[index].approvals &= !(1 << slot);
+    reconcile(state, now)?;
+    let approvals = state.proposals[index].approvals;
+    let owner = state.owners[slot];
+    Ok(vec![Ev::new("msig.revoked", owner)
+        .u64("approvals", u64::from(approvals.count_ones()))
+        .u64("id", id)
+        .key("owner", owner)])
+}
+
 /// The proposer can withdraw a proposal at any time before it starts executing.
 /// Any owner can clear one that expired or whose proposer is gone.
 fn cancel(state: &mut State, slot: usize, id: u64, now: u32) -> Result<Vec<Ev>> {
@@ -534,7 +579,7 @@ fn execute(
     check_payload(&state, &proposal, input.destination)?;
     let caller = state.owners[slot];
     if proposal.kind == KIND_TRANSFER {
-        return start_transfer(state, index, input);
+        return start_transfer(state, index, now, input);
     }
     state.proposals.remove(index);
     let target_key: [u8; 32] = array(&proposal.target, 0)?;
@@ -555,20 +600,41 @@ fn execute(
             reconcile(&mut state, now)?;
             Ev::new("msig.owner_removed", caller).u64("id", id).key("owner", target_key)
         }
+        KIND_SET_THRESHOLD => {
+            state.threshold = proposal.aux as u8;
+            reconcile(&mut state, now)?;
+            Ev::new("msig.threshold_changed", caller)
+                .u64("id", id)
+                .u64("threshold", u64::from(proposal.aux))
+        }
+        KIND_SET_DELAY => {
+            state.delay = proposal.aux;
+            Ev::new("msig.delay_changed", caller)
+                .u64("delay", u64::from(proposal.aux))
+                .u64("id", id)
+        }
         KIND_SET_POLICY => {
+            let limit = read_u128(&proposal.target, 0)?;
             state.policies.retain(|policy| policy.currency != proposal.currency);
             if proposal.aux != 0 {
                 if state.policies.len() >= MAX_POLICIES {
                     return Err(ERR_CAPACITY);
                 }
-                state
-                    .policies
-                    .push(Policy { currency: proposal.currency, fast_limit: proposal.amount });
+                state.policies.push(Policy {
+                    currency: proposal.currency,
+                    window_secs: proposal.aux,
+                    fast_limit: proposal.amount,
+                    window_limit: limit,
+                    window_start: 0,
+                    spent: 0,
+                });
             }
             Ev::new("msig.policy_set", caller)
                 .u64("currency", u64::from(proposal.currency))
                 .u128("fast_limit", proposal.amount)
                 .u64("id", id)
+                .u128("window_limit", limit)
+                .u64("window_secs", u64::from(proposal.aux))
         }
         _ => {
             state.frozen = false;
@@ -582,6 +648,7 @@ fn execute(
 fn start_transfer(
     mut state: State,
     index: usize,
+    now: u32,
     input: &MessageInput<'_>,
 ) -> Result<MessageOutput> {
     let proposal = state.proposals[index];
@@ -599,9 +666,23 @@ fn start_transfer(
     if state.held(SHELL_CURRENCY_ID) < fuel {
         return Err(ERR_INSOLVENT);
     }
+    let mut window_start = 0;
+    if let Some(policy) = state.policies.iter_mut().find(|p| p.currency == proposal.currency) {
+        if now >= policy.window_start.saturating_add(policy.window_secs) {
+            policy.window_start = now;
+            policy.spent = 0;
+        }
+        let spent = policy.spent.checked_add(proposal.amount).ok_or(ERR_OVERFLOW)?;
+        if spent > policy.window_limit {
+            return Err(ERR_LIMIT);
+        }
+        policy.spent = spent;
+        window_start = policy.window_start;
+    }
     state.debit(proposal.currency, proposal.amount)?;
     state.debit(SHELL_CURRENCY_ID, fuel)?;
     state.proposals[index].status = STATUS_EXECUTING;
+    state.proposals[index].aux = window_start;
     state.pending.push(Pending {
         recipient,
         id: proposal.id,
@@ -680,9 +761,16 @@ fn callback(input: &MessageInput<'_>, mut state: State) -> Result<MessageOutput>
     } else {
         state.credit(entry.currency, entry.amount)?;
         let proposal = &mut state.proposals[index];
+        let window_start = proposal.aux;
         proposal.status = STATUS_QUEUED;
         proposal.eta = now;
         proposal.expires = now.saturating_add(state.grace);
+        proposal.aux = 0;
+        if let Some(policy) = state.policies.iter_mut().find(|p| p.currency == entry.currency) {
+            if policy.window_start == window_start {
+                policy.spent = policy.spent.saturating_sub(entry.amount);
+            }
+        }
         "msig.transfer_failed"
     };
     state.pending.remove(position);

@@ -27,5 +27,4 @@ name = "avm-treasury-payee"
 version = "0.1.0"
 dependencies = [
  "avm-contract-sdk",
- "avm-multisig-treasury",
 ]

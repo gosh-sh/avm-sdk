@@ -528,6 +528,9 @@ impl Sim {
     pub fn approve(&mut self, actor: [u8; 32], id: u64) -> MessageOutput {
         self.act(actor, ids::APPROVE, id)
     }
+    pub fn revoke(&mut self, actor: [u8; 32], id: u64) -> MessageOutput {
+        self.act(actor, ids::REVOKE, id)
+    }
     pub fn cancel(&mut self, actor: [u8; 32], id: u64) -> MessageOutput {
         self.act(actor, ids::CANCEL, id)
     }

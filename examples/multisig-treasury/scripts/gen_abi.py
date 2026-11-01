@@ -24,7 +24,7 @@ import blake3
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT.parent
-STATE_BYTES = 3136  # keep equal to state::STATE_BYTES (checked by a test)
+STATE_BYTES = 3264  # keep equal to state::STATE_BYTES (checked by a test)
 
 # ----------------------------------------------------------------- the ABI ---
 
@@ -43,6 +43,7 @@ TREASURY_METHODS = [
     ("treasury.deposit", None),
     ("treasury.propose", "propose_args"),
     ("treasury.approve", "proposal_id"),
+    ("treasury.revoke", "proposal_id"),
     ("treasury.cancel", "proposal_id"),
     ("treasury.execute", "proposal_id"),
     ("treasury.freeze", None),
@@ -56,36 +57,41 @@ EVENTS = [
     ("msig.deposited", [("amount", A), ("currency", U), ("from", K)]),
     ("msig.proposed", [("amount", A), ("currency", U), ("id", U), ("kind", U), ("proposer", K)]),
     ("msig.approved", [("approvals", U), ("id", U), ("owner", K)]),
+    ("msig.revoked", [("approvals", U), ("id", U), ("owner", K)]),
     ("msig.queued", [("eta", U), ("expires", U), ("id", U)]),
     ("msig.cancelled", [("by", K), ("id", U)]),
     ("msig.frozen", [("by", K)]),
     ("msig.unfrozen", [("id", U)]),
     ("msig.owner_added", [("id", U), ("owner", K)]),
     ("msig.owner_removed", [("id", U), ("owner", K)]),
-    ("msig.policy_set", [("currency", U), ("fast_limit", A), ("id", U)]),
+    ("msig.threshold_changed", [("id", U), ("threshold", U)]),
+    ("msig.delay_changed", [("delay", U), ("id", U)]),
+    ("msig.policy_set", [("currency", U), ("fast_limit", A), ("id", U), ("window_limit", A),
+                         ("window_secs", U)]),
     ("msig.transfer_pending", [("amount", A), ("currency", U), ("id", U)]),
     ("msig.transfer_settled", [("amount", A), ("currency", U), ("id", U)]),
     ("msig.transfer_failed", [("amount", A), ("currency", U), ("id", U)]),
 ]
 
 TREASURY_ERRORS = [
-    (4000, "bad_args", "bad arguments"),
-    (4001, "unauthorized", "not an owner"),
-    (4002, "bad_state", "bad state"),
-    (4003, "frozen", "frozen"),
-    (4004, "bad_value", "bad value"),
-    (4005, "not_found", "not found"),
-    (4006, "expired", "expired"),
-    (4007, "timelock", "timelock active"),
-    (4009, "low_balance", "balance too low"),
-    (4010, "capacity", "table full"),
-    (4011, "insolvent", "low reserve"),
-    (4012, "bad_callback", "bad callback"),
-    (4013, "duplicate", "duplicate"),
-    (4014, "bad_threshold", "below threshold"),
+    (4000, "invalid_args", "invalid or non-canonical arguments"),
+    (4001, "unauthorized", "caller is not an owner"),
+    (4002, "invalid_state", "state is corrupt or the action is not valid now"),
+    (4003, "frozen", "the treasury is frozen"),
+    (4004, "invalid_value", "attached value is missing or not allowed"),
+    (4005, "not_found", "unknown proposal, owner, policy or approval"),
+    (4006, "expired", "proposal deadline passed"),
+    (4007, "timelock", "timelock has not elapsed"),
+    (4008, "limit_exceeded", "spending window limit exceeded"),
+    (4009, "insufficient_balance", "treasury balance too low"),
+    (4010, "capacity", "table is full"),
+    (4011, "insolvent", "vault balance or SHELL reserve insufficient"),
+    (4012, "invalid_callback", "invalid, stale or mismatched callback"),
+    (4013, "duplicate", "already approved or already an owner"),
+    (4014, "invalid_threshold", "threshold or owner change not allowed"),
     (4015, "overflow", "arithmetic overflow"),
-    (4016, "busy", "payout in flight"),
-    (4017, "not_ready", "wrong state"),
+    (4016, "recipient_busy", "a payout to this recipient is already in flight"),
+    (4017, "not_ready", "proposal is in the wrong state"),
 ]
 
 PAYEE_TYPES = [

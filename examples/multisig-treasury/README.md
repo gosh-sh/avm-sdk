@@ -1,24 +1,24 @@
 # Multisig Treasury
 
 An m-of-n treasury for multi-currency ECC funds, with a **timelock**, per-currency
-**fast-lane policies**, a **circuit breaker** and **acknowledged payouts**. One
+**spending policies**, a **circuit breaker** and **acknowledged payouts**. One
 contract, no dependencies beyond the SDK, no arithmetic beyond additions.
 
 | | |
 |---|---|
-| `contracts/treasury` | the treasury (`avm-multisig-treasury`) |
+| `contracts/treasury` | the treasury (`avm-multisig-treasury`) and `rt.rs`, the guest runtime shared with the payee |
 | `contracts/payee` | fixture that receives a payout, echoes the receipt, or rejects it (exercises the bounce path) |
-| `tests` | 31 behaviour tests, 5 treasury↔payee integration tests, randomized invariant tests |
+| `tests` | 37 behaviour tests, 5 treasury↔payee integration tests, randomized invariant tests |
 | `scripts` | `gen_abi.py` (manifests + `ids.rs` from one description), `check.sh`, `e2e.py` (journey on `avm-local-stand`) |
 
 ## How it works
 
-Up to **8 owners** (external keys) and a `threshold`. Nothing moves, and nothing
-about the governance changes, except through a *proposal*:
+Up to **8 owners** (external keys) and a `threshold`. Nothing moves, and no
+setting changes, except through a *proposal*:
 
 1. An owner **proposes** (and approves their own proposal).
-2. Others **approve**. Once approvals reach the threshold the proposal is
-   **queued** with `eta = now + delay`.
+2. Others **approve**; any owner can **revoke** their approval. Once approvals reach
+   the threshold the proposal is **queued** with `eta = now + delay`.
 3. After `eta`, and before `eta + grace`, any owner **executes** it.
    Proposals expire (`ttl` while collecting approvals, `grace` once queued).
 
@@ -26,22 +26,23 @@ about the governance changes, except through a *proposal*:
 |---|---|
 | `TRANSFER` | pay `amount` of a currency to an address through an acknowledged payout |
 | `ADD_OWNER` / `REMOVE_OWNER` | change the owner set (slots never move; removal strips the owner's approvals and reopens proposals that depended on them) |
-| `SET_POLICY` | per-currency **fast limit**: transfers up to it skip the delay. `aux = 1` sets it, `aux = 0` removes it |
+| `SET_THRESHOLD` | demotes queued proposals that no longer have enough approvals, promotes open ones that now do |
+| `SET_DELAY` | timelock for later proposals (≤ 30 days) |
+| `SET_POLICY` | per-currency **fast limit** (transfers up to it skip the delay) and **window limit** (max outflow per `window_secs`); `window_secs = 0` removes the policy |
 | `UNFREEZE` | lifts a freeze; no delay, still needs the threshold |
 
-The threshold and the delay are fixed at deploy time. Governance proposals never
-get the fast lane. Every proposal is re-validated just before it executes (the
-owner set and balances may have changed).
+Governance proposals never get the fast lane. Every proposal is re-validated just
+before it executes (the owner set, threshold and balances may have changed).
 
 **Freeze.** Any single owner can freeze the treasury. While frozen nothing can be
-proposed, approved or executed except an `UNFREEZE`; deposits, cancels and payout
-callbacks keep working, so a freeze can never trap value in flight.
+proposed, approved or executed except an `UNFREEZE`; deposits, revokes, cancels and
+payout callbacks keep working, so a freeze can never trap value in flight.
 
 **Payouts.** A transfer debits the ledger first and sends the funds with a callback
 request. `TRS1 | currency u32 | proposal id u64 | amount u128` is the receipt the
-payee must echo. A bounce returns the funds and puts the proposal back in the
-queue; one payout per recipient may be in flight (at most 4 overall), so the
-callback's source address identifies the payout.
+payee must echo. A bounce returns the funds, restores the spending allowance and puts the
+proposal back in the queue; one payout per recipient may be in flight (at most 4
+overall), so the callback's source address identifies the payout.
 
 **Safety net.** Every call re-validates the whole canonical state and checks that
 the contract physically holds at least what it believes it owns
@@ -51,24 +52,23 @@ the contract physically holds at least what it believes it owns
 
 | call | body |
 |---|---|
-| constructor | `threshold u8 · owners u8 · delay u32 · grace u32 · ttl u32 · fuel u128 · owner keys[32 each]`, passed as raw init bytes (the manifest declares no init type, like `bounty-escrow`) |
+| constructor | `threshold u8 · owners u8 · delay u32 · grace u32 · ttl u32 · fuel u128 · owner keys[32 each]`, passed as raw init bytes (the manifest declares no init type, like `bounty-escrow`: the stand length-prefixes a declared `bytes` type) |
 | `treasury.deposit` | empty; value in `extra`. Anyone, owners or contracts. SHELL funds the FUEL for payouts |
 | `treasury.propose` | `kind u8 · currency u32 · aux u32 · amount u128 · target[64]` (89 B) |
-| `treasury.approve/cancel/execute` | `proposal id u64` |
+| `treasury.approve/revoke/cancel/execute` | `proposal id u64` |
 | `treasury.freeze` | empty |
 
-`target` is a recipient address (`TRANSFER`) or an owner key in its first 32 bytes
-(owner changes); for every other kind it is zero. `SET_POLICY` uses `amount` as the
-fast limit. Unused fields must be zero.
+`target` is a recipient address (`TRANSFER`), an owner key in its first 32 bytes
+(owner changes) or the window limit as `u128` in its first 16 bytes (`SET_POLICY`,
+with `amount` = fast limit and `aux` = window seconds). Unused fields must be zero.
 
-State is a fixed 3136-byte image, full-replaced on each call. Errors 4000–4017;
-4008 is retired and not in the ABI.
+State is a fixed 3264-byte image, full-replaced on each call. Errors 4000–4017.
 
 ## Verify
 
 ```sh
 pip install blake3
-./scripts/check.sh      # id rule, manifests, fmt, clippy -D warnings, tests
+./scripts/check.sh      # id rule, manifests, fmt, clippy (native and wasm32) -D warnings, tests
 ```
 
 On Linux with the SDK commands installed, build both contracts and run the journey:
@@ -85,14 +85,44 @@ Built with `avm-contract-build` (Rust 1.93.0):
 
 | | WASM | ACAB | descriptor |
 |---|---|---|---|
-| treasury | 63,211 B | 1,756 B | 66 B |
-| payee | 39,457 B | 355 B | 66 B |
+| treasury | 56,198 B | 2,427 B | 66 B |
+| payee | 27,867 B | 355 B | 66 B |
 
 A treasury deploy body is WASM + ACAB + descriptor + init data + the envelope. With
-a 3-owner init (126 B) and a 289-byte envelope that is **65,448 B**, 88 B under
-`max_body_size = 65536`. The stand rejects a larger body with `BodyTooLarge`; an
-intermediate build with a 66,701 B body was rejected, and this one deploys. The
-margin is thin, so any new code in the treasury needs a size check.
+a 3-owner init (126 B) and a 289-byte envelope (the docs state 288) that is
+**59,106 B**, 6,430 B under `max_body_size = 65536`.
+
+The same contracts built as ordinary `std` crates were much larger (treasury WASM
+66,234 B, a 69,165 B body, too big to deploy; the stand rejects a 66,701 B body with
+`BodyTooLarge`). Most of the difference is the allocator and panic machinery that
+`std` links in, not the contract logic.
+
+## `no_std` guest runtime
+
+On `wasm32` both contracts are `no_std`. `contracts/treasury/src/rt.rs`, which the
+payee includes by path, supplies what `std` would have:
+
+- a bump `#[global_allocator]` over a static 128 KiB heap, recycled whenever no
+  allocation is live (so it is safe even if an instance serves several messages);
+  an allocation failure traps;
+- a `#[panic_handler]` that traps (`unreachable`).
+
+This is the only `unsafe` code in the example. The contracts keep
+`forbid(unsafe_code)` on native builds and use `deny(unsafe_code)` on `wasm32`, with
+a single `allow` on the `rt` module. The SDK itself is already `no_std` and its
+macro does not install an allocator, so there is no conflict.
+
+The heap holds a copy of the whole init input, which contains the deploy body, so
+it is sized by `max_body_size`, not by the steady state: the journey passes with a
+64 KiB heap (deploy body 59 KB) and fails at 32 KiB. At the largest allowed body,
+65,536 B, the peak is estimated below 80 KB, which was not measured.
+
+Tried and not kept (measured on an earlier, reduced build of the treasury): `opt-level`
+`z`, 2 and 3 (all larger for the treasury),
+`strip = true` and `--gc-sections` (no change, the builder already strips and the
+linker already collects), and replacing indexing with `get()` (about 300 B on the
+payee, and the `core::fmt` block that remains is retained by panic sites inside the
+SDK). Nightly `build-std` and `panic_immediate_abort` were not used.
 
 ## Verified on `avm-local-stand`
 
@@ -104,17 +134,25 @@ treasury state and compares it with what the script computed on its own.
 - transfer: propose, approve (queued with `eta = now + delay`), execute refused
   before `eta` (`4007`), execute after it, callback delivered in the same step,
   receipt recorded by the payee;
+- revoke an approval (the queued proposal reopens, a second revoke is refused with
+  `4005`, a new approval requeues it with a restarted clock), then cancel;
 - a rejecting payee: the payout bounces, funds return and the proposal is queued
   again; after the payee accepts, the same proposal pays out;
-- `SET_POLICY` fast lane: a transfer within the limit has `eta = now` and executes
-  at once; one unit above it still waits for the delay and is then cancelled;
+- `SET_DELAY` changes the eta of later proposals; `SET_THRESHOLD` demotes a queued
+  proposal that no longer has enough approvals, and lowering it works under the
+  higher threshold;
+- `SET_POLICY`: a transfer within the fast limit has `eta = now` and executes at
+  once; a larger one waits; a transfer past the window limit is refused with `4008`
+  and stays queued; a bounced payout gives its allowance back; after the window
+  ends a new one opens and the refused transfer goes through;
 - add an owner, then remove it; freeze (propose and execute refused with `4003`),
   unfreeze without delay;
-- all 14 events appear on the stand, and the stand journal replays to the same roots.
+- all 17 events appear on the stand, and the stand journal replays to the same roots.
 
-**FUEL.** Every call fits in the smallest reserve the stand accepts, 1 SHELL
-(1,000,000 FUEL); a reserve of 0 is refused (`RouteRequiresFee`). The stand does not
-report exact FUEL per call, so no finer figure is claimed.
+**FUEL.** All 88 calls of the journey fit in the smallest reserve the stand accepts,
+1 SHELL (1,000,000 FUEL); a reserve of 0 is refused (`RouteRequiresFee`). The stand
+does not report exact FUEL per call, so no finer figure is claimed. Fees and storage
+rent are charged to the contract's own SHELL, so the script tops both accounts up.
 
 **`input.extra`.** It is the account balance *after* the message's own value is
 credited: with 1000 C7 already held and 777 attached, the contract saw 1777. The
@@ -124,22 +162,17 @@ solvency check is written so it holds either way.
 
 Also verified natively: all tests, clippy, and that the id rule
 (`u64_le(blake3(name)[0..8])`) reproduces the official ids of `bounty-escrow` and
-`fungible-token`. The ids in the real ACAB match `ids.rs` (7 treasury methods, 3
-payee methods, 14 events). The tests drive canonical ACMI frames built from the
-SDK's documented layout.
+`fungible-token`. The ids in the real ACAB match `ids.rs` (8 treasury methods, 3
+payee methods, 17 events). The tests drive canonical ACMI frames built from the
+SDK's documented layout. The native tests run the `std` code path; the bump
+allocator and the trapping panic handler are exercised only by the stand journey.
 
 Covered only by the native tests, not by the stand journey: proposal expiry, the
 8-owner cap, table limits, callbacks while frozen, non-canonical state rejection.
 
 Unaudited, not for real funds.
 
-**Cut to fit the deploy-body limit.** An earlier design also had `revoke`, threshold
-and delay proposals, and a per-window spending cap. They were removed because the
-treasury did not fit `max_body_size`. Compiler profile changes (`opt-level` z, 1, 2,
-3) and several refactors did not help; the `core::fmt` and panic code that remains
-comes from the SDK and `std` and is shared with the payee.
-
 Known limits: the solvency check cannot see a shortfall smaller than the value
-arriving in the same message; there is no spending cap, so a threshold of owners can
-move any amount after the delay; a single owner can freeze (that is the design), so
-the owner set must trust each member not to grief.
+arriving in the same message; a bounce restores the spending allowance only if the
+window has not rolled over meanwhile; a single owner can freeze (that is the
+design), so the owner set must trust each member not to grief.
