@@ -18,7 +18,6 @@ name = "avm-vault-receiver"
 version = "0.1.0"
 dependencies = [
  "avm-contract-sdk",
- "avm-vault-amm",
 ]
 
 [[package]]

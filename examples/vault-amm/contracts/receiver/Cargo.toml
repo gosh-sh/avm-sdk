@@ -9,4 +9,3 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 avm-contract-sdk = { path = "../../../../crates/avm-contract-sdk" }
-avm-vault-amm = { path = "../amm", default-features = false }
