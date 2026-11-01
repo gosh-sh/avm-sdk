@@ -655,10 +655,6 @@ fn forged_or_inexact_callbacks_are_rejected_and_the_payout_stays_pending() {
     let forged = |sim: &mut Sim, how: Settle, method: u64, source: AccountAddress| {
         sim.settle_with(addr(5), how, h, method, source)
     };
-    // Delivered, but the echoed receipt is wrong or missing.
-    let wrong = payout_receipt(C0, 0, 999);
-    failure(&forged(&mut sim, Settle::Delivered(wrong), ids::CALLBACK, addr(5)), ERR_CALLBACK);
-    failure(&forged(&mut sim, Settle::Delivered(vec![]), ids::CALLBACK, addr(5)), ERR_CALLBACK);
     // Delivered, yet principal came back with it.
     let returning = Settle::DeliveredReturning(receipt.clone(), vec![(C0, 1_000)]);
     failure(&forged(&mut sim, returning, ids::CALLBACK, addr(5)), ERR_CALLBACK);
@@ -867,22 +863,15 @@ fn an_underfunded_vault_refuses_to_operate() {
 }
 
 #[test]
-fn the_balance_check_works_before_or_after_the_transfer_is_credited() {
+fn deposit_requires_the_documented_post_credit_balance() {
     let mut sim = sim();
-    accepted(&sim.call_with_pre_credit_balance(
-        ALICE,
-        ids::DEPOSIT,
-        &[],
-        &[(C0, 500_000), (C1, 700_000)],
-    ));
-    sim.assert_accounting();
-    accepted(&sim.call_with_pre_credit_balance(ALICE, ids::DEPOSIT, &[], &[(C0, 1)]));
-    let mut body = Vec::new();
-    for value in [500_001u128, 700_000, 0, 0] {
-        body.extend_from_slice(&value.to_le_bytes());
-    }
-    body.extend_from_slice(&NEVER.to_le_bytes());
-    accepted(&sim.call_with_pre_credit_balance(ALICE, ids::ADD_LIQUIDITY, &body, &[]));
+    failure(
+        &sim.call_with_pre_credit_balance(ALICE, ids::DEPOSIT, &[], &[(C0, 500_000)]),
+        ERR_INSOLVENT,
+    );
+    accepted(&sim.deposit(ALICE, 500_000, 700_000));
+    accepted(&sim.deposit(ALICE, 1, 0));
+    accepted(&sim.add_liquidity(ALICE, (500_001, 700_000), (0, 0), NEVER));
     sim.assert_accounting();
 }
 
@@ -908,4 +897,95 @@ fn math_and_contract_agree_on_a_published_example() {
     assert_eq!(math::swap_out(1_000_000, 1_000_000, 10_000, 30), Ok(9_871));
     assert_eq!(math::swap_in(1_000_000, 1_000_000, 9_000, 30), Ok(9_110));
     assert_eq!(math::sqrt_product(1_000_000, 1_000_000) - MINIMUM_LIQUIDITY, 999_000);
+}
+
+#[test]
+fn successful_native_callbacks_with_bad_bodies_do_not_block_other_holders() {
+    let mut sim = sim();
+    accepted(&sim.deposit(MALLORY, 8, 0));
+    accepted(&sim.deposit(BOB, 10, 0));
+    for index in 0..PENDING_SLOTS {
+        let recipient = addr(100 + index as u8);
+        accepted(&sim.withdraw(MALLORY, C0, 1, recipient));
+        let mut receipt = payout_receipt(C0, index as u64, 1);
+        let body = match index {
+            0 => vec![],
+            1 => vec![0xff; 31],
+            2 => vec![0xff; 33],
+            3 => {
+                receipt[0] ^= 1;
+                receipt
+            }
+            4 => {
+                receipt[4] ^= 1;
+                receipt
+            }
+            5 => {
+                receipt[8] ^= 1;
+                receipt
+            }
+            6 => {
+                receipt[16] ^= 1;
+                receipt
+            }
+            _ => vec![0xff; 32],
+        };
+        let result = if index == PENDING_SLOTS - 1 {
+            Settle::DeliveredReturning(body, vec![(SHELL_CURRENCY_ID, 7)])
+        } else {
+            Settle::Delivered(body)
+        };
+        accepted(&sim.settle(recipient, result));
+        assert!(sim.pool().pending.is_empty());
+    }
+    accepted(&sim.withdraw(BOB, C0, 10, addr(120)));
+    accepted(&sim.settle(addr(120), Settle::Bounced(vec![(C0, 10)])));
+    assert_eq!(sim.ledger(BOB).0[0], 10);
+    sim.assert_accounting();
+}
+
+#[test]
+fn deposits_cannot_hide_existing_shortfalls_in_either_currency() {
+    for side in 0..2 {
+        for deposit in [9, 10, 11, 100] {
+            let mut sim = sim();
+            accepted(&sim.deposit(ALICE, 100, 100));
+            sim.vault.insert([C0, C1][side], 90);
+            let before = sim.state.clone();
+            let output =
+                if side == 0 { sim.deposit(BOB, deposit, 0) } else { sim.deposit(BOB, 0, deposit) };
+            failure(&output, ERR_INSOLVENT);
+            assert_eq!(sim.state, before);
+        }
+    }
+}
+
+#[test]
+fn twap_wraps_the_full_price_instead_of_saturating_it() {
+    let cases = [
+        (1u128, (1u128 << 64) - 1, u128::MAX - ((1u128 << 64) - 1), 1u128),
+        (1, 1u128 << 64, 0, 1),
+        (1, (1u128 << 64) + 1, 1u128 << 64, 0),
+        // floor((2^100 + 1) * 2^64 / 3), reduced modulo 2^128.
+        (3, (1u128 << 100) + 1, 113427455640312821160607117168492587690, 0),
+    ];
+    for (a, b, price0, price1) in cases {
+        for reverse in [false, true] {
+            let mut sim = sim();
+            let (a, b) = if reverse { (b, a) } else { (a, b) };
+            sim.seed(ALICE, a, b);
+            let price = if reverse { [price1, price0] } else { [price0, price1] };
+            for (round, actor) in [BOB, CAROL].into_iter().enumerate() {
+                sim.advance(1);
+                accepted(&sim.deposit(actor, a, b));
+                accepted(&sim.add_liquidity(actor, (a, b), (0, 0), NEVER));
+                let ticks = round as u128 + 1;
+                assert_eq!(
+                    sim.pool().cumulative,
+                    [price[0].wrapping_mul(ticks), price[1].wrapping_mul(ticks)]
+                );
+                sim.assert_accounting();
+            }
+        }
+    }
 }

@@ -251,7 +251,7 @@ fn the_receiver_enforces_who_may_call_it_and_what_it_accepts() {
 }
 
 #[test]
-fn a_receiver_that_echoes_the_wrong_receipt_cannot_settle_the_payout() {
+fn a_receiver_that_echoes_the_wrong_receipt_still_releases_the_slot() {
     let mut sim = funded();
     let mut dest = Dest::deploy(10);
     accepted(&dest.bind(addr(POOL)));
@@ -259,11 +259,14 @@ fn a_receiver_that_echoes_the_wrong_receipt_cannot_settle_the_payout() {
     let payout = sim.outbox[0].clone();
     let mut forged = payout.body.clone();
     forged[16] ^= 1;
-    let output = sim.settle(dest.address, Settle::Delivered(forged));
-    assert_ne!(output.status_code, 0);
-    assert_eq!(sim.pool().pending.len(), 1, "the payout stays pending");
-    // The genuine echo still settles it.
-    accepted(&sim.settle(dest.address, Settle::Delivered(payout.body)));
+    accepted(&sim.settle(dest.address, Settle::Delivered(forged)));
     assert!(sim.pool().pending.is_empty());
+    // A second holder can withdraw to that same recipient immediately.
+    accepted(&sim.deposit(BOB, 10, 0));
+    accepted(&sim.withdraw(BOB, C0, 10, dest.address));
+    let payout = sim.outbox[0].clone();
+    let reply = dest.receive(addr(POOL), &payout);
+    accepted(&reply);
+    accepted(&sim.settle(dest.address, Settle::Delivered(reply.callback_result_body)));
     sim.assert_accounting();
 }

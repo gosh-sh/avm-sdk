@@ -10,7 +10,7 @@ swaps exact-in and exact-out, checks the TWAP accumulators, reads the status vie
 withdraws to the receiver (accepted and rejected payouts) and replays the journal. After every step the decoded AMM ledger is checked against the amounts
 the script computed on its own. The stand does not expose per-account ECC
 balances, so the vault's real balances are checked indirectly: the contract's
-own solvency check compares `input.extra` with its ledger on every call and
+own solvency check compares post-credit `input.extra` on external calls (including the new ledger on deposits) and
 fails the call with 3012 if the vault holds less than the ledger promises.
 """
 import argparse
@@ -120,6 +120,7 @@ class Stand:
                     break
         else:
             self.fuel.append((method, None))
+        assert self.fuel[-1][1] == 1, {"method": method, "fuel_bound": self.fuel[-1][1]}
         result = self.command("call", **options, **stamps)
         assert result["status"] == "ok", result
         raw = bytes.fromhex(result["raw_executor_output"])
@@ -282,6 +283,22 @@ def run(sdk, output):
             assert bob not in view["accounts"], "an empty holder is compacted away"
             got = receiver_view(stand.account_state(receiver))
             assert got["count"] == 2 and got["last"] == receipt(C0, 2, 500), got
+
+            # Adversarial receiver accepts principal but emits an empty receipt.
+            # More than eight such payouts must not exhaust the global pending slots.
+            stand.call(receiver, "vault.receiver.reject", b"\x02", identity="developer")
+            stand.call(amm, "vault.amm.deposit", extra=f"{C0}:9", identity="package-owner")
+            for _ in range(9):
+                before_count = receiver_view(stand.account_state(receiver))["count"]
+                stand.call(amm, "vault.amm.withdraw", le(C0, 4) + le(1, 16) + payee,
+                           identity="package-owner")
+                assert amm_view(stand.account_state(amm))["pending"] == 0
+                assert receiver_view(stand.account_state(receiver))["count"] == before_count + 1
+            # A different holder can still exit after the adversarial payouts.
+            stand.call(amm, "vault.amm.deposit", extra=f"{C0}:1", identity="user")
+            stand.call(amm, "vault.amm.withdraw", le(C0, 4) + le(1, 16) + payee, identity="user")
+            assert amm_view(stand.account_state(amm))["pending"] == 0
+            stand.call(receiver, "vault.receiver.reject", b"\x00", identity="developer")
 
             # Alice leaves the pool and withdraws part of it.
             body = le(500_000, 16) + le(0, 16) + le(0, 16) + le(NEVER, 4)

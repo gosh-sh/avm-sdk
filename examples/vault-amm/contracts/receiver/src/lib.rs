@@ -64,7 +64,7 @@ fn address(bytes: &[u8], offset: usize) -> Result<AccountAddress, u32> {
 
 fn process(input: MessageInput<'_>) -> Result<MessageOutput, u32> {
     let bytes = input.state;
-    if bytes.len() != STATE_BYTES || bytes[OFF_REJECT] > 1 || bytes[97..OFF_COUNT] != [0; 7] {
+    if bytes.len() != STATE_BYTES || bytes[OFF_REJECT] > 2 || bytes[97..OFF_COUNT] != [0; 7] {
         return Err(ERR_ARGS);
     }
     let owner: [u8; 32] = arr(bytes, 0)?;
@@ -90,7 +90,7 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput, u32> {
             }
             state[OFF_BOUND..OFF_REJECT].copy_from_slice(body);
         } else {
-            if body.len() != 1 || body[0] > 1 {
+            if body.len() != 1 || body[0] > 2 {
                 return Err(ERR_ARGS);
             }
             state[OFF_REJECT] = body[0];
@@ -134,7 +134,10 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput, u32> {
     state[OFF_COUNT..OFF_COUNT + 8].copy_from_slice(&count.saturating_add(1).to_le_bytes());
     state[OFF_LAST..OFF_LAST + 32].copy_from_slice(body);
     let mut output = MessageOutput::success(StateUpdate::FullReplace(state));
-    output.callback_result_body = body.to_vec();
+    // Mode 2 is an adversarial fixture: delivery succeeds without an echo.
+    if bytes[OFF_REJECT] != 2 {
+        output.callback_result_body = body.to_vec();
+    }
     Ok(output)
 }
 
