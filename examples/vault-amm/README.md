@@ -8,7 +8,7 @@ one AVM contract plus a small companion contract used as a payout destination.
 |---|---|
 | `contracts/amm` | the AMM (`avm-vault-amm`), a message-isolated contract |
 | `contracts/receiver` | fixture that receives payouts, echoes the receipt, or rejects (exercises the bounce path) |
-| `tests` | 40 AMM tests, a 2450-vector arithmetic oracle, deterministic fuzzing, AMM↔Receiver integration |
+| `tests` | 42 AMM tests, a 2450-vector arithmetic oracle, deterministic fuzzing, AMM↔Receiver integration |
 | `scripts` | manifest→`ids.rs` generator/checker, Python big-int oracle, `check.sh`, `e2e.py` (real stand journey) |
 
 ## What it does
@@ -17,12 +17,16 @@ one AVM contract plus a small companion contract used as a payout destination.
 * **Add / remove liquidity** against the ledger. Uniswap-v2 shares: first mint is
   `sqrt(a0·a1) − 1000` (the 1000 are locked forever), later mints are
   proportional with the excess left in the ledger. Slippage minimums and a deadline on every call.
-* **Swap** exact-in with an LP fee (≤ 10%) and an optional protocol cut (≤ 50% of
-  the fee). Output rounds down in the pool's favour, so `k` never decreases.
+* **Swap** exact-in or exact-out with an LP fee (≤ 10%) and an optional protocol
+  cut (≤ 50% of the fee). Exact-in rounds output down; exact-out rounds the
+  required input up twice, always in the pool's favour, so `k` never decreases.
 * **Withdraw** ledger balances to any address. The payout is a message with a
   callback: the pool debits first, remembers one pending payout per recipient and
   re-credits the holder if delivery bounces. A success callback must echo the
   32-byte receipt `"VAM1" | currency u32 | id u64 | amount u128` exactly.
+* **TWAP** accumulators (UQ64.64 price × seconds, wrapping) for both directions,
+  and a read-only **`status`** method that emits the pool's reserves, fees, share
+  supply, op counter and pause flag as an event.
 * **Admin**: `set_params` (fees, pause), `collect_fees`. Pausing blocks new
   activity but never exits (withdrawals, remove-liquidity, callbacks keep working).
 * **Self-check on every call**: the canonical state is re-validated and the vault's
@@ -31,15 +35,30 @@ one AVM contract plus a small companion contract used as a payout destination.
 
 Errors are 3000–3015 (receiver 2200–2202), all declared in the manifests.
 
-### What was left out to fit the deploy limit
+### `no_std` guest runtime
 
-The AMM's first draft was 72,560 B of WASM, which `avm-local-stand` refuses to
-deploy: the whole deploy body (WASM + ACAB + descriptor + init data + 289 B of
-envelope) must fit `max_body_size = 65,536 B`. After size work that does not
-change behaviour (see the commit history), three features were removed:
-exact-output swaps (`swap_exact_out`; `math::swap_in` remains as a tested library
-function), the TWAP price accumulators (their 40 state bytes are now reserved and
-must be zero), and the read-only `status` method and event.
+The first draft was 72,560 B of WASM, which `avm-local-stand` refuses to deploy:
+the whole deploy body (WASM + ACAB + descriptor + init data + 289 B of envelope)
+must fit `max_body_size = 65,536 B`. An earlier revision of this example removed
+`swap_exact_out`, the TWAP accumulators and the `status` method to fit. They are
+back, because most of the size was not the contract logic but the allocator and
+panic machinery that `std` links in.
+
+On `wasm32` both contracts are now `no_std`. `contracts/amm/src/rt.rs`, which the
+receiver includes by path, supplies a bump `#[global_allocator]` over a static
+128 KiB heap, recycled whenever no allocation is live (an allocation failure
+traps), and a `#[panic_handler]` that traps. The SDK is already `no_std` and its
+export macro installs no allocator. The receiver no longer depends on the amm
+crate; it includes `ids.rs` by path.
+
+This is the only `unsafe` code in the example: native builds keep
+`forbid(unsafe_code)`, `wasm32` uses `deny(unsafe_code)` with one `allow` on the
+`rt` module. The heap holds a copy of the whole init input, which contains the
+deploy body, so it is sized by `max_body_size`, not by the steady state: the
+journey passes with a 64 KiB heap (deploy body 57 KB) and fails at 32 KiB. At the
+largest allowed body the peak is estimated below 80 KB, which was not measured.
+The native tests run the `std` code path; the allocator and panic handler are
+exercised only by the stand journey.
 
 ## Wire layouts (little endian)
 
@@ -48,11 +67,12 @@ must be zero), and the read-only `status` method and event.
 | `vault.amm.deposit` | empty; value in `extra` (either/both pool currencies) |
 | `vault.amm.add_liquidity` | desired0 u128 · desired1 u128 · min0 u128 · min1 u128 · deadline u32 (68 B) |
 | `vault.amm.remove_liquidity` | shares u128 · min0 u128 · min1 u128 · deadline u32 (52 B) |
-| `vault.amm.swap_exact_in` | direction u8 · amount_in u128 · min_out u128 · deadline u32 (37 B) |
+| `vault.amm.swap_exact_in` / `_out` | direction u8 · exact u128 · bound u128 · deadline u32 (37 B); bound = min out / max in |
 | `vault.amm.withdraw` | currency u32 · amount u128 · recipient dapp_id[32]+account_id[32] (84 B) |
 | `vault.amm.set_params` | swap_fee_bps u16 · protocol_fee_bps u16 · paused u8 (5 B) |
 | `vault.amm.collect_fees` | empty; admin only |
 | `vault.amm.topup` | SHELL only, funds the FUEL reserve for payouts |
+| `vault.amm.status` | empty; emits an `amm.status` event, changes no ledger or reserve |
 
 State is a fixed 4376-byte image (32 holder slots, 8 pending payouts, ring of 16
 receipts), full-replaced each call and kept under the 65536-byte FullReplace limit.
@@ -80,13 +100,13 @@ Built with SDK release `avm-dev-2662a32e7c91-sdk-93e34e16e449`:
 
 | artifact | AMM | receiver |
 |---|---|---|
-| `contract.wasm` | 63,130 B | 39,396 B |
-| `contract.acab` | 1,922 B | 361 B |
+| `contract.wasm` | 54,484 B | 27,862 B |
+| `contract.acab` | 2,103 B | 361 B |
 | `contract.descriptor` | 66 B | 66 B |
 
-AMM deploy body: 63,130 + 1,922 + 66 + 64 (init) + 289 (envelope) = 65,471 B of 65,536 B.
-There is little headroom: adding methods or events to the AMM will need further
-size work.
+AMM deploy body: 54,484 + 2,103 + 66 + 64 (init) + 289 (envelope) = 57,006 B of
+65,536 B, so 8,530 B of headroom. As ordinary `std` crates the same code was
+63,130 B of WASM with the three features removed.
 
 ## Verified on the builder and the local stand
 
@@ -95,12 +115,15 @@ size work.
   `scripts/gen_ids.py`.
 * `scripts/check.sh` passes (fmt, clippy `-D warnings`, all tests).
 * `scripts/e2e.py` passes on `avm-local-stand`: deploy of both contracts, bind,
-  SHELL top-up, deposit, add liquidity, swap (and a rejected slippage bound),
+  SHELL top-up, deposit, add liquidity, swap exact-in (and a rejected slippage
+  bound) with the TWAP accumulators compared against an independent computation,
   withdraw to the receiver with callback settlement, a rejecting receiver that
   bounces the payout and re-credits the holder, a retried payout, remove
-  liquidity, and journal replay with identical roots. After each step the decoded
+  liquidity, an exact-out swap (the double round-up input, `k` not decreasing, a
+  bound one unit too tight refused without effects), the `status` view, and journal
+  replay with identical roots. After each step the decoded
   ledger and reserves are compared with figures the script computes itself.
-* Each call of that journey completes within a 1 SHELL FUEL reserve
+* Each of the 18 calls of that journey completes within a 1 SHELL FUEL reserve
   (1,000,000 FUEL; the per-message cap is 10,000,000). This is an upper bound:
   the stand does not report the exact `fuel_used` for successful calls.
 * `publish-version` of a second AMM build into the same package succeeds. The
