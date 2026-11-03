@@ -22,6 +22,10 @@ The available stand commands are listed in the
   callback accounting checked against an independent arithmetic oracle.
 - [fungible-token](fungible-token/README.md): a fixed-supply internal token ledger
   with bounded holder slots, transfer errors and event/replay checks.
+- [lending-market](lending-market/README.md): over-collateralised lending with
+  share-based supply, a utilisation interest curve, liquidations, bad-debt
+  write-off and acknowledged payouts, sized for the 64 KiB deploy limit from the
+  start; checked by behaviour, integration and randomized invariant tests.
 - [factory-child-provenance](factory-child-provenance/README.md): derived-address
   checks and their limits. A derived address does not authenticate current code.
 
