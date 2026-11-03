@@ -117,9 +117,8 @@ impl Config {
             && self.params_valid()
     }
 
-    /// The bounds of every admin-adjustable parameter. They guarantee that a
-    /// liquidation at the threshold always leaves the position no worse off and
-    /// that no rate or move can be set to an extreme value.
+    /// Bounds on admin-adjustable parameters, including a margin for the
+    /// liquidation bonus at the threshold in the continuous model.
     pub fn params_valid(&self) -> bool {
         self.ltv != 0
             && self.ltv < self.liq

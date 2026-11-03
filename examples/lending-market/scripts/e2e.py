@@ -14,9 +14,9 @@ remaining bad debt is written off, the lender redeems its shares, and withdrawal
 go to the payee (delivered, bounced by a payee that rejects, and delivered again).
 
 The script carries its own model of the accounting rules (interest index, share
-price, rounding directions, liquidation and write-off). After every step the
-contract state is decoded and compared with the model, so a disagreement in either
-direction fails the run. The stand journal is replayed at the end.
+price, rounding directions, liquidation and write-off). At the checkpoints,
+decoded accounting fields and accounts are compared with the model. The stand
+journal is replayed at the end.
 """
 import argparse
 import json
@@ -114,8 +114,8 @@ class Stand:
         args = json.dumps(body) if isinstance(body, int) else json.dumps("0x" + body.hex()) if body else "null"
         options = dict(address=address, method=method, args_json=args, identity=identity,
                        extra_currencies=extra)
-        # Smallest FUEL reserve (1 SHELL = 1_000_000 FUEL, capped at 10_000_000) that lets the call
-        # finish, found on a copy of the state so the journey itself is unaffected.
+        # Probe the expected call status on copies of the state. Each SHELL buys
+        # 1_000_000 FUEL. The main journey checks settlement separately.
         for shells in (1, 2, 3, 5, 10):
             probe = self.state.with_suffix(".probe")
             shutil.copyfile(self.state, probe)
@@ -307,11 +307,12 @@ class Model:
         self.accrue(now)
         target = self.accounts[borrower]
         assert target["scaled"] > 0 and target["col"] == 0
-        loss = self.debt_of(target["scaled"])
-        absorbed = min(loss, self.reserves)
-        self.reserves -= absorbed
+        before = self.debt_of(self.scaled)
         self.scaled -= target["scaled"]
         target["scaled"] = 0
+        loss = before - self.debt_of(self.scaled)
+        absorbed = min(loss, self.reserves)
+        self.reserves -= absorbed
         return loss, absorbed
 
     def redeem(self, now, key, shares):
@@ -526,14 +527,14 @@ def run(sdk, output):
                 assert replay[key] == inspect[key], (key, replay[key], inspect[key])
             summary = {"status": "PASS", "market": market, "payee": payee, "debt_after_30_days": debt,
                        "liquidations": liquidations, "write_off": {"loss": loss, "absorbed": absorbed},
-                       "redeemed": assets, "final": final, "fuel_reserve_needed_shells": stand.fuel,
+                       "redeemed": assets, "final": final, "fuel_probe_reserve_shells": stand.fuel,
                        "events_seen": sorted(stand.events_seen), "events": events, "inspect": inspect,
                        "replay": replay}
             output.write_text(json.dumps(summary, indent=2, default=str) + "\n")
             print(f"lending-market journey PASS: {output}")
             print(f"debt after 30 days: {debt} (borrowed 120000); liquidations: {len(liquidations)}; "
                   f"write-off loss {loss}, absorbed by reserves {absorbed}")
-            print("FUEL needed per call (smallest reserve in SHELL, 1 SHELL = 1,000,000 FUEL; cap 10):")
+            print("FUEL probe (smallest tried reserve with expected status in SHELL, 1 SHELL = 1,000,000 FUEL; cap 10):")
             for method, shells in stand.fuel:
                 print(f"  {'> 10 (cap)' if shells is None else '<= %d M' % shells:>11}  {method}")
         except Exception:
