@@ -10,7 +10,7 @@ payouts**. One contract, no dependencies beyond the SDK.
 | `contracts/lending` | the market (`avm-lending-market`): `state.rs` (canonical state), `math.rs` (256-bit `mul_div`, rate curve), `rt.rs` (`no_std` guest runtime) |
 | `contracts/payee` | fixture that receives a payout, echoes the receipt, or rejects it (exercises the bounce path) |
 | `tests` | 31 behaviour tests, 8 market↔payee integration tests, 1 randomized invariant test (40 seeds × 1,500 steps + crash scenarios) |
-| `scripts` | `gen_abi.py` (manifests + `ids.rs` from one description), `check.sh` |
+| `scripts` | `gen_abi.py` (manifests + `ids.rs` from one description), `check.sh`, `e2e.py` (a loan's life on `avm-local-stand`) |
 | `docs/SPEC.md` | the accounting rules and rounding directions |
 
 ## How it works
@@ -86,7 +86,14 @@ On Linux with the SDK commands installed:
 ```sh
 avm-contract-build build --manifest-path contracts/lending/Cargo.toml
 avm-contract-build build --manifest-path contracts/payee/Cargo.toml
+python3 scripts/e2e.py --sdk ~/.local/share/avm-sdk/current
 ```
+
+`e2e.py` deploys the market and a payee and walks three stand identities through
+supply, collateral, borrowing, thirty days of interest, a price falling in steps of
+at most 20%, liquidation in rounds, a write-off, redemption and withdrawals
+(delivered, bounced by a payee that rejects, delivered again). It carries its own
+model of the accounting and compares the decoded state with it after every step.
 
 The randomized test checks after every accepted call that the ledger equals the
 physical balance **exactly** for both currencies, that everything ever deposited is
