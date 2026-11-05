@@ -218,6 +218,10 @@ def verify_contents(actual, expected, claimed_roots, compact):
     return roots
 
 
+def batch_reserve_shells(current, operation_prices=True):
+    return 2 if current and operation_prices else 1
+
+
 def expected_journey(bundle, label, identities, transcript, times, current):
     """Construct the complete expected leaves from public fixture inputs.
 
@@ -233,6 +237,8 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     assert label in labels
     version = label == "version-upgrade"
     batch = label == "contract-batch-patch"
+    operation_prices = "operator_cost=op_prices_v1;" in (bundle / "profiles/wasmtime-release-profile.v1").read_text()
+    batch_reserve = batch_reserve_shells(current, operation_prices)
     failure = label in {"trap", "out-of-fuel", "invalid-event"}
     second = "contract-a-v2" if version else "contract-b-failure" if failure else label
     names = ["contract-a-v1", second]
@@ -334,11 +340,11 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     external(transcript[2], 0, user, 1, start + 3,
              int.from_bytes(h(b"causal.a.forward")[:8], "little"), forward, extras=[(0, 100), (7, 40)])
     delivered = struct.pack("<BBHI", 0, 0 if batch else 4, 2, 16) + method
-    delivered += le(1 if batch else 0, 16) + le(6, 8) + le(start + 3, 4) + bytes(4)
+    delivered += le(batch_reserve if batch else 0, 16) + le(6, 8) + le(start + 3, 4) + bytes(4)
     delivered += first + second_address + (b"" if batch else handler) + le(0, 4) + le(37, 16) + le(7, 4) + le(11, 16) + b"\x42" * 16
     assert transcript[3] == delivered, "complete VM-produced message differs"
     sender = bytearray(le(1, 8) + bytes(64))
-    sender_shells = funded - (39 + 20 + 72) * 2 - 2 - 1
+    sender_shells = funded - (39 + 20 + 72) * 2 - 2 - (batch_reserve if batch else 1)
     if batch:
         external(transcript[4], 1, user, 1, start + 4, int.from_bytes(method, "little"), b"")
         receiver = le(65536, 4) + le(1, 8) + bytes(65528)

@@ -1,0 +1,23 @@
+[build]
+max_memory_bytes = 2097152
+
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "u32"
+name = "pages"
+
+[[abi.methods]]
+name = "memory.probe"
+input_type_id = 1
+
+[[abi.errors]]
+status_code = 1000
+name = "invalid_page_count"
+message = "page count must contain four bytes"

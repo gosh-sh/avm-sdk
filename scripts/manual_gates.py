@@ -246,6 +246,12 @@ def main():
     (consumer_sdk / "bin").mkdir()
     for binary in (builder, stand):
         (consumer_sdk / "bin" / binary.name).symlink_to(binary)
+    run("contract-memory-sections", [sys.executable, "-B", str(sdk / "scripts/tests/contract_memory.py"),
+        "--sdk", str(consumer_sdk), "--builder", str(builder),
+        "--output", str(evidence / "contract-memory-sections")], environment=guest)
+    run("contract-memory-lifecycle", [sys.executable, "-B", str(sdk / "scripts/tests/memory_lifecycle.py"),
+        "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
+        "--profile", str(profile), "--output", str(evidence / "contract-memory-lifecycle")], environment=guest)
     run("sdk-public-issue-paths", [sys.executable, "-B", str(sdk / "scripts/tests/sdk_issue_public_paths.py"),
         "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
         "--profile", str(profile), "--out", str(evidence / "public-issue-paths")], environment=guest)

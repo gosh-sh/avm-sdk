@@ -19,6 +19,13 @@ written to `target/avm` below that directory. The SDK 0.5.0 builder enables
 target flags. The native host compiler in the release profile is a separate
 identity, Rust/Cargo 1.98.0.
 
+`[build].max_memory_bytes` in `avm-contract.toml` selects the module's declared
+maximum linear memory. Without it, deployment builds read `avm-memory.json`.
+Use `build --for-testing` for marked measurement artifacts and
+`record-memory --manifest-path Cargo.toml --report <JSONL>` to save test peaks.
+Repeat `--code-hash <hash>` for other tested variants of that contract.
+See [contract memory](contract-memory.md) for constraints and local checks.
+
 ## avm-local-stand
 
 Every invocation requires:
@@ -54,6 +61,11 @@ lowercase hex characters for the account id.
 
 Unknown commands, aliases, duplicate options, incomplete artifact triples, and
 options not owned by the selected command are rejected.
+
+`--check-memory` additionally checks an executing command's synchronous guest
+runs, reports peak linear-memory bytes and the maximum, warns at 80% of the declared
+maximum and fails on rejected growth or incomplete capture.
+See [contract memory](contract-memory.md) for the report's scope.
 
 ## Additional tooling
 

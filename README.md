@@ -48,6 +48,7 @@ See its manifest for measured ELF dependencies and the
 - [Getting Started](docs/getting-started.md)
 - [FUEL And SHELL](docs/fuel-and-fees.md)
 - [Runtime Limits, Rent And Addresses](docs/runtime-limits.md)
+- [Contract Memory Maximum And Local Checks](docs/contract-memory.md)
 - [SDK Tooling](docs/tooling-preview.md)
 - [Command-Line Reference](docs/cli-reference.md)
 - [Contract Examples](examples/README.md)

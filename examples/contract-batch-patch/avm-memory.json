@@ -1,0 +1,9 @@
+{
+  "initial_memory_bytes": 1703936,
+  "peak_memory_bytes": 1835008,
+  "test_calls": 12,
+  "test_wasm_hashes": [
+    "e45103bbd8f937c323ea7775cb1f6fc9176b176f5d08d6b8ca993bde549098ea"
+  ],
+  "version": 1
+}

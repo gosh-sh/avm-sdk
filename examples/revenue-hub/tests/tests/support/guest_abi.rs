@@ -1,4 +1,48 @@
-use wasmtime::{Config, Engine, Instance, Module, Store};
+use wasmtime::{Config, Engine, Instance, Module, ResourceLimiter, Store, StoreLimits};
+
+struct MemoryLimits {
+    inner: StoreLimits,
+    rejected: u64,
+}
+
+impl ResourceLimiter for MemoryLimits {
+    fn memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> wasmtime::Result<bool> {
+        let allowed = self.inner.memory_growing(current, desired, maximum)?;
+        if !allowed {
+            self.rejected += 1;
+        }
+        Ok(allowed)
+    }
+    fn memory_grow_failed(&mut self, error: wasmtime::Error) -> wasmtime::Result<()> {
+        self.rejected += 1;
+        self.inner.memory_grow_failed(error)
+    }
+    fn table_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> wasmtime::Result<bool> {
+        self.inner.table_growing(current, desired, maximum)
+    }
+    fn table_grow_failed(&mut self, error: wasmtime::Error) -> wasmtime::Result<()> {
+        self.inner.table_grow_failed(error)
+    }
+    fn instances(&self) -> usize {
+        self.inner.instances()
+    }
+    fn memories(&self) -> usize {
+        self.inner.memories()
+    }
+    fn tables(&self) -> usize {
+        self.inner.tables()
+    }
+}
 
 pub fn decode_hex(text: &str) -> Result<Vec<u8>, String> {
     if !text.len().is_multiple_of(2) {
@@ -31,10 +75,14 @@ pub fn check_vectors(wasm: &[u8], vectors: &str) -> Result<usize, String> {
         let (name, entrypoint) = (fields[0], fields[1]);
         let input = decode_hex(fields[2]).map_err(|error| format!("{name}: {error}"))?;
         let expected = decode_hex(fields[3]).map_err(|error| format!("{name}: {error}"))?;
-        let mut store = Store::new(&engine, ());
+        let mut store =
+            Store::new(&engine, MemoryLimits { inner: StoreLimits::default(), rejected: 0 });
+        store.limiter(|limits| limits);
         let instance = Instance::new(&mut store, &module, &[])
             .map_err(|error| format!("{name}: instantiate: {error}"))?;
         let memory = instance.get_memory(&mut store, "memory").ok_or("missing memory export")?;
+        let initial = memory.data_size(&store);
+        store.data_mut().rejected = 0;
         let alloc = instance
             .get_typed_func::<i32, i32>(&mut store, "avm_guest_alloc")
             .map_err(|error| format!("{name}: allocator export: {error}"))?;
@@ -82,6 +130,14 @@ pub fn check_vectors(wasm: &[u8], vectors: &str) -> Result<usize, String> {
             .map_err(|error| format!("{name}: free output: {error}"))?;
         free.call(&mut store, (pointer as i32, length as i32))
             .map_err(|error| format!("{name}: free input: {error}"))?;
+        if std::env::var_os("AVM_MEMORY_VECTOR_STATS").is_some() {
+            println!(
+                "AVM_MEMORY_USAGE {entrypoint} {initial} {} {} {}",
+                memory.data_size(&store),
+                store.data().rejected,
+                memory.ty(&store).maximum().unwrap_or(0) * 65_536
+            );
+        }
         count += 1;
     }
     if count == 0 {

@@ -6,10 +6,13 @@
 - Keep the Core-WASM V2 instruction set, admission rules and configured runtime limits.
 - Run the Revenue Hub guest ABI checks on Wasmtime 48.0.8.
 - Produce byte-for-byte reproducible release bundles from identical build inputs.
+- Derive deployment memory maxima from each contract's recorded test peak, with explicit overrides and local peak/growth checks; see [contract memory](contract-memory.md).
 
 <a id="compatibility"></a>
 
 ## Compatibility
+
+- Rebuilding a contract now requires its committed `avm-memory.json` or an explicit `build.max_memory_bytes`. Record peaks with that contract's largest-input tests before deployment; `--for-testing` artifacts are marked and must be rebuilt for deployment.
 
 - The guest crate remains version `0.1.1`. Contract WASM using the Core-WASM V2 instruction set remains admissible.
 - Existing WASM can consume different FUEL with the new prices. Recheck initialization, message and batch calls against their configured budgets, including allocator and cleanup work. Calls that previously succeeded can exhaust FUEL; paid calls can burn different SHELL amounts and return different unused reserves.

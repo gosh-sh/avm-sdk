@@ -18,6 +18,12 @@ def h(data):
 
 
 class FixtureOracleTests(unittest.TestCase):
+    def test_batch_fixture_reserve_keeps_the_published_two_shell_policy(self):
+        from fixture_oracle import batch_reserve_shells
+        self.assertEqual(batch_reserve_shells(True), 2)
+        self.assertEqual(batch_reserve_shells(False), 1)
+        self.assertEqual(batch_reserve_shells(True, operation_prices=False), 1)
+
     def test_empty_and_singleton_roots_use_the_selected_domains_and_maximal_path(self):
         for compact in (False, True):
             empty = b"AVM_MULTI_MAP_COMPACT_EMPTY_V1" if compact else b"AVM_MULTI_MAP_EMPTY"

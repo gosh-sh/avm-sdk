@@ -1,5 +1,10 @@
 # Contract Examples
 
+Each contract keeps `avm-memory.json` with the peak measured by its own tests.
+Deployment builds use that page-rounded peak; `build.max_memory_bytes` provides
+an explicit override. See [contract memory](../docs/contract-memory.md) to
+repeat measurements, check warnings and choose enough capacity.
+
 These contracts are deterministic fixtures for learning the SDK and exercising
 the local AVM stand. They use real SDK exports, canonical ABI metadata, state
 updates, messages, events, and upgrade intents. They are deliberately small and

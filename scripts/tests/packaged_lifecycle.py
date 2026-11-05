@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 import struct
 import subprocess
+import tomllib
 
 import blake3 as reference_blake3
 
@@ -94,7 +95,20 @@ def read_accounts(path):
     return read_state(path)[:2]
 
 
-def wasm_facts(data, batch):
+def fixture_memory_maximum(root, source):
+    """Keep the historical bundle oracle separate from deployment selection."""
+    config = tomllib.loads((root / "avm-contract.toml").read_text())
+    explicit = config.get("build", {}).get("max_memory_bytes")
+    if explicit is not None:
+        return explicit
+    if not source and (root / "avm-memory.json").is_file():
+        from contract_memory import declared_maximum
+        return declared_maximum(root / "avm-contract.toml")
+    # Earlier bundles and marked measurement builds used the admission cap.
+    return 33554432
+
+
+def wasm_facts(data, batch, maximum_bytes=33554432):
     """Independent section decoder; no builder/admission implementation is imported."""
     def leb(position):
         value = 0
@@ -122,7 +136,7 @@ def wasm_facts(data, batch):
             minimum, cursor = leb(cursor)
             maximum, cursor = leb(cursor)
             assert count == 1 and flags == 1 and cursor == end
-            assert 1 <= minimum <= maximum == 512
+            assert 1 <= minimum <= maximum and maximum * 65536 == maximum_bytes
             memory = {"minimum_bytes": minimum * 65536, "maximum_bytes": maximum * 65536}
         if section == 7:
             count, cursor = leb(position)
@@ -146,7 +160,7 @@ def wasm_facts(data, batch):
 
 
 class Journey:
-    def __init__(self, bundle, evidence, label):
+    def __init__(self, bundle, evidence, label, source=False):
         self.bundle = bundle
         self.evidence = evidence / label
         self.evidence.mkdir(parents=True)
@@ -155,10 +169,11 @@ class Journey:
         self.sequence = 0
         self.time = 1_800_000_000
         self.label = label
+        self.source = source
         self.command_history = []
         self.initial_state = None
         self.identities = None
-        self.current = json.loads((bundle / "BUILD-MANIFEST.json").read_bytes())["schema"] == "gosh.avm-sdk.release.v2"
+        self.current = source or json.loads((bundle / "BUILD-MANIFEST.json").read_bytes())["schema"] == "gosh.avm-sdk.release.v2"
 
     def run(self, command, expected=0, **options):
         argv = [str(self.bundle / "bin/avm-local-stand"), command,
@@ -237,7 +252,7 @@ class Journey:
         # the exact empty CLI-created identity/config seed. No internal message
         # injection, root edits, private executor or prebuilt WASM is involved.
         assert self.initial_state is not None and self.identities is not None
-        restored = Journey(self.bundle, self.evidence.parent, self.label + "-command-replay")
+        restored = Journey(self.bundle, self.evidence.parent, self.label + "-command-replay", self.source)
         descriptor = os.open(restored.state, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(descriptor, "wb") as stream:
             stream.write(self.initial_state)
@@ -258,11 +273,10 @@ class Journey:
         }, indent=2))
 
 
-def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
+def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=False):
     evidence.mkdir(parents=True, exist_ok=False)
-    manifest = json.loads((bundle / "BUILD-MANIFEST.json").read_bytes())
-    current = manifest["schema"] == "gosh.avm-sdk.release.v2"
-    if current:
+    current = source or json.loads((bundle / "BUILD-MANIFEST.json").read_bytes())["schema"] == "gosh.avm-sdk.release.v2"
+    if current and not source:
         assert incompatible_state is not None, "candidate qualification requires a populated historical state"
         assert wrong_rustc is not None, "candidate qualification requires a real different compiler"
         version = subprocess.run([str(wrong_rustc), "-vV"], capture_output=True, check=True)
@@ -286,7 +300,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
         assert rejection.returncode == 2
         assert json.loads(rejection.stdout)["status"] == "error"
         assert incompatible_state.read_bytes() == before
-    version = Journey(bundle, evidence, "version-upgrade")
+    version = Journey(bundle, evidence, "version-upgrade", source)
     initialized = version.run("init", dapp_id="11" * 32)
     owner = initialized["identities"]["package_owner"]
     assert len(owner) == 64 and bytes.fromhex(owner).hex() == owner
@@ -319,8 +333,11 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
         (evidence / f"{example}-build.stderr").write_bytes(process.stderr)
         assert process.returncode == 0, process.stderr.decode()
         directory = root / "target/avm"
-        assert sorted(p.name for p in directory.iterdir()) == ["contract.acab", "contract.descriptor", "contract.wasm"]
-        values = {p.name: p.read_bytes() for p in directory.iterdir()}
+        names = ["contract.acab", "contract.descriptor", "contract.wasm"]
+        assert sorted(p.name for p in directory.iterdir()) == sorted(names + (["NOT-FOR-DEPLOYMENT"] if source else []))
+        if source:
+            assert "artifact_purpose: memory-test-only" in (root / "target/avm-build-provenance.txt").read_text()
+        values = {name: (directory / name).read_bytes() for name in names}
         expected = [("contract.wasm", blake3(values["contract.wasm"])),
                     ("contract.acab", blake3(b"AVM_ABI" + values["contract.acab"])),
                     ("contract.descriptor", blake3(values["contract.descriptor"]))]
@@ -329,7 +346,8 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
         assert values["contract.acab"][:4] == b"ACAB"
         assert len(values["contract.descriptor"]) == 66
         artifacts[example] = {name: sha(data) for name, data in values.items()}
-        admission[example] = wasm_facts(values["contract.wasm"], example == "contract-batch-patch")
+        maximum = fixture_memory_maximum(root, source)
+        admission[example] = wasm_facts(values["contract.wasm"], example == "contract-batch-patch", maximum)
     assert artifacts["contract-a-v1"]["contract.acab"] == artifacts["contract-a-v2"]["contract.acab"]
     assert artifacts["contract-a-v1"]["contract.descriptor"] == artifacts["contract-a-v2"]["contract.descriptor"]
     assert artifacts["contract-a-v1"]["contract.wasm"] != artifacts["contract-a-v2"]["contract.wasm"]
@@ -384,7 +402,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
     version.replay()
 
     for destination_example, callback in [("contract-b", True), ("contract-batch-patch", False)]:
-        journey = Journey(bundle, evidence, destination_example)
+        journey = Journey(bundle, evidence, destination_example, source)
         journey.run("init", dapp_id="11" * 32)
         sender = journey.deploy("contract-a-v1")
         receiver = journey.deploy(destination_example, command="publish-version")
@@ -428,14 +446,15 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
     assert built.returncode == 0, built.stderr.decode()
     failure_wasm = (negative / "target/avm/contract.wasm").read_bytes()
     assert sha(failure_wasm) != artifacts["contract-b"]["contract.wasm"]
-    wasm_facts(failure_wasm, False)
+    failure_maximum = fixture_memory_maximum(negative, source)
+    wasm_facts(failure_wasm, False, failure_maximum)
     (evidence / "failure-artifacts.json").write_text(json.dumps({p.name: sha(p.read_bytes()) for p in (negative / "target/avm").iterdir()}, indent=2))
     for label, method, handler, status in [
         ("trap", "causal.b.drain", (0xc2c6c51bc610249d).to_bytes(8, "little"), 30),
         ("out-of-fuel", "causal.b.drain", blake3(b"causal.a.version")[:8], 31),
         ("invalid-event", "causal.b.receive", (0xc2c6c51bc610249d).to_bytes(8, "little"), 44),
     ]:
-        journey = Journey(bundle, evidence, label)
+        journey = Journey(bundle, evidence, label, source)
         journey.run("init", dapp_id="11" * 32)
         sender = journey.deploy("contract-a-v1")
         receiver = journey.deploy("contract-b-failure", command="publish-version")
@@ -463,7 +482,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
         assert ring == before_ring and journey.run("events")["events"] == before_events
         journey.replay()
 
-    invalid = Journey(bundle, evidence, "invalid-profile")
+    invalid = Journey(bundle, evidence, "invalid-profile", source)
     invalid.profile = invalid.evidence / "invalid.v1"
     invalid.profile.write_bytes((bundle / "profiles/wasmtime-release-profile.v1").read_bytes() + b"unapproved=true\n")
     # Current init is allowed to reject early; if it accepts, actual deploy must reject.
@@ -484,7 +503,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None):
     else:
         assert process.returncode == 2
     (evidence / "passed.json").write_text(json.dumps({
-        "passed": True, "bundle": str(bundle), "authorized_upgrade_passed": current,
+        "passed": True, "bundle": str(bundle), "source_contract_tests": source, "authorized_upgrade_passed": current,
         "historical_limitations": [] if current else [
             "Fixed example owner differs from the public CLI-generated owner; upgrade rejection was verified."
         ],
@@ -502,5 +521,6 @@ if __name__ == "__main__":
     parser.add_argument("--evidence", required=True, type=Path)
     parser.add_argument("--incompatible-state", type=Path)
     parser.add_argument("--wrong-rustc", type=Path)
+    parser.add_argument("--source", action="store_true", help="Run source contract scenarios with explicitly marked test artifacts")
     arguments = parser.parse_args()
-    run(arguments.bundle.resolve(), arguments.evidence.resolve(), arguments.incompatible_state, arguments.wrong_rustc)
+    run(arguments.bundle.resolve(), arguments.evidence.resolve(), arguments.incompatible_state, arguments.wrong_rustc, arguments.source)

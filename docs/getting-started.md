@@ -49,6 +49,10 @@ identities, so rebuild contract A for its new package owner when testing upgrade
 
 ## Build A Contract
 
+Each example records its test peak in `avm-memory.json`. Deployment builds use
+that memory maximum unless `avm-contract.toml` explicitly overrides it.
+Read [contract memory](contract-memory.md) before repeating or extending tests.
+
 Copy an example inside this checkout before modifying it so its relative SDK
 dependency remains valid. The build command compiles the contract twice,
 verifies reproducibility, validates its AVM metadata, and writes three artifacts

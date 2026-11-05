@@ -46,6 +46,12 @@ contract instead of relying on this limit.
 The stand CLI does not offer an override for these limits. Build contracts with
 the pinned compiler and account for the configured FUEL budget.
 
+The module's declared maximum comes from its committed `avm-memory.json`
+unless `build.max_memory_bytes` explicitly overrides it in the contract
+manifest. This is bounded by the runtime's global memory cap.
+Use `--check-memory` on local executing commands to inspect peak linear-memory
+capacity, the declared maximum and rejected growth; see [contract memory](contract-memory.md).
+
 ## State, output and deploy body are different limits
 
 The current stand selects `FullReplace` when the **previous canonical account
