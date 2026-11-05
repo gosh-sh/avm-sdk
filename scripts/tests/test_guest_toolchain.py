@@ -11,7 +11,7 @@ import manual_gates
 
 class GuestToolchainTests(unittest.TestCase):
     def test_guest_commands_do_not_inherit_the_native_host_compiler(self):
-        native = {"RUSTUP_TOOLCHAIN": "1.93.0", "CARGO": "/host/cargo", "RUSTC": "/host/rustc",
+        native = {"RUSTUP_TOOLCHAIN": "1.98.0", "CARGO": "/host/cargo", "RUSTC": "/host/rustc",
                   "RUSTC_WRAPPER": "/wrapper-that-must-still-be-rejected"}
         with patch.dict(os.environ, native, clear=True), patch.object(
                 manual_gates.subprocess, "check_output", side_effect=["/guest/cargo\n", "/guest/rustc\n"]) as which:

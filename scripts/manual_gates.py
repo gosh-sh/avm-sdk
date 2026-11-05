@@ -18,7 +18,7 @@ from release import file_digest, parse_profile, require
 
 def tree_engine_features(text):
     entries = [line.split("|", 1)[1].removesuffix(" (*)").split(",")
-               for line in text.splitlines() if line.startswith("wasmtime v36.0.12|")]
+               for line in text.splitlines() if line.startswith("wasmtime v48.0.8|")]
     require(entries and all(set(item) == set(entries[0]) for item in entries),
             "missing or ambiguous resolved Wasmtime graph")
     return sorted(entries[0])
@@ -28,10 +28,11 @@ def compiled_engine_features(text):
     records = [json.loads(line) for line in text.splitlines() if line.startswith('{"reason":')]
     require(any(row.get("reason") == "build-finished" and row.get("success") for row in records),
             "engine graph compilation did not complete")
+    # Select the AVM engine; the node graph can also link another Wasmtime version.
     entries = [row for row in records if row.get("reason") == "compiler-artifact"
-               and row.get("target", {}).get("name") == "wasmtime"]
-    require(len(entries) == 1 and "wasmtime@36.0.12" in entries[0]["package_id"],
-            "missing or ambiguous compiled Wasmtime artifact")
+               and row.get("target", {}).get("name") == "wasmtime"
+               and row.get("package_id", "").endswith("#wasmtime@48.0.8")]
+    require(len(entries) == 1, "missing or ambiguous compiled Wasmtime artifact")
     return sorted(entries[0]["features"])
 
 
@@ -183,6 +184,7 @@ def main():
     run("engine-format", ["cargo", "fmt", "-p", "avm-wasm-code", "-p", "avm-wasm-executor", "--", "--check"])
     run("guest-source-parity", ["diff", "-ru", str(sdk / "crates/avm-contract-sdk"), str(source / "node/libs/avm-contract-sdk")])
     run("profile-parity", ["cmp", str(sdk / "profiles/wasmtime-release-profile.v1"), str(source / "specs/avm-vm/wasmtime-release-profile.v1")])
+    run("release-text", [sys.executable, "-B", "scripts/check-release-text.py"], sdk)
     run("installer-regressions", [sys.executable, "-B", "-m", "unittest", "discover", "-s", "scripts/tests", "-p", "test_*.py", "-v"], sdk, python_tests=True)
     guest = guest_environment()
     run("sdk-format", [guest["CARGO"], "fmt", "--", "--check"], sdk, environment=guest)
@@ -217,7 +219,7 @@ def main():
     for package in ("avm-test-harness", "avm-contract-sdk", "avm-contract-build", "avm-wasm-code"):
         test(package, ["--lib"])
     # Library tests and --all-targets check/clippy do not execute these owner
-    # admission/preparation boundaries (SDK-R167-005).
+    # admission/preparation boundaries.
     for target in ("validate_wasm_module", "prepare_code", "get_prepared",
                    "invalid_forbidden_sections", "invalid_mvp_function_body",
                    "disabled_feature_encodings"):
@@ -280,7 +282,7 @@ def main():
     test("avm-event-capnp-codec", ["--test", "build_event_log"], "avm_event_capnp_codec_build_event_log_fixed_raw_vectors avm_event_capnp_codec_parse_event_log_unit_determinism_and_no_payload_copy avm_event_capnp_codec_parse_event_log_negative avm_event_capnp_codec_parse_event_log_does_not_replace_inner_validation verified_log_preserves_encoding_and_rejects_invalid_inputs avm_event_capnp_codec_build_event_log_competing_fault_precedence".split())
     test("avm-scheduler", ["--test", "isolated_fuel_admission"])
     test("avm-test-harness", ["--lib"], ["local_stand::tests::" + case for case in "owner_event_reads_use_block_start_and_advance_only_in_the_next_block owner_block_records_failed_batch_and_rejected_input_fuel_burns_once account_batch_exhausted_pool_settles_zero_fuel_fallback_without_state_effects".split()])
-    # SDK-R167-001: inspect and compile the actual node graph. Separately run
+    # Inspect and compile the actual node graph. Separately run
     # the owner assertions with the exact same compiled Wasmtime feature set.
     tree = ["cargo", "tree", "--locked", "--offline", "--edges", "normal,build",
             "--prefix", "none", "--format", "{p}|{f}"]
@@ -299,7 +301,7 @@ def main():
             "actual node build differs from its resolved graph")
     for package in ("avm-wasm-code", "avm-wasm-executor"):
         text = run(package + "-node-engine-features", ["cargo", "test", "--locked", "--offline",
-                   "--release", "--message-format=json", "-p", package, "--features", "wasmtime/default",
+                   "--release", "--message-format=json", "-p", package,
                    "--lib", "--", "--test-threads=1"], tests=True)
         require(compiled_engine_features(text) == node_features,
                 "node feature assertions ran under a different engine build graph")

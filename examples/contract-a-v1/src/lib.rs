@@ -18,6 +18,7 @@ const FORWARD_ARGS_BYTES: usize = 80;
 const VALUE_ECC0: u128 = 37;
 const EXTRA_CURRENCY_ID: u32 = 7;
 const EXTRA_CURRENCY_AMOUNT: u128 = 11;
+const BATCH_FUEL_FEE_SHELLS: u128 = 2;
 const OUTBOUND_BODY: [u8; 16] = [0x42; 16];
 const CALLBACK_BODY: [u8; 16] = [0x99; 16];
 const CODE_UPGRADE_HEADER_BYTES: usize = 72;
@@ -124,7 +125,7 @@ impl Contract for ContractA {
         output.outbound_intents = vec![OutboundIntent {
             input_index: 0,
             destination,
-            fuel_fee_shells: u128::from(callback_method_id == 0),
+            fuel_fee_shells: BATCH_FUEL_FEE_SHELLS * u128::from(callback_method_id == 0),
             extra: vec![
                 CurrencyAmount { currency_id: 0, amount: VALUE_ECC0 },
                 CurrencyAmount { currency_id: EXTRA_CURRENCY_ID, amount: EXTRA_CURRENCY_AMOUNT },

@@ -1,6 +1,6 @@
 # Runtime limits, rent and deployment identity
 
-These are the **SDK 0.4.0 local stand** settings. They are development
+These are the **SDK 0.5.0 local stand** settings. They are development
 configuration, not mainnet promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the
 active network configuration before estimating production costs or capacity.
@@ -24,8 +24,13 @@ The stand uses `max_message_execution_fuel = 10000000`,
 On a chargeable isolated call the budget is the smaller of the message reserve
 converted to FUEL and the message cap. Increasing `fuel_fee_shells` beyond the
 cap cannot buy a larger execution. Local-free messages are also metered and
-capped. The bucket cap bounds aggregate work; it does not increase one message's
-budget. See [FUEL and SHELL](fuel-and-fees.md).
+capped. The bucket cap bounds one `AccountBatch` invocation; each
+`MessageIsolated` call has its own message allowance. See [FUEL and SHELL](fuel-and-fees.md).
+
+SDK 0.5.0 changes instruction prices and charges requested bytes, elements
+and growth pages. The numeric limits above remain fixed for this local stand;
+they can admit less work for a particular existing contract. Recheck the
+complete execution against the [bundled price schedule](fuel-and-fees.md#operation-prices-in-sdk-050).
 
 CLI failures after an attempted WASM execution report the VM status name,
 `fuel_used`, `fuel_budget`, and `max_message_execution_fuel`. Status **31** is
@@ -33,6 +38,10 @@ CLI failures after an attempted WASM execution report the VM status name,
 runtime's metered allocation, guest entrypoint and cleanup work, not just your
 method body. Validation failures before execution have no attempted FUEL to
 report. Diagnostics do not imply that a failed external call was committed.
+
+Status **33** is `VM_WASM_STACK_LIMIT`: the call exceeded the WASM stack limit,
+for example through recursion that is too deep. Bound recursion depth in the
+contract instead of relying on this limit.
 
 The stand CLI does not offer an override for these limits. Build contracts with
 the pinned compiler and account for the configured FUEL budget.

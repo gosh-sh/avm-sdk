@@ -12,7 +12,7 @@ local state from one release together; see [compatibility guidance](release-note
 ## Host and guest compiler identities
 
 The native runtime profile and `provenance/build.json` attest the host tools
-built with Rust/Cargo 1.93.0. The SDK 0.4.0 Core-WASM V2 contract builder
+built with Rust/Cargo 1.98.0. The SDK 0.5.0 Core-WASM V2 contract builder
 separately requires guest Rust/Cargo 1.99.1 and records those exact identities
 and `+wide-arithmetic` in `avm-build-provenance.txt`. A native host compiler
 version is not the guest compiler requirement. Keep historical release
@@ -37,7 +37,9 @@ The installer checks the downloaded checksum files and identity bindings before
 extracting or activating a bundle. It rejects unsafe archive entries and does
 not silently treat a v1 archive as a v2 release. Use the verifier from a trusted
 checkout or a previously verified installation, never from an unverified
-download. SHA-256 checksums do not provide an independent signature beyond the
+download. Verifiers from releases before SDK 0.5.0 reject its extended runtime
+profile; the SDK 0.5.0 verifier also accepts earlier published bundles.
+SHA-256 checksums do not provide an independent signature beyond the
 GitHub/HTTPS trust boundary.
 
 ## Verify a downloaded bundle
@@ -55,6 +57,28 @@ python3 scripts/release.py verify \
 Set `RELEASE_TAG` to the exact tag from the release page. The verifier checks
 the archive checksum, complete payload inventory and manifest/build identity
 bindings. Verification does not rebuild or upgrade deployed contracts.
+
+To also compare the bundle with an exact SDK commit available in a local Git
+checkout, use local mode. Set the expected full commits and archive SHA-256
+from the independently reviewed release inputs:
+
+```bash
+python3 scripts/verify-public-release.py \
+  --archive /path/to/avm-sdk-linux-x86_64.tar.gz \
+  --checksum /path/to/avm-sdk-linux-x86_64.tar.gz.sha256 \
+  --sdk /path/to/avm-sdk \
+  --tag "$RELEASE_TAG" \
+  --sdk-commit "$SDK_COMMIT" \
+  --source-commit "$SOURCE_COMMIT" \
+  --archive-sha256 "$ARCHIVE_SHA256" \
+  --destination /path/to/new-verification-directory
+```
+
+This mode reads committed Git objects and local files without contacting
+GitHub. It writes `local-verification.json` and establishes archive/source
+parity; it does not attest that a public tag or release exists. Omitting all
+three local options (`--archive`, `--checksum`, `--sdk`) selects the existing
+verification of downloaded GitHub release assets.
 
 ## Install a prepared local bundle
 

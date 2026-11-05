@@ -25,7 +25,7 @@ not estimate all fees.
 
 Use Rust 1.99.1, rustfmt, Clippy, `wasm32-unknown-unknown` and Python 3.
 Contracts have no external Rust dependencies. The guest ABI checks reuse pinned
-Wasmtime 36.0.12 as a host-only test dependency, outside the guest WASM graph.
+Wasmtime 48.0.8 as a host-only test dependency, outside the guest WASM graph.
 Binaryen 133 is a build tool: its existing
 installer verifies a pinned archive checksum. From the SDK root:
 

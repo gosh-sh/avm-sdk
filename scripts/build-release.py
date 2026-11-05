@@ -17,8 +17,8 @@ from manual_gates import clean, head, normalize_scratch_environment
 from release import ARCHIVE, BINARIES, ROOT, artifact_records, digest, engine_library_artifact, file_digest, parse_profile, require, verify_archive
 
 RUST_NOTICE_SHA256 = {
-    "COPYRIGHT.html": "ed776cb483639823551326501ea4a7d0e63a040a5589d25d68234c223bd9d9f9",
-    "COPYRIGHT-library.html": "d93d65853736bde4e8649691233a98848ba709673873aeb39487bc1ca6ee292a",
+    "COPYRIGHT.html": "5b0c93fc4e6d4b072eaa521b1762d1e746f4c368f65e81a0e5308e2772dac85e",
+    "COPYRIGHT-library.html": "68129500b616d5838629e68f55ff3aed5e096dacf60ce9eb41bbe599a563afa6",
 }
 
 
@@ -54,7 +54,7 @@ def native_linker_inputs(compiler, driver, source):
 
 
 def toolchain_notices(sysroot, rustc_verbose):
-    """Preserve Rust 1.93.0's own notices, including non-Cargo library vendors."""
+    """Preserve Rust 1.98.0's own notices, including non-Cargo library vendors."""
     sysroot = sysroot.resolve()
     texts, files = [], {}
     for name, expected in sorted(RUST_NOTICE_SHA256.items()):
@@ -62,7 +62,7 @@ def toolchain_notices(sysroot, rustc_verbose):
         path = sysroot / relative
         require(path.is_file() and path.resolve().is_relative_to(sysroot), "missing pinned Rust toolchain notice")
         data = path.read_bytes()
-        require(digest(data) == expected, "Rust 1.93.0 notice differs from its reviewed input")
+        require(digest(data) == expected, "Rust 1.98.0 notice differs from its reviewed input")
         destination = "licenses/toolchain/" + name
         files[destination] = data
         texts.append({"file": destination, "sha256": expected, "sysroot_path": relative})
@@ -220,6 +220,10 @@ def build(source, sdk, output, gates):
     with (output / "cargo-artifacts.jsonl").open("wb") as stdout, (output / "build.log").open("wb") as stderr:
         process = subprocess.run(argv, cwd=source, env=environment, stdout=stdout, stderr=stderr)
     require(process.returncode == 0, "release binary build failed; retained build.log")
+    # Cargo reports in completion order; keep the same records in a canonical
+    # order, with build-finished last, so identical inputs give identical bytes.
+    *records, finished = (output / "cargo-artifacts.jsonl").read_bytes().splitlines(keepends=True)
+    (output / "cargo-artifacts.jsonl").write_bytes(b"".join(sorted(records)) + finished)
     ids_after = identity(source, sdk)
     require(ids_after == ids, "build inputs changed")
     messages = [json.loads(line) for line in (output / "cargo-artifacts.jsonl").read_text().splitlines() if line.startswith("{")]
@@ -317,12 +321,12 @@ def package(source, sdk, build_root, output):
     files["provenance/cargo-artifacts.jsonl"] = (build_root / "cargo-artifacts.jsonl").read_bytes()
     tag = f"avm-dev-{ids['source_commit'][:12]}-sdk-{ids['sdk_commit'][:12]}"
     files["BUILD-MANIFEST.json"] = json_bytes({
-        "schema": "gosh.avm-sdk.release.v2", "bundle_version": "0.4.0", "guest_version": "0.1.1", "release_tag": tag,
+        "schema": "gosh.avm-sdk.release.v2", "bundle_version": "0.5.0", "guest_version": "0.1.1", "release_tag": tag,
         "ackinacki_repository": "gosh-sh/acki-nacki", "ackinacki_commit": ids["source_commit"],
         "sdk_repository": "gosh-sh/avm-sdk", "sdk_commit": ids["sdk_commit"],
         "wasmtime_profile_sha256": ids["profile_sha256"], "runtime_lock_sha256": ids["lock_sha256"],
         "build_receipt_sha256": digest(receipt_bytes), "third_party_notices_sha256": digest(files["THIRD-PARTY-NOTICES.json"]),
-        "rust_toolchain": "1.93.0", "target": receipt["target"], "cpu": receipt["cpu"], "platform": receipt["platform"],
+        "rust_toolchain": "1.98.0", "target": receipt["target"], "cpu": receipt["cpu"], "platform": receipt["platform"],
         "license_scope": {"guest_and_sdk": "LICENSE.md", "host_tools": "licenses/Acki-Nacki-Node-LICENSE.md", "dependencies": "THIRD-PARTY-NOTICES.json"},
     })
     files["SHA256SUMS"] = "".join(f"{digest(data)}  {name}\n" for name, data in sorted(files.items())).encode()

@@ -10,7 +10,7 @@ sys.path.insert(0, str(SCRIPTS))
 SPEC = importlib.util.spec_from_file_location("engine_build_release", SCRIPTS / "build-release.py")
 build_release = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(build_release)
-ENGINE_ID = "registry+https://github.com/rust-lang/crates.io-index#wasmtime@36.0.12"
+ENGINE_ID = "registry+https://github.com/rust-lang/crates.io-index#wasmtime@48.0.8"
 
 
 def artifact(name, kind, features):
@@ -28,7 +28,7 @@ class EngineArtifacts(unittest.TestCase):
 
     def test_absent_or_wrong_package_or_nonlibrary_engine_rejects(self):
         wrong_package = artifact("wasmtime", "lib", ["runtime"])
-        wrong_package["package_id"] = ENGINE_ID.replace("36.0.12", "36.0.11")
+        wrong_package["package_id"] = ENGINE_ID.replace("48.0.8", "48.0.7")
         wrong_reason = artifact("wasmtime", "lib", ["runtime"])
         wrong_reason["reason"] = "build-script-executed"
         for records in ([], [artifact("build-script-build", "custom-build", ["runtime"])],

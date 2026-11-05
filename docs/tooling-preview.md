@@ -1,12 +1,12 @@
 # SDK tooling
 
-This guide describes SDK 0.4.0. Use a matching builder and local-stand binary
+This guide describes SDK 0.5.0. Use a matching builder and local-stand binary
 for the commands below; check the source identities recorded in the distribution.
 SDK 0.2.0 does not include the constructor and CLI additions described here.
 
 ## Core-WASM V2 guest builds
 
-SDK 0.4.0 builds contracts with exact Rust/Cargo 1.99.1 and
+SDK 0.5.0 builds contracts with exact Rust/Cargo 1.99.1 and
 `-Ctarget-feature=+wide-arithmetic`. This compiler's wide-integer lowering is
 validated against a native-integer semantic regression; emitting an instruction
 alone does not prove correct arithmetic.
@@ -23,9 +23,9 @@ can change WASM/code hashes and FUEL use. Profile/config hashes and prepared
 cache namespaces change, so do not mix retained state or native caches from
 different profiles. This is not a production-network migration instruction.
 
-The release profile and native build receipt separately attest host
-Rust/Cargo 1.93.0. Guest compiler requirements do not replace that native
-host-build identity, alter fees or promise a CPU/FUEL performance ratio.
+The release profile and native build receipt separately attest Wasmtime 48.0.8
+and host Rust/Cargo 1.98.0. Guest compiler requirements do not replace that
+native host-build identity, alter fees or promise a CPU/FUEL performance ratio.
 
 ## Constructor data
 

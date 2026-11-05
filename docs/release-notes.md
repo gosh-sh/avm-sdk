@@ -1,3 +1,22 @@
+# AVM SDK 0.5.0
+
+- Run contracts on Wasmtime 48.0.8 LTS with Cranelift 0.135.8 and wasmparser 0.254.2, replacing Wasmtime 36.0.12, which lacks upstream security fixes.
+- Build the native tools with Rust/Cargo 1.98.0; contract builds keep Rust/Cargo 1.99.1.
+- Apply operation-specific FUEL prices and additional charges for requested memory bytes, table elements and memory-growth pages; see [the charging rules](fuel-and-fees.md#operation-prices-in-sdk-050).
+- Keep the Core-WASM V2 instruction set, admission rules and configured runtime limits.
+- Run the Revenue Hub guest ABI checks on Wasmtime 48.0.8.
+- Produce byte-for-byte reproducible release bundles from identical build inputs.
+
+<a id="compatibility"></a>
+
+## Compatibility
+
+- The guest crate remains version `0.1.1`. Contract WASM using the Core-WASM V2 instruction set remains admissible.
+- Existing WASM can consume different FUEL with the new prices. Recheck initialization, message and batch calls against their configured budgets, including allocator and cleanup work. Calls that previously succeeded can exhaust FUEL; paid calls can burn different SHELL amounts and return different unused reserves.
+- The profile records additional Wasmtime settings, so its identity, the configuration hash and prepared-cache namespaces change. Create fresh local stand state for the new bundle and keep earlier tools, profile and retained state together.
+- Verify and install SDK 0.5.0 bundles with this release's scripts; earlier checkouts reject the new profile. These scripts still verify earlier published bundles.
+- Linux x86-64-v3 and Python 3.11+ are required; see the bundle manifest for measured GLIBC dependencies. Examples are educational, and this SDK release does not establish production-network or performance acceptance.
+
 # AVM SDK 0.4.0
 
 - Use Rust/Cargo 1.99.1 for validated wide-arithmetic contract builds; native tools remain on 1.93.0.
@@ -6,8 +25,6 @@
 - Update Revenue Hub and Vesting Streams optimizers for wide-arithmetic WASM.
 - Optimize Revenue Vault deployment size to fit the existing 65,536-byte limit.
 - Update example checks and build/install instructions for matching tool bundles.
-
-<a id="compatibility"></a>
 
 ## Compatibility
 

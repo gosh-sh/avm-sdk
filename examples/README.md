@@ -91,6 +91,11 @@ message entry point intentionally fails.
 Use it to validate `AccountBatch`, bounded batch input, large retained state,
 and narrow state patches without replacing the complete state image.
 
+Contract A v1 reserves 2 SHELL for this batch delivery. With the local
+`fuel_per_shell = 1000000`, that funds 2,000,000 FUEL. For a changed profile
+or input, measure the full batch call and round the required reserve up with
+`ceil(fuel_used / fuel_per_shell)`.
+
 ## Build An Example
 
 Install the SDK commands first, then build any example from the repository or

@@ -78,6 +78,43 @@ charging the common local path. Applications that require delivery after a
 possible split should propose a sufficient reserve instead of relying on the
 current topology remaining local.
 
+## Operation prices in SDK 0.5.0
+
+SDK 0.5.0 uses the exact operation schedule in the bundled
+[`wasmtime-release-profile.v1`](../profiles/wasmtime-release-profile.v1).
+`operator_cost` lists a fixed FUEL price for each admitted WASM instruction;
+`variable_operator_costs` adds charges for requested volume. These prices
+apply to both paid and local-free execution.
+
+- `block`, `loop`, `else`, `end`, `nop`, `drop`, `return` and `unreachable`
+  have zero instruction price.
+- Other instructions have explicit prices from 1 to 255 FUEL. Calls,
+  indirect calls, loads/stores, division/remainder, floating-point operations
+  and conversions can have different prices. Use the bundled schedule for
+  the exact opcode and release.
+- `memory.copy`, `memory.fill` and `memory.init` add a charge for each
+  requested byte. `table.copy` and `table.init` add a charge for each
+  requested element.
+- `memory.grow` adds a charge for each requested 64-KiB page, including a
+  failed growth request. The instruction price is charged separately.
+- Unlisted variable charges are zero. The complete fixed and variable
+  schedules are recorded together with `fuel_semantics_revision=4` in the
+  profile.
+
+Volume charges use the requested length, not the amount of new data or the
+number of cache misses. A bulk operation with zero requested length still
+has its instruction price. Include the volume charges, allocator code,
+function entries, input/output handling and cleanup when budgeting the
+complete execution's FUEL.
+
+Existing contract WASM remains admissible under the same Core-WASM V2 rules,
+but its FUEL use can change without recompilation. Re-run concrete init,
+message and batch inputs with the matching tools/profile/configuration. Check
+both the attached reserve and the applicable message or batch cap. A larger
+reserve cannot exceed the configured cap. On paid routes a changed
+`fuel_used` also changes rounded SHELL charges and unused-reserve refunds;
+the payer, local-free conditions and refund rules below remain the same.
+
 ## Chargeable FUEL
 
 For chargeable `MessageIsolated` execution, the runtime derives:

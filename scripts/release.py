@@ -23,6 +23,32 @@ SHA = re.compile(r"[0-9a-f]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 MAX_FILES = 20000
 MAX_BYTES = 256 * 1024 * 1024
+PRICED_OPERATORS = frozenset("""
+Block Br BrIf BrTable Call CallIndirect DataDrop Drop ElemDrop Else End F32Abs F32Add F32Ceil
+F32Const F32ConvertI32S F32ConvertI32U F32ConvertI64S F32ConvertI64U F32Copysign F32DemoteF64
+F32Div F32Eq F32Floor F32Ge F32Gt F32Le F32Load F32Lt F32Max F32Min F32Mul F32Ne F32Nearest
+F32Neg F32ReinterpretI32 F32Sqrt F32Store F32Sub F32Trunc F64Abs F64Add F64Ceil F64Const
+F64ConvertI32S F64ConvertI32U F64ConvertI64S F64ConvertI64U F64Copysign F64Div F64Eq F64Floor
+F64Ge F64Gt F64Le F64Load F64Lt F64Max F64Min F64Mul F64Ne F64Nearest F64Neg F64PromoteF32
+F64ReinterpretI64 F64Sqrt F64Store F64Sub F64Trunc GlobalGet GlobalSet I32Add I32And I32Clz
+I32Const I32Ctz I32DivS I32DivU I32Eq I32Eqz I32Extend16S I32Extend8S I32GeS I32GeU I32GtS
+I32GtU I32LeS I32LeU I32Load I32Load16S I32Load16U I32Load8S I32Load8U I32LtS I32LtU I32Mul
+I32Ne I32Or I32Popcnt I32ReinterpretF32 I32RemS I32RemU I32Rotl I32Rotr I32Shl I32ShrS I32ShrU
+I32Store I32Store16 I32Store8 I32Sub I32TruncF32S I32TruncF32U I32TruncF64S I32TruncF64U
+I32WrapI64 I32Xor I64Add I64Add128 I64And I64Clz I64Const I64Ctz I64DivS I64DivU I64Eq I64Eqz
+I64Extend16S I64Extend32S I64Extend8S I64ExtendI32S I64ExtendI32U I64GeS I64GeU I64GtS I64GtU
+I64LeS I64LeU I64Load I64Load16S I64Load16U I64Load32S I64Load32U I64Load8S I64Load8U I64LtS
+I64LtU I64Mul I64MulWideS I64MulWideU I64Ne I64Or I64Popcnt I64ReinterpretF64 I64RemS I64RemU
+I64Rotl I64Rotr I64Shl I64ShrS I64ShrU I64Store I64Store16 I64Store32 I64Store8 I64Sub I64Sub128
+I64TruncF32S I64TruncF32U I64TruncF64S I64TruncF64U I64Xor If LocalGet LocalSet LocalTee Loop
+MemoryCopy MemoryFill MemoryGrow MemoryInit MemorySize Nop Return Select TableCopy TableInit
+Unreachable
+""".split())
+VARIABLE_COST_FIELDS = frozenset("""
+memory_copy_per_byte memory_fill_per_byte memory_grow_per_page
+memory_init_per_byte table_copy_per_element table_init_per_element others
+""".split())
+ZERO_COST_OPERATORS = frozenset("Block Drop Else End Loop Nop Return Unreachable".split())
 
 
 def require(condition, message):
@@ -40,6 +66,21 @@ def file_digest(path):
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             value.update(block)
     return value.hexdigest()
+
+
+def parse_costs(value, expected, zero=()):
+    """Require every supported field exactly once with a canonical u8 value."""
+    result = {}
+    for pair in value.split(","):
+        match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_]*):(0|[1-9][0-9]*)", pair)
+        require(match is not None, "invalid profile cost entry")
+        name, number = match.groups()
+        require(name in expected and name not in result, "unknown or duplicate profile cost")
+        require(int(number) <= 255, "profile cost exceeds u8")
+        result[name] = int(number)
+    require(result.keys() == expected, "missing profile cost")
+    require(all(result[name] == 0 for name in zero), "nonzero structural profile cost")
+    return result
 
 
 def parse_profile(data):
@@ -63,7 +104,7 @@ def parse_profile(data):
     group(r"[0-9a-f]{64}", "wasmtime_sha256 cranelift_codegen_sha256 wasmparser_sha256 cargo_lock_sha256")
     group(r"[0-9a-f]{40}", "rustc_commit cargo_commit")
     group(r"(?:0|[1-9][0-9]*)", "profile_encoding_version wasm_profile_id memory_guard_size pooling_max_unused_warm_slots pooling_decommit_batch_size pooling_linear_memory_keep_resident pooling_total_component_instances pooling_max_core_instances_per_component pooling_max_memories_per_component pooling_max_tables_per_component pooling_total_gc_heaps fuel_semantics_revision trap_mapping_revision instance_pre_abi_revision")
-    group(r"(?:true|false)", "cranelift_nan_canonicalization consume_fuel epoch_interruption parallel_compilation memory_init_cow signals_based_traps debug_info native_unwind_info generate_address_map wasm_backtrace wasm_tail_call wasm_custom_page_sizes wasm_threads wasm_shared_everything_threads wasm_reference_types wasm_function_references wasm_wide_arithmetic wasm_gc wasm_simd wasm_relaxed_simd wasm_bulk_memory wasm_multi_value wasm_multi_memory wasm_memory64 wasm_extended_const wasm_stack_switching wasm_component_model wasm_component_model_async wasm_component_model_async_builtins wasm_component_model_async_stackful wasm_component_model_error_context wasm_component_model_gc wasm_exceptions wasm_legacy_exceptions")
+    group(r"(?:true|false)", "cranelift_nan_canonicalization consume_fuel epoch_interruption parallel_compilation memory_init_cow signals_based_traps debug_info native_unwind_info generate_address_map wasm_backtrace wasm_tail_call wasm_custom_page_sizes wasm_threads wasm_shared_everything_threads wasm_reference_types wasm_function_references wasm_wide_arithmetic wasm_gc wasm_simd wasm_relaxed_simd wasm_bulk_memory wasm_multi_value wasm_multi_memory wasm_memory64 wasm_extended_const wasm_stack_switching wasm_component_model wasm_component_model_async wasm_component_model_async_stackful wasm_component_model_error_context wasm_component_model_gc wasm_exceptions wasm_legacy_exceptions")
     group(r"[a-z0-9_.-]+(?:,[a-z0-9_.-]+)*", "wasmtime_required_features host_features cranelift_flags")
     literals = {
         "profile_id": "AVM_WASMTIME_X86_64_V3_V1",
@@ -81,6 +122,30 @@ def parse_profile(data):
         "pooling_table_elements": "config.wasm.max_table_elements",
         "pooling_max_memory_size": "config.wasm.memory_limit_bytes",
     }
+    if "wasm_component_model_async_builtins" in fields:
+        # Earlier published bundles use the Wasmtime 36 profile without the settings below.
+        group(r"(?:true|false)", "wasm_component_model_async_builtins")
+    else:
+        group(r"(?:true|false)", "wasm_component_model_more_async_builtins cranelift_debug_verifier cranelift_wasmtime_debug_checks memory_may_move guard_before_linear_memory table_lazy_init debug_symbols metadata_for_internal_asserts concurrency_support shared_memory relaxed_simd_deterministic wasm_branch_hinting wasm_component_model_threading wasm_component_model_map wasm_component_model_memory64 wasm_component_model_fixed_length_lists wasm_component_model_implements")
+        group(r"(?:0|[1-9][0-9]*)", "memory_reservation_for_growth memory_guaranteed_dense_image_size pooling_max_core_instance_size pooling_max_component_instance_size")
+        group(r"[a-z0-9_.-]+(?:,[a-z0-9_.-]+)*", "wasm_features_allowlist")
+        literals.update({
+            "cranelift_regalloc_algorithm": "backtracking", "compiler_inlining": "no",
+            "instance_initialization_fuel": "u64::MAX_unmetered_then_zero",
+            "guest_debug": "not_compiled", "wasm_backtrace_details": "disable", "collector": "null",
+            "pooling_memory_protection_keys": "no", "pooling_pagemap_scan": "no",
+        })
+        if fields.get("operator_cost", "").startswith("op_prices_v1;"):
+            group(r"op_prices_v1;[A-Za-z0-9_:,]+", "operator_cost")
+            group(r"[a-z0-9_:,]+", "variable_operator_costs")
+            require(fields.get("fuel_semantics_revision") == "4",
+                    "unsupported priced profile fuel semantics")
+            parse_costs(fields["operator_cost"].split(";", 1)[1],
+                        PRICED_OPERATORS, ZERO_COST_OPERATORS)
+            parse_costs(fields.get("variable_operator_costs", ""),
+                        VARIABLE_COST_FIELDS, ("others",))
+        else:
+            literals.update(operator_cost="legacy_flat_v1", variable_operator_costs="all_zero")
     grammar.update({name: re.escape(value) for name, value in literals.items()})
     require(fields.keys() == grammar.keys(), "missing or unknown profile fields")
     for name, pattern in grammar.items():

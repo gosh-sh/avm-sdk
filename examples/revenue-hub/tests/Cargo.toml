@@ -15,7 +15,7 @@ avm-revenue-audit = { path = "../contracts/audit" }
 guest-abi-check = []
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-wasmtime = { version = "=36.0.12", default-features = false, features = ["component-model", "cranelift", "gc", "gc-null", "parallel-compilation", "pooling-allocator", "runtime", "std", "threads"] }
+wasmtime = { version = "=48.0.8", default-features = false, features = ["component-model", "cranelift", "gc", "gc-null", "parallel-compilation", "pooling-allocator", "runtime", "std", "threads"] }
 
 [[test]]
 name = "guest_modes"

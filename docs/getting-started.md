@@ -1,8 +1,8 @@
 # Getting Started
 
-These instructions describe SDK 0.4.0 and Core-WASM V2. Use its matching
-builder, local stand and profile bundle. SDK 0.3.0 retains its earlier
-compiler/profile; follow the documentation inside each installed release.
+These instructions describe SDK 0.5.0 and Core-WASM V2. Use its matching
+builder, local stand and profile bundle. Earlier releases retain their own
+compilers/profiles; follow the documentation inside each installed release.
 A [local bundle](releases.md#install-a-prepared-local-bundle) can also be
 verified and installed directly.
 
@@ -22,7 +22,7 @@ The installer places the selected release under
 export PATH="${HOME}/.local/bin:${PATH}"
 ```
 
-Choose the matching immutable `RELEASE_TAG` from the SDK 0.4.0 release page.
+Choose the matching immutable `RELEASE_TAG` from the SDK 0.5.0 release page.
 An unqualified install command selects the latest published release.
 
 ## Initialize The Stand
@@ -68,8 +68,8 @@ env RUSTUP_TOOLCHAIN=1.99.1 \
 ```
 
 The per-command environment selects the guest compiler even when the calling
-shell or native Cargo test uses Rust 1.93.0. Native runtime tools retain their
-separate 1.93.0 build identity. The builder rejects a different guest compiler,
+shell or native Cargo test uses Rust 1.98.0. Native runtime tools retain their
+separate 1.98.0 build identity. The builder rejects a different guest compiler,
 Cargo version or compiler wrapper before compilation.
 
 Artifacts:

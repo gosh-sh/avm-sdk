@@ -70,7 +70,7 @@ def payload():
     }]}})
     features = next(line.split(b"=", 1)[1].decode().split(",") for line in profile.splitlines()
                     if line.startswith(b"wasmtime_required_features="))
-    engine_id = "registry+https://github.com/rust-lang/crates.io-index#wasmtime@36.0.12"
+    engine_id = "registry+https://github.com/rust-lang/crates.io-index#wasmtime@48.0.8"
     engine = {"package_id": engine_id, "features": features,
               "scope": "Inert independent regression fixture; no compiler executed"}
     files["provenance/cargo-artifacts.jsonl"] = json_bytes({
@@ -392,6 +392,17 @@ class IntegrityTests(unittest.TestCase):
                 self.assertFalse((self.sdk_home / "releases" / TAG).exists())
                 self.assertEqual(list(self.bin_dir.iterdir()), [unrelated])
                 self.assertEqual(unrelated.read_bytes(), b"unrelated command")
+
+    def test_published_wasmtime36_profile_grammar_remains_verifiable_but_not_mixable(self):
+        current = PROFILE.read_bytes()
+        marker = b"instance_pre_abi_revision=1\n"
+        legacy = current[:current.index(marker) + len(marker)].replace(
+            b"wasm_component_model_more_async_builtins=", b"wasm_component_model_async_builtins=")
+        self.assertEqual(len(release.parse_profile(legacy)), 80)
+        for label, mixed in {"legacy-plus-new": legacy + b"collector=null\n",
+                             "new-plus-legacy": current + b"wasm_component_model_async_builtins=false\n"}.items():
+            with self.subTest(label=label), self.assertRaisesRegex(ValueError, "profile fields"):
+                release.parse_profile(mixed)
 
     def test_receipt_cannot_reuse_another_cargo_artifact_log(self):
         files = payload()

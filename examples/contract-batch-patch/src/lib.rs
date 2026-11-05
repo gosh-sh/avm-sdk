@@ -19,6 +19,7 @@ const INTERNAL_PATCH_BODY: [u8; 16] = [0x42; 16];
 const VALUE_ECC0: u128 = 37;
 const EXTRA_CURRENCY_ID: u32 = 7;
 const EXTRA_CURRENCY_AMOUNT: u128 = 11;
+const BATCH_FUEL_FEE_SHELLS: u128 = 2;
 
 struct BatchPatchContract;
 
@@ -63,7 +64,7 @@ impl BatchContract for BatchPatchContract {
             || message.destination != input.destination
             || ecc0.currency_id != 0
             || ecc0.amount != VALUE_ECC0
-            || message.fuel_fee_shells != 1
+            || message.fuel_fee_shells != BATCH_FUEL_FEE_SHELLS
             || currency.currency_id != EXTRA_CURRENCY_ID
             || currency.amount != EXTRA_CURRENCY_AMOUNT
             || extra.next().is_some()

@@ -32,7 +32,7 @@ def main():
                       "input_bytes": len(bytes.fromhex(input_hex)),
                       "output_bytes": len(bytes.fromhex(expected_hex))})
     evidence.write_text(json.dumps({"status": "PASS",
-        "scope": "Guest ABI only; in-tree guest SDK, Rust Wasmtime 36.0.12",
+        "scope": "Guest ABI only; in-tree guest SDK, Rust Wasmtime 48.0.8",
         "wasm_sha256": hashlib.sha256(wasm.read_bytes()).hexdigest(), "cases": cases}, indent=2) + "\n")
     print(f"Audit WASM/native output agreement and rejected-mode serialization: {len(cases)} PASS")
 
