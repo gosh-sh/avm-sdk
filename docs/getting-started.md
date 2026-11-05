@@ -49,8 +49,9 @@ identities, so rebuild contract A for its new package owner when testing upgrade
 
 ## Build A Contract
 
-Each example records its test peak in `avm-memory.json`. Deployment builds use
-that memory maximum unless `avm-contract.toml` explicitly overrides it.
+Each example records its tested stack, ABI arena and peak memory in
+`avm-memory.json`. Deployment builds use those resources unless explicitly
+overridden in `avm-contract.toml` or, for the arena, in the export macro.
 Read [contract memory](contract-memory.md) before repeating or extending tests.
 
 Copy an example inside this checkout before modifying it so its relative SDK

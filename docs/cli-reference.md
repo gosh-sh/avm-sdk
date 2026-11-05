@@ -19,16 +19,25 @@ written to `target/avm` below that directory. The SDK 0.5.0 builder enables
 target flags. The native host compiler in the release profile is a separate
 identity, Rust/Cargo 1.98.0.
 
-`[build].max_memory_bytes` in `avm-contract.toml` selects the module's declared
-maximum linear memory. Without it, deployment builds read `avm-memory.json`.
+`[build].stack_bytes`, `[build].arena_bytes` and `[build].max_memory_bytes`
+override the corresponding tested resources in `avm-memory.json`. Deployment
+builds require complete measured or explicit resources. Stack uses 16-byte
+alignment, arena uses exact bytes, and maximum memory uses 64-KiB pages.
 Use `build --for-testing` for marked measurement artifacts and
 `record-memory --manifest-path Cargo.toml --report <JSONL>` to save test peaks.
 Repeat `--code-hash <hash>` for other tested variants of that contract.
 See [contract memory](contract-memory.md) for constraints and local checks.
 
+`avm-local-stand check-contract-tests --wasm <module> --manifest-path <Cargo.toml>
+--tests <JSONL> --wasmtime-profile <profile>` replays captured raw guest ABI
+vectors for resource selection. It uses the normal admission and execution
+paths, checks statuses and output bytes with the original FUEL budgets, and
+reports initial and peak memory. This command does not maintain stand state;
+rerun the original stateful tests on the selected deployment artifacts.
+
 ## avm-local-stand
 
-Every invocation requires:
+Stateful stand commands require:
 
 ```text
 avm-local-stand <command> --state <path> --wasmtime-profile <path> [options]

@@ -155,4 +155,4 @@ fn record_callback(input: MessageInput<'_>) -> MessageOutput {
     MessageOutput::success(StateUpdate::FullReplace(state))
 }
 
-avm_contract_sdk::export_message_contract!(DeployCallbackRepro, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(DeployCallbackRepro);

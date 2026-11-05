@@ -36,12 +36,30 @@ pub type AvmAmount = u128;
 /// The VM-reserved method identifier for an account-local code upgrade.
 pub const CODE_UPGRADE_METHOD_ID: u64 = 0xc2c6_c51b_c610_249d;
 
-/// Default arena capacity used by the export macros.
-///
-/// This holds the live input and output allocations. Contracts whose admitted
-/// descriptor permits larger combined frames can select another bounded value
-/// in the two-argument macro form.
-pub const DEFAULT_GUEST_ARENA_BYTES: usize = 8 * 1024 * 1024 + 16;
+/// Arena capacity supplied by the contract builder from project measurements.
+/// A WASM export macro without an explicit capacity requires this build input.
+pub const DEFAULT_GUEST_ARENA_BYTES: usize = arena_build_input();
+
+const fn arena_build_input() -> usize {
+    let Some(value) = option_env!("AVM_GUEST_ARENA_BYTES") else {
+        return 0;
+    };
+    let bytes = value.as_bytes();
+    let (mut result, mut index) = (0_usize, 0);
+    while index < bytes.len() {
+        assert!(bytes[index] >= b'0' && bytes[index] <= b'9', "invalid arena build input");
+        result = match result.checked_mul(10) {
+            Some(value) => value,
+            None => panic!("arena build input overflow"),
+        };
+        result = match result.checked_add((bytes[index] - b'0') as usize) {
+            Some(value) => value,
+            None => panic!("arena build input overflow"),
+        };
+        index += 1;
+    }
+    result
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AccountAddress {
@@ -96,6 +114,12 @@ macro_rules! export_message_contract {
         );
     };
     ($contract:ty, arena_bytes = $arena_bytes:expr) => {
+        #[cfg(target_arch = "wasm32")]
+        const _: () = assert!($arena_bytes > 0 && $arena_bytes <= u32::MAX as usize,
+            "arena capacity is missing; measure contract tests, set build.arena_bytes or the macro arena_bytes parameter");
+        #[cfg(target_arch = "wasm32")]
+        #[no_mangle]
+        pub extern "C" fn __avm_guest_arena_bytes() -> u32 { $arena_bytes as u32 }
         static __AVM_GUEST_ARENA: $crate::GuestArena<{ $arena_bytes }> = $crate::GuestArena::new();
 
         #[no_mangle]

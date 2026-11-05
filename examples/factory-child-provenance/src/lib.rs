@@ -378,7 +378,7 @@ fn g(s: &mut [u32; 16], [a, b, c, d]: [usize; 4], x: u32, y: u32) {
     s[b] = (s[b] ^ s[c]).rotate_right(7);
 }
 
-avm_contract_sdk::export_message_contract!(FactoryChildProvenance, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(FactoryChildProvenance);
 
 #[cfg(test)]
 mod current_policy_tests {

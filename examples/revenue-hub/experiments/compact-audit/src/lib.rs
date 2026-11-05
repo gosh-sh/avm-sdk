@@ -323,7 +323,7 @@ impl BatchContract for AuditLedger {
 }
 
 #[cfg(target_arch = "wasm32")]
-avm_contract_sdk::export_batch_contract!(AuditLedger, arena_bytes = 524_288);
+avm_contract_sdk::export_batch_contract!(AuditLedger);
 
 /// Offline conversion only: no on-chain migration entrypoint or authority is supplied.
 /// Rejects unknown/noncanonical bytes rather than silently discarding them.

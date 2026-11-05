@@ -268,4 +268,4 @@ fn finish(s: State, name: &str, index: u8, amount: u128) -> HubResult<MessageOut
 }
 
 #[cfg(target_arch = "wasm32")]
-avm_contract_sdk::export_message_contract!(RevenueVault, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(RevenueVault);

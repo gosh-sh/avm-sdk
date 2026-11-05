@@ -609,7 +609,7 @@ fn nonzero_address(a: AccountAddress) -> bool {
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "guest"))]
-avm_contract_sdk::export_message_contract!(Escrow, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(Escrow);
 
 fn event_class(name: &str) -> Result<u64> {
     match name {

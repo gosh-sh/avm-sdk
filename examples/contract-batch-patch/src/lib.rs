@@ -101,4 +101,4 @@ fn valid_counter(state: &[u8]) -> Option<u64> {
     state[COUNTER_OFFSET..COUNTER_OFFSET + COUNTER_BYTES].try_into().ok().map(u64::from_le_bytes)
 }
 
-avm_contract_sdk::export_batch_contract!(BatchPatchContract, arena_bytes = 524_288);
+avm_contract_sdk::export_batch_contract!(BatchPatchContract);

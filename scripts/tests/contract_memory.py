@@ -73,7 +73,9 @@ def declared_maximum(manifest):
     if explicit is not None:
         return explicit
     record = json.loads(manifest.with_name("avm-memory.json").read_text())
-    if record["version"] != 1 or record["test_calls"] <= 0 or record["peak_memory_bytes"] <= 0:
+    # Earlier installed bundles use schema 1. Their maximum remains verifiable;
+    # the current builder separately requires schema 2 for deployment inputs.
+    if record["version"] not in (1, 2) or record["test_calls"] <= 0 or record["peak_memory_bytes"] <= 0:
         raise ValueError("invalid project memory measurement")
     return max(record["initial_memory_bytes"], ((record["peak_memory_bytes"] + 65535) // 65536) * 65536)
 
@@ -104,7 +106,11 @@ def main():
             raise ValueError("deployment build retained a measurement-only marker")
         if "artifact_purpose: deployment" not in (target / "avm-build-provenance.txt").read_text():
             raise ValueError("deployment provenance purpose is missing")
-        records.append({"manifest": relative, "minimum_bytes": minimum, "declared_max_bytes": maximum, "provenance_verified": True})
+        provenance = (target / "avm-build-provenance.txt").read_text()
+        resources = {name: int(next(line.split(": ", 1)[1] for line in provenance.splitlines() if line.startswith(name + ": "))) for name in ("stack_bytes", "arena_bytes")}
+        if "stack_first: true" not in provenance or "initial_heap_bytes: 0" not in provenance:
+            raise ValueError("missing verified stack-first resource layout")
+        records.append({"manifest": relative, "minimum_bytes": minimum, "declared_max_bytes": maximum, **resources, "provenance_verified": True})
         (args.output / "examples.json").write_text(json.dumps({"examples": records}, indent=2) + "\n")
     if not records:
         raise ValueError("no contract manifests found")

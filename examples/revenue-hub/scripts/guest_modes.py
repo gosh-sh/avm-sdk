@@ -45,6 +45,16 @@ def main():
         if not value["complete"]:
             raise ValueError("incomplete direct guest memory observations")
     process.check_returncode()
+    if environment.get("AVM_MEMORY_TEST_VECTORS"):
+        import blake3
+        captured = []
+        for line in vectors.read_text().strip().splitlines():
+            name, entrypoint, input_hex, expected_hex = line.split("\t")
+            captured.append({"name": name, "code_hash": blake3.blake3(wasm.read_bytes()).hexdigest(),
+                "entrypoint": entrypoint, "input": input_hex, "output": expected_hex, "vm_status": 0,
+                "fuel_budget": 10_000_000_000, "output_cap": 4294967295, "direct": True})
+        path = Path(environment["AVM_MEMORY_TEST_VECTORS"]) / f"direct-{os.getpid()}.jsonl"
+        path.write_text("".join(json.dumps(value) + "\n" for value in captured))
     cases = []
     for row in vectors.read_text().strip().splitlines():
         name, entrypoint, input_hex, expected_hex = row.split("\t")

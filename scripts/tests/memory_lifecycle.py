@@ -89,15 +89,23 @@ def main():
         assert (artifacts / "NOT-FOR-DEPLOYMENT").is_file()
         assert b"NOT FOR DEPLOYMENT" in testing.stderr
         assert "artifact_purpose: memory-test-only" in (fixture / "target/avm-build-provenance.txt").read_text()
+        unmeasured = run([args.builder.resolve(), "record-memory", "--manifest-path", fixture / "Cargo.toml", "--report", report], "bootstrap-is-not-a-measurement", expected=1)
+        assert b"bootstrap resources are not a measurement" in unmeasured.stderr
+        manifest.write_text("[build]\nstack_bytes = 16384\narena_bytes = 65536\n\n" + descriptor)
+        build("bounded-resource-test-build", testing=True)
         initial, testing_maximum = memory_limits((artifacts / "contract.wasm").read_bytes())
         stand("init", "init", dapp_id="11" * 32)
         address, _ = deploy("measure")
+        control, _ = stand("call", "control-growth", address=address, method="memory.probe", args_json="0", identity="user", check_memory=True, **timing())
+        control_pages = int.from_bytes(read_state(state)[0][address]["data"], "little")
         grown, _ = stand("call", "successful-growth", address=address, method="memory.probe", args_json="1", identity="user", check_memory=True, **timing())
-        assert grown["memory_check"]["runs"][0]["peak_bytes"] == initial + 65_536
+        assert grown["memory_check"]["runs"][0]["peak_bytes"] == (control_pages + 1) * 65_536
         run([args.builder.resolve(), "record-memory", "--manifest-path", fixture / "Cargo.toml", "--report", report], "record")
         record = json.loads((fixture / "avm-memory.json").read_text())
         peak = record["peak_memory_bytes"]
-        assert peak == initial + 65_536 and record["test_calls"] >= 2
+        assert peak == (control_pages + 1) * 65_536 and record["test_calls"] >= 3
+        assert record["version"] == 2 and record["stack_bytes"] == 16384 and record["arena_bytes"] == 65536
+        manifest.write_text(descriptor)
         deployment = build("deployment-build")
         provenance = (fixture / "target/avm-build-provenance.txt").read_text()
         check_built_memory((artifacts / "contract.wasm").read_bytes(), peak, provenance)
@@ -105,14 +113,22 @@ def main():
         assert "artifact_purpose: deployment" in provenance and "memory_measurement_blake3:" in provenance
         assert b"largest state and inputs" in deployment.stderr
         measured_address, warning = deploy("measured")
+        _, warning = stand("call", "near-limit-growth", address=measured_address, method="memory.probe", args_json="1", identity="user", check_memory=True, **timing())
         assert "80%" in warning
         rejected, diagnostic = stand("call", "rejected-growth", expected=2, address=measured_address, method="memory.probe", args_json="1000", identity="user", check_memory=True, **timing())
         assert rejected["status"] == "ok" and not rejected["memory_check"]["passed"]
         assert rejected["memory_check"]["runs"][0]["rejected_growths"] == 1
         assert "memory.grow was rejected" in diagnostic
         assert int.from_bytes(read_state(state)[0][measured_address]["data"], "little") == 0xFFFFFFFF
+        before_overflow = read_state(state)[0][measured_address]["data"]
+        before_overflow_state = state.read_bytes()
+        trapped, _ = stand("call", "stack-overflow", expected=2, address=measured_address, method="memory.probe", args_json=str(0x8000_0000 | 1024), identity="user", check_memory=True, **timing())
+        assert read_state(state)[0][measured_address]["data"] == before_overflow
+        assert "VM_WASM_TRAP" in trapped["error"] and state.read_bytes() == before_overflow_state
+        repeated, _ = stand("call", "stack-overflow-repeat", expected=2, address=measured_address, method="memory.probe", args_json=str(0x8000_0000 | 1024), identity="user", check_memory=True, **timing())
+        assert repeated["error"] == trapped["error"] and state.read_bytes() == before_overflow_state
         before = (fixture / "avm-memory.json").read_bytes()
-        manifest.write_text(f"[build]\nmax_memory_bytes = {peak}\n\n" + descriptor)
+        manifest.write_text(f"[build]\nmax_memory_bytes = {peak}\nstack_bytes = 16384\narena_bytes = 65536\n\n" + descriptor)
         build("explicit-test-build", testing=True)
         failure = run([args.builder.resolve(), "record-memory", "--manifest-path", fixture / "Cargo.toml", "--report", report], "rejected-record", expected=1)
         assert b"growth was rejected" in failure.stderr
@@ -123,6 +139,7 @@ def main():
             "peak_memory_bytes": peak, "deployment_maximum_bytes": peak, "testing_maximum_bytes": testing_maximum,
             "test_calls": record["test_calls"], "marker_and_purpose_verified": True, "warning_verified": True,
             "rejected_growth_preserved": True, "failed_record_preserved_previous_measurement": True,
+            "rust_stack_overflow_trap_repeated": True, "overflow_preserved_canonical_state": True,
             "temporary_state_removed_on_exit": True}, indent=2) + "\n")
     print("PASS: measured deployment maximum, marker, provenance, warning and rejected growth")
 

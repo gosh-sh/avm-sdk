@@ -49,6 +49,8 @@ target = output / "examples/deploy-callback-repro"
 target.mkdir(parents=True)
 for name in ("Cargo.toml", "Cargo.lock", "avm-contract.toml"):
     shutil.copy2(example / name, target / name)
+if (example / "avm-memory.json").is_file():
+    shutil.copy2(example / "avm-memory.json", target / "avm-memory.json")
 shutil.copytree(example / "src", target / "src")
 PY
 here="${work}/source/examples/deploy-callback-repro"

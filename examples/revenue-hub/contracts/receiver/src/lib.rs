@@ -152,4 +152,4 @@ pub fn vault_address(b: &[u8]) -> HubResult<AccountAddress> {
 }
 
 #[cfg(target_arch = "wasm32")]
-avm_contract_sdk::export_message_contract!(PayoutReceiver, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(PayoutReceiver);

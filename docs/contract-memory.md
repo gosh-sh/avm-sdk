@@ -1,90 +1,127 @@
-# Contract memory maximum
+# Contract memory, stack and ABI arena
 
-A deployment build uses the peak linear memory measured by the contract's own
-tests. Commit the resulting `avm-memory.json` next to `avm-contract.toml`.
-The builder rounds the recorded peak up to a 64-KiB WASM page and never selects
-a maximum below the recorded initial memory. It verifies the emitted memory
-section and writes the selected maximum, measurement-file digest and artifact
-purpose to `target/avm-build-provenance.txt`. Both clean builds use that value.
+A deployment build reads `avm-memory.json` next to `avm-contract.toml`. Commit
+this project file with your source. It records the stack and ABI arena required
+by the contract's own tests, their peak linear memory, test count and tested
+WASM hashes. No fixed stack, arena or linear-memory default is used for deployment.
+Missing measurements require explicit settings or a complete test measurement.
 
-There is no fixed deployment default. Without a measurement or an explicit
-setting, the build fails and explains how to produce one.
+The stack is the smallest passing size on a **16-byte ABI alignment** grid.
+The arena holds the simultaneously live raw ABI input and output allocations;
+its measured capacity is their largest combined byte length, without rounding.
+The arena is separate from Rust's dynamically allocated heap. The linker reserves
+no extra initial heap page. The total memory maximum is the larger of initial
+memory and the test peak, rounded up to a **64-KiB WASM page**. Stack and arena
+are not rounded to memory pages.
 
-## Measure your tests
+## Measure your contract's complete tests
+
+The capture wrapper runs your existing test command, preserving its assertions
+and outcomes. That command must build and execute the contract through
+`AVM_CONTRACT_BUILD` and `AVM_LOCAL_STAND`, or the corresponding executables on
+`PATH`. Use fresh disposable stand state. The single-contract capture command
+expects one contract package; bundled multi-contract examples have their own
+complete-suite command below.
 
 ```bash
-avm-contract-build build --manifest-path Cargo.toml --for-testing
-export AVM_MEMORY_REPORT="$PWD/target/memory-runs.jsonl"
-: > "$AVM_MEMORY_REPORT"
-# Run every supported scenario, including the largest state and inputs.
-# Deploy this test build into a fresh disposable local stand first.
-avm-local-stand call --state demo.state --wasmtime-profile "$PROFILE" \
-  --address "$ADDRESS" --method your.method --args-json '{}' \
-  --identity user --check-memory
-avm-contract-build record-memory --manifest-path Cargo.toml \
-  --report "$AVM_MEMORY_REPORT"
+SDK_TESTS="$AVM_SDK_HOME/current/scripts/tests"
+CONTRACT="$PWD"
+python3 "$SDK_TESTS/collect_contract_tests.py" \
+  --contract "$CONTRACT" --builder "$AVM_CONTRACT_BUILD" \
+  --stand "$AVM_LOCAL_STAND" --profile "$AVM_WASMTIME_PROFILE" \
+  --output "$CAPTURE_DIR" -- bash scripts/test.sh
+python3 "$SDK_TESTS/measure_contract_resources.py" \
+  --corpus "$CAPTURE_DIR" --sdk "$(dirname "$CONTRACT")" \
+  --builder "$AVM_CONTRACT_BUILD" --stand "$AVM_LOCAL_STAND" \
+  --profile "$AVM_WASMTIME_PROFILE" --output "$MEASUREMENT_DIR"
 avm-contract-build build --manifest-path Cargo.toml
+bash scripts/test.sh
 git add avm-memory.json
 ```
 
-The measuring build uses the existing admission cap when no maximum is explicit.
-Its output directory contains `NOT-FOR-DEPLOYMENT`, its provenance says
-`memory-test-only`, and stderr warns against deployment. Test builds retain the
-usual artifact names so existing local test commands can consume them. Rebuild
-without `--for-testing` before deployment; a successful deployment build clears
-its own stale marker and records purpose `deployment`.
+Install the SDK's Python test dependencies first. Both output directories must
+be new external scratch directories. Test commands that optimize modules must
+call `wasm-opt` through `PATH` and supply its executable with `--optimizer`
+to both capture and selection. The
+bundled collector also captures direct guest ABI vectors used by the examples.
 
-`AVM_MEMORY_REPORT` collects all synchronous stand invocations into a locked
-JSONL file, preserving the original outcomes of expected negative tests and
-commands without execution. Explicit `--check-memory` additionally makes the
-command fail on rejected growth, incomplete capture or no observed invocation.
-Use it on executing deploy, call or replay commands; quoting and inspection
-do not run a guest.
+Selection replays every captured invocation with its original input, expected
+status, output and FUEL budget. It searches stack sizes on the 16-byte grid,
+checks the next smaller size fails, and checks one byte less arena fails.
+It then retests the page-rounded maximum. It preserves explicit build settings
+and macro arena overrides. Build recipes are restored after every probe, even
+on failure. Review the retained results and rerun your **whole original test
+command on the deployment artifacts**; raw-call replay alone cannot replace
+stateful assertions, funding checks or a test's external oracle.
+Keep all build-recipe project directories available until selection finishes;
+test cleanup must not remove a temporary source variant that still needs rebuilding.
 
-`record-memory` selects the current tested WASM's CodeHash. Repeat `--code-hash`
-to include other tested builds of the same contract. Use the final WASM after
-optimization, include every tested variant and keep other contracts separate.
-Absent observations, incomplete captures and rejected growth cannot produce a
-successful measurement. The versioned project file records initial bytes,
-peak bytes, test-call count and tested WASM hashes. It is reviewed project
-metadata, not a proof that every future input will fit. Repeat measurements
-after changing sources, dependencies, compiler settings or supported inputs.
+`--for-testing` permits bootstrap resources only for collecting tests: the
+existing admission cap, 1-MiB stack and 8-MiB-plus-16-byte arena when unspecified.
+These are not measurements. Artifacts contain `NOT-FOR-DEPLOYMENT`, provenance
+says `memory-test-only`, and stderr warns against deployment. Such bootstrap
+values cannot be saved by `record-memory`. A successful ordinary build removes
+its stale marker and records purpose `deployment`.
 
-## Understand the report
+## Explicit settings
 
-`memory_check.runs` contains CodeHash, entrypoint, initial bytes,
-`declared_max_bytes`, `peak_bytes`, `near_limit` and `rejected_growths` for each
-fresh invocation. Peak includes allocator, entrypoint and cleanup growth.
-It measures WASM linear-memory capacity, not live Rust allocations or host RSS.
-Linear memory cannot shrink within a fresh instance.
-
-A warning appears at **80%** of the declared maximum. **Production data larger
-than your tests can exhaust the declared memory: growth will be rejected and
-the call can fail.** Test the largest supported state, inputs and batches,
-including temporary allocations and output serialization. A small successful
-test is insufficient coverage. Core-WASM `memory.grow` returns `-1` on rejected
-growth; the local check fails even if the guest handled that sentinel. Its VM
-result and actual stand state changes are preserved, so use disposable state.
-
-## Set an explicit maximum
-
-An explicit setting replaces the measurement:
+Each explicit field overrides the corresponding measurement:
 
 ```toml
 [build]
-max_memory_bytes = 4194304
+stack_bytes = 24576
+arena_bytes = 4097
+max_memory_bytes = 262144
 ```
 
-Use a positive integer byte count, in multiples of 65536, within the runtime
-admission cap and above the module's initial memory requirement. This does not
-raise the runtime cap or FUEL budget. The builder accepts the explicit value
-without reading an old measurement file. Changing the maximum changes the
-WASM bytes and code identity; rebuild and publish a new code version for an
-existing contract. Recheck FUEL funding for the active runtime profile.
+Stack must be positive and a multiple of 16. Arena is an integer byte capacity.
+Maximum memory must be a positive multiple of 65536 within the runtime admission
+cap and at least the compiled initial memory. All three explicit values allow
+a deployment build without a measurement file. An explicit `arena_bytes` macro
+parameter takes precedence over the configured arena; the builder reads the
+actual compiled capacity and records it. Older guest SDKs without capacity
+metadata must be updated; an unknown arena is never reported as zero.
 
-## Reproduce the bundled examples
+The builder verifies stack-first layout in the actual module: the downward-growing
+linear stack starts at address zero, before static data and the heap. It guards
+stack-pointer updates so wrapped underflow traps before the function accesses
+data using that pointer. Diagnostic globals and the capacity helper are removed
+from the final export surface. The emitted maximum and actual stack/arena are
+recorded in `target/avm-build-provenance.txt`; two clean builds must agree.
 
-All 17 example contracts keep their own measured project file. Their complete
-local scenario suites and direct WASM vectors can be measured again with
-`scripts/tests/measure_example_memory.py`. Verify the deployment memory sections
-and two-clean-build results with `scripts/tests/contract_memory.py`.
+**Larger production inputs can require more stack, arena and memory than the
+tests. Exhausting a limit can stop the call.** Test the largest supported state,
+inputs, batches and output serialization, and increase explicit limits when
+needed. Changing sources, dependencies, compiler settings or supported inputs
+requires repeating qualification. Resource changes alter WASM bytes and CodeHash;
+deploy a new code version and recheck its FUEL funding.
+
+## Local memory checks
+
+`avm-local-stand ... --check-memory` reports each fresh invocation's CodeHash,
+entrypoint, initial bytes, `declared_max_bytes`, `peak_bytes`, `near_limit` and
+`rejected_growths`. Peak includes allocator, entrypoint and cleanup growth. It
+measures linear-memory capacity, not live Rust allocations or host RSS. Linear
+memory cannot shrink within an instance. A warning appears at **80%** of the
+declared maximum. No observed invocation, incomplete capture or rejected growth
+fails the check. Quoting and inspection do not execute a guest.
+
+`AVM_MEMORY_REPORT` appends synchronous observations to a locked JSONL file
+without changing the original command's outcome. Once stack and arena have
+been measured or explicitly set, `avm-contract-build record-memory
+--manifest-path Cargo.toml --report "$AVM_MEMORY_REPORT"` can refresh the peak.
+Repeat `--code-hash` for every tested variant, including optimized artifacts.
+Foreign contracts, absent observations and rejected growth cannot provide a
+successful measurement. Core-WASM `memory.grow` still returns `-1` on rejected
+growth; the check fails even when guest code handles that sentinel. Use
+disposable state because actual VM outcomes and state changes are preserved.
+
+## Bundled examples
+
+All 17 contracts retain their own measured project file. Run
+`scripts/tests/measure_example_memory.py --collect-only` with its required tool
+and output arguments, then select resources with `measure_contract_resources.py`.
+Run the full collector again with `--collect-only --deployment` to check the
+original scenario suites on deployment builds. `contract_memory.py` verifies
+each emitted memory section and resource provenance. The builder itself always
+performs two independent clean compilations and compares their admitted bytes.

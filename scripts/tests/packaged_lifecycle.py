@@ -273,7 +273,7 @@ class Journey:
         }, indent=2))
 
 
-def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=False):
+def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=False, deployment=False):
     evidence.mkdir(parents=True, exist_ok=False)
     current = source or json.loads((bundle / "BUILD-MANIFEST.json").read_bytes())["schema"] == "gosh.avm-sdk.release.v2"
     if current and not source:
@@ -334,9 +334,11 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
         assert process.returncode == 0, process.stderr.decode()
         directory = root / "target/avm"
         names = ["contract.acab", "contract.descriptor", "contract.wasm"]
-        assert sorted(p.name for p in directory.iterdir()) == sorted(names + (["NOT-FOR-DEPLOYMENT"] if source else []))
-        if source:
+        assert sorted(p.name for p in directory.iterdir()) == sorted(names + (["NOT-FOR-DEPLOYMENT"] if source and not deployment else []))
+        if source and not deployment:
             assert "artifact_purpose: memory-test-only" in (root / "target/avm-build-provenance.txt").read_text()
+        elif current:
+            assert "artifact_purpose: deployment" in (root / "target/avm-build-provenance.txt").read_text()
         values = {name: (directory / name).read_bytes() for name in names}
         expected = [("contract.wasm", blake3(values["contract.wasm"])),
                     ("contract.acab", blake3(b"AVM_ABI" + values["contract.acab"])),
@@ -346,7 +348,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
         assert values["contract.acab"][:4] == b"ACAB"
         assert len(values["contract.descriptor"]) == 66
         artifacts[example] = {name: sha(data) for name, data in values.items()}
-        maximum = fixture_memory_maximum(root, source)
+        maximum = fixture_memory_maximum(root, source and not deployment)
         admission[example] = wasm_facts(values["contract.wasm"], example == "contract-batch-patch", maximum)
     assert artifacts["contract-a-v1"]["contract.acab"] == artifacts["contract-a-v2"]["contract.acab"]
     assert artifacts["contract-a-v1"]["contract.descriptor"] == artifacts["contract-a-v2"]["contract.descriptor"]
@@ -446,7 +448,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
     assert built.returncode == 0, built.stderr.decode()
     failure_wasm = (negative / "target/avm/contract.wasm").read_bytes()
     assert sha(failure_wasm) != artifacts["contract-b"]["contract.wasm"]
-    failure_maximum = fixture_memory_maximum(negative, source)
+    failure_maximum = fixture_memory_maximum(negative, source and not deployment)
     wasm_facts(failure_wasm, False, failure_maximum)
     (evidence / "failure-artifacts.json").write_text(json.dumps({p.name: sha(p.read_bytes()) for p in (negative / "target/avm").iterdir()}, indent=2))
     for label, method, handler, status in [
@@ -522,5 +524,7 @@ if __name__ == "__main__":
     parser.add_argument("--incompatible-state", type=Path)
     parser.add_argument("--wrong-rustc", type=Path)
     parser.add_argument("--source", action="store_true", help="Run source contract scenarios with explicitly marked test artifacts")
+    parser.add_argument("--source-deployment", action="store_true", help="Run source scenarios with deployable measured resource limits")
     arguments = parser.parse_args()
-    run(arguments.bundle.resolve(), arguments.evidence.resolve(), arguments.incompatible_state, arguments.wrong_rustc, arguments.source)
+    run(arguments.bundle.resolve(), arguments.evidence.resolve(), arguments.incompatible_state, arguments.wrong_rustc,
+        arguments.source or arguments.source_deployment, arguments.source_deployment)

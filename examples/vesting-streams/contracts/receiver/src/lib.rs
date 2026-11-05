@@ -125,4 +125,4 @@ fn process(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
     Ok(out)
 }
 #[cfg(target_arch = "wasm32")]
-avm_contract_sdk::export_message_contract!(Receiver, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(Receiver);

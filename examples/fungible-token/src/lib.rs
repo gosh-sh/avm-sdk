@@ -147,4 +147,4 @@ fn transferred(ledger: &Ledger, from: [u8; 32], to: [u8; 32], amount: u64) -> Me
     output
 }
 
-avm_contract_sdk::export_message_contract!(FungibleToken, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(FungibleToken);

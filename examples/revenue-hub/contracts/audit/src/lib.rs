@@ -322,4 +322,4 @@ impl BatchContract for AuditLedger {
 }
 
 #[cfg(target_arch = "wasm32")]
-avm_contract_sdk::export_batch_contract!(AuditLedger, arena_bytes = 524_288);
+avm_contract_sdk::export_batch_contract!(AuditLedger);

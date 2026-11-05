@@ -43,6 +43,12 @@ Status **33** is `VM_WASM_STACK_LIMIT`: the call exceeded the WASM stack limit,
 for example through recursion that is too deep. Bound recursion depth in the
 contract instead of relying on this limit.
 
+The contract's linker-selected linear-memory stack is a separate bound. Its
+stack-first layout and generated pointer guards turn overflow into a deterministic
+WASM trap (status **30**) before data or heap storage can be overwritten.
+Choose its size from complete contract tests or `build.stack_bytes`;
+see [contract memory](contract-memory.md).
+
 The stand CLI does not offer an override for these limits. Build contracts with
 the pinned compiler and account for the configured FUEL budget.
 

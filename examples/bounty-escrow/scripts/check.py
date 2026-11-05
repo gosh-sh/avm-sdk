@@ -57,6 +57,8 @@ def main():
     run("native-tests", ["cargo", "+1.99.1", "test", "--workspace", "--locked", "--offline"])
     for contract in ("escrow", "receiver"):
         run("build-" + contract, [args.builder, "build", "--manifest-path", ROOT / "contracts" / contract / "Cargo.toml"])
+        provenance = (ROOT / "contracts" / contract / "target/avm-build-provenance.txt").read_text()
+        env["AVM_GUEST_ARENA_BYTES"] = next(line.removeprefix("arena_bytes: ") for line in provenance.splitlines() if line.startswith("arena_bytes: "))
         run("wasm-clippy-" + contract, ["cargo", "+1.99.1", "clippy", "-p", "avm-bounty-" + contract, "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
     run("canonical-ids", ["python3", "scripts/sync_ids.py", "--check"])
     run("artifact-inspection", ["python3", "scripts/verify_artifacts.py", "--out", out / "artifacts.json"])

@@ -65,4 +65,4 @@ fn outbound(input: MessageInput<'_>, method_id: u64, body: Vec<u8>) -> OutboundI
     }
 }
 
-avm_contract_sdk::export_message_contract!(generated::Contract<Handlers>, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(generated::Contract<Handlers>);

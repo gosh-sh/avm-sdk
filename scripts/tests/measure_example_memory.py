@@ -25,7 +25,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("sdk", "builder", "stand", "profile", "optimizer", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--collect-only", action="store_true", help="Retain the complete corpus without replacing project measurements")
+    parser.add_argument("--deployment", action="store_true", help="Exercise deployment builds with committed resource measurements")
     args = parser.parse_args()
+    if args.deployment and not args.collect_only:
+        parser.error("use --collect-only with --deployment to preserve the selected resource measurements")
     source, output = args.sdk.resolve(), args.output.resolve()
     if output.is_relative_to(source):
         raise ValueError("measurement output must be outside the SDK source tree")
@@ -47,12 +51,19 @@ def main():
     report.write_text("")
     builds.write_text("")
     environment = os.environ.copy()
+    if args.collect_only and not args.deployment:
+        # Type-checking guest-only tests needs a capacity as well. The builder
+        # owns real artifact capacities and overrides this test environment.
+        environment["AVM_GUEST_ARENA_BYTES"] = "8388624"
+    if args.deployment:
+        environment["AVM_MEMORY_TEST_DEPLOYMENT"] = "1"
     environment.update(AVM_MEMORY_REPORT=str(report), AVM_MEMORY_VECTOR_STATS="1",
         AVM_MEMORY_TEST_PROJECTS=str(output / "projects.json"), AVM_MEMORY_TEST_BUILDS=str(builds),
-        AVM_MEMORY_TEST_BUILDER=str(args.builder.resolve()), AVM_MEMORY_TEST_STAND=str(args.stand.resolve()))
+        AVM_MEMORY_TEST_BUILDER=str(args.builder.resolve()), AVM_MEMORY_TEST_STAND=str(args.stand.resolve()),
+        AVM_MEMORY_TEST_OPTIMIZER=str(args.optimizer.resolve()), AVM_MEMORY_TEST_VECTORS=str(output / "test-vectors"))
     driver = sdk / "scripts/tests/memory_test_driver.py"
     (sdk / "bin").mkdir(exist_ok=True)
-    for mode, name in (("builder", "avm-contract-build"), ("stand", "avm-local-stand")):
+    for mode, name in (("builder", "avm-contract-build"), ("stand", "avm-local-stand"), ("optimizer", "wasm-opt")):
         path = sdk / "bin" / name
         if path.is_symlink():
             path.unlink()
@@ -78,7 +89,7 @@ def main():
 
     for relative in projects.values():
         run("initial-build-" + relative.replace("/", "_"), [sdk / "bin/avm-contract-build", "build", "--manifest-path", sdk / relative / "Cargo.toml"])
-    run("source-contract-scenarios", [sys.executable, "-B", sdk / "scripts/tests/packaged_lifecycle.py", "--bundle", sdk, "--evidence", output / "source-contract-scenarios", "--source"])
+    run("source-contract-scenarios", [sys.executable, "-B", sdk / "scripts/tests/packaged_lifecycle.py", "--bundle", sdk, "--evidence", output / "source-contract-scenarios", "--source-deployment" if args.deployment else "--source"])
     run("contract-tools", [sys.executable, "-B", sdk / "scripts/tests/sdk_issue_public_paths.py", "--sdk", sdk,
         "--builder", sdk / "bin/avm-contract-build", "--stand", sdk / "bin/avm-local-stand", "--profile", args.profile.resolve(), "--out", output / "contract-tools"])
     run("deploy-callback", ["bash", sdk / "examples/deploy-callback-repro/repro.sh", "--builder", sdk / "bin/avm-contract-build",
@@ -86,9 +97,9 @@ def main():
     for name in ("bounty-escrow", "revenue-hub"):
         command = ["bash", sdk / "examples" / name / "scripts/check.sh", "--sdk", sdk, "--out", output / name]
         if name == "revenue-hub":
-            command += ["--optimizer", args.optimizer.resolve()]
+            command += ["--optimizer", sdk / "bin/wasm-opt"]
         run(name, command)
-    run("vesting-streams", ["bash", sdk / "examples/vesting-streams/scripts/check.sh", sdk, args.optimizer.resolve()],
+    run("vesting-streams", ["bash", sdk / "examples/vesting-streams/scripts/check.sh", sdk, sdk / "bin/wasm-opt"],
         extra={"AVM_EVIDENCE_DIR": output / "vesting-streams"})
     run("fungible-token", ["bash", sdk / "examples/fungible-token/stand-e2e.sh"], extra={"AVM_TOKEN_WORK": output / "fungible-token"})
     run("factory-child", ["bash", sdk / "examples/factory-child-provenance/prove.sh"],
@@ -108,6 +119,9 @@ def main():
                 raise ValueError(f"unknown or ambiguous tested CodeHash: {event['code_hash']}")
             observed[next(iter(owners))].add(event["code_hash"])
     results = []
+    if args.collect_only:
+        (output / "result.json").write_text(json.dumps({"passed": True, "mode": "complete-test-corpus", "observed": {key: sorted(value) for key, value in observed.items()}}, indent=2) + "\n")
+        return
     for project, hashes in observed.items():
         if not hashes:
             raise ValueError(f"no real test invocation for {project}")

@@ -270,7 +270,7 @@ fn event_read_checksum(bytes: &[u8]) -> u64 {
     })
 }
 
-avm_contract_sdk::export_message_contract!(ContractB, arena_bytes = 262_144);/* AVM_E2E_FAILURE_FLOW_HELPER_BEGIN */
+avm_contract_sdk::export_message_contract!(ContractB);/* AVM_E2E_FAILURE_FLOW_HELPER_BEGIN */
 
 #[inline(always)]
 fn failure_flow(input: &MessageInput<'_>) -> Option<MessageOutput> {

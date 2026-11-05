@@ -243,4 +243,4 @@ fn process_callback(input: MessageInput<'_>) -> MessageOutput {
     MessageOutput::success(StateUpdate::FullReplace(next_state))
 }
 
-avm_contract_sdk::export_message_contract!(ContractA, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(ContractA);

@@ -47,4 +47,4 @@ impl Contract for Boundary {
         MessageOutput::success(update)
     }
 }
-avm_contract_sdk::export_message_contract!(Boundary, arena_bytes = 524_288);
+avm_contract_sdk::export_message_contract!(Boundary);

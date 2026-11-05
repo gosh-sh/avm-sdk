@@ -121,4 +121,4 @@ pub fn bound_source(state: &[u8]) -> Option<AccountAddress> {
 }
 
 #[cfg(target_arch = "wasm32")]
-avm_contract_sdk::export_message_contract!(Receiver, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(Receiver);

@@ -23,7 +23,8 @@ cargo clippy --workspace --all-targets --locked --offline -- -D warnings 2>&1 | 
 cargo test --workspace --locked --offline 2>&1 | tee "$evidence/native-tests.txt"
 bash scripts/build.sh "$sdk" "$optimizer"
 for contract in vesting receiver; do
-  cargo clippy -p "avm-stream-$contract" --target wasm32-unknown-unknown --locked --offline -- -D warnings 2>&1 | tee "$evidence/clippy-wasm-$contract.txt"
+  AVM_GUEST_ARENA_BYTES="$(sed -n 's/^arena_bytes: //p' "contracts/$contract/target/avm-build-provenance.txt")" \
+    cargo clippy -p "avm-stream-$contract" --target wasm32-unknown-unknown --locked --offline -- -D warnings 2>&1 | tee "$evidence/clippy-wasm-$contract.txt"
 done
 python3 -B scripts/verify_artifacts.py --output "$evidence/artifacts.json"
 python3 -B scripts/e2e.py --sdk "$sdk" --output "$evidence/avm-e2e.json"
