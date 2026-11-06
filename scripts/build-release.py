@@ -14,12 +14,16 @@ import tarfile
 import tomllib
 
 from manual_gates import clean, head, normalize_scratch_environment
-from release import ARCHIVE, BINARIES, ROOT, artifact_records, digest, engine_library_artifact, file_digest, parse_profile, require, verify_archive
+from release import ARCHIVE, BINARIES, ROOT, artifact_records, digest, engine_library_artifact, file_digest, json_object, parse_profile, require, verify_archive
 
 RUST_NOTICE_SHA256 = {
     "COPYRIGHT.html": "5b0c93fc4e6d4b072eaa521b1762d1e746f4c368f65e81a0e5308e2772dac85e",
     "COPYRIGHT-library.html": "68129500b616d5838629e68f55ff3aed5e096dacf60ce9eb41bbe599a563afa6",
 }
+# Stable public names of the build's private locations: the binaries' path
+# remapping and every published provenance path use them.
+PUBLIC_ROOTS = {"cargo": "/avm/cargo", "sdk": "/avm/sdk", "source": "/avm/source",
+                "target": "/avm/target", "toolchain": "/avm/toolchain"}
 
 
 def capture(argv, cwd):
@@ -206,7 +210,7 @@ def build(source, sdk, output, gates):
     # Keep host feature detection dynamic. Compiling the host itself for v3 can
     # constant-fold is_x86_feature_detected! and bypass the engine's CPU rejection.
     # The accepted profile separately fixes Cranelift's guest target to v3.
-    flags = f"--cfg tokio_unstable -Ctarget-cpu=x86-64 --remap-path-prefix={source}=/avm/source --remap-path-prefix={target}=/avm/target"
+    flags = f"--cfg tokio_unstable -Ctarget-cpu=x86-64 --remap-path-prefix={source}={PUBLIC_ROOTS['source']} --remap-path-prefix={target}={PUBLIC_ROOTS['target']}"
     flags += " " + " ".join(native_linker["rustflags"])
     environment = os.environ.copy()
     environment.update(RUSTFLAGS=flags, CARGO_INCREMENTAL="0", SOURCE_DATE_EPOCH="0",
@@ -290,9 +294,67 @@ def build(source, sdk, output, gates):
                                          "features": engine_features,
                                          "scope": "Actual shared Wasmtime artifact linked by this combined Cargo build"}
                                  for name in BINARIES},
-               "source_gates_sha256": file_digest(gates)}
+               "source_gates_sha256": file_digest(gates),
+               # Private locations; package() publishes them only by PUBLIC_ROOTS.
+               "path_roots": {"cargo": str(Path(os.environ["CARGO_HOME"])),
+                              "sdk": str(Path(__file__).resolve().parents[1]),
+                              "source": str(source), "target": str(target),
+                              "toolchain": str(compiler.parent.parent)}}
     (output / "build.json").write_bytes(json_bytes(receipt))
     print(json.dumps({"built": ids, "binaries": executed}))
+
+
+def public_provenance(build_root, receipt):
+    """Derive the published build records; the private originals stay in build_root."""
+    roots = receipt.get("path_roots")
+    require(isinstance(roots, dict) and roots.keys() == PUBLIC_ROOTS.keys()
+            and all(isinstance(path, str) and Path(path).is_absolute() for path in roots.values())
+            and len(set(roots.values())) == len(roots), "build receipt lacks its private path roots")
+    names = {path: PUBLIC_ROOTS[name] for name, path in roots.items()}
+    # One pass, deepest root first, so a public name is never rewritten again.
+    pattern = re.compile("|".join(re.escape(path) for path in sorted(names, key=len, reverse=True)))
+
+    def public(value):
+        if isinstance(value, str):
+            return pattern.sub(lambda match: names[match.group()], value)
+        if isinstance(value, list):
+            return [public(item) for item in value]
+        if isinstance(value, dict):
+            result = {public(key): public(item) for key, item in value.items()}
+            require(len(result) == len(value), "public build paths collide")
+            return result
+        return value
+
+    records = [json_object(line) for line in (build_root / "cargo-artifacts.jsonl").read_bytes().splitlines() if line.strip()]
+    # Keep build() order rules: canonical record order, build-finished last.
+    *rows, finished = [(json.dumps(public(row), sort_keys=True) + "\n").encode() for row in records]
+    artifacts = b"".join(sorted(rows)) + finished
+    directories = {row["package_id"]: os.path.dirname(row["manifest_path"]) for row in records if "manifest_path" in row}
+    notices = json_object((build_root / "THIRD-PARTY-NOTICES.json").read_bytes())
+    texts = []
+    for package in notices["packages"]:
+        # Name texts and their origins by public locations, as build() does by private ones.
+        directory = directories[package["package_id"]]
+        prefix = "licenses/third-party/" + digest(public(package["package_id"]).encode())[:16]
+        for index, text in enumerate(package["texts"]):
+            origin = os.path.normpath(os.path.join(directory, text["upstream_path"]))
+            text["upstream_path"] = os.path.relpath(public(origin), public(directory))
+            texts.append((text, f"{prefix}-{index}.txt"))
+    texts += [(text, text["file"]) for text in notices["rust_toolchain"]["texts"]]
+    files = {}
+    for text, name in texts:
+        path = build_root / text["file"]
+        require(path.is_file() and not path.is_symlink() and path.resolve().is_relative_to((build_root / "licenses").resolve()),
+                "packaged license text is absent, a symlink or outside the build")
+        files[name] = path.read_bytes()
+        text["file"] = name
+    notices = public(notices)
+    notices["packages"].sort(key=lambda package: package["package_id"])
+    published = public(receipt)
+    published["compiler_artifacts_sha256"] = digest(artifacts)
+    files.update({"provenance/build.json": json_bytes(published), "provenance/cargo-artifacts.jsonl": artifacts,
+                  "THIRD-PARTY-NOTICES.json": json_bytes(notices)})
+    return files
 
 
 def package(source, sdk, build_root, output):
@@ -310,26 +372,23 @@ def package(source, sdk, build_root, output):
         require(digest(data) == receipt["binaries"]["bin/" + name], "binary changed since actual Cargo build")
         require(file_digest(Path(built[name]["executable"])) == digest(data), "package binary differs from Cargo's actual executable")
         files["bin/" + name] = data
-    for path in (build_root / "licenses").rglob("*"):
-        if path.is_file():
-            require(not path.is_symlink(), "packaged license text cannot be a symlink")
-            files[path.relative_to(build_root).as_posix()] = path.read_bytes()
-    files["THIRD-PARTY-NOTICES.json"] = (build_root / "THIRD-PARTY-NOTICES.json").read_bytes()
+    files.update(public_provenance(build_root, receipt))
     files["licenses/Acki-Nacki-Node-LICENSE.md"] = (source / "LICENSE.md").read_bytes()
-    files["provenance/build.json"] = receipt_bytes
     files["provenance/runtime.Cargo.lock"] = (source / "Cargo.lock").read_bytes()
-    files["provenance/cargo-artifacts.jsonl"] = (build_root / "cargo-artifacts.jsonl").read_bytes()
     tag = f"avm-dev-{ids['source_commit'][:12]}-sdk-{ids['sdk_commit'][:12]}"
     files["BUILD-MANIFEST.json"] = json_bytes({
         "schema": "gosh.avm-sdk.release.v2", "bundle_version": "0.5.0", "guest_version": "0.1.1", "release_tag": tag,
         "ackinacki_repository": "gosh-sh/acki-nacki", "ackinacki_commit": ids["source_commit"],
         "sdk_repository": "gosh-sh/avm-sdk", "sdk_commit": ids["sdk_commit"],
         "wasmtime_profile_sha256": ids["profile_sha256"], "runtime_lock_sha256": ids["lock_sha256"],
-        "build_receipt_sha256": digest(receipt_bytes), "third_party_notices_sha256": digest(files["THIRD-PARTY-NOTICES.json"]),
+        "build_receipt_sha256": digest(files["provenance/build.json"]), "third_party_notices_sha256": digest(files["THIRD-PARTY-NOTICES.json"]),
         "rust_toolchain": "1.98.0", "target": receipt["target"], "cpu": receipt["cpu"], "platform": receipt["platform"],
         "license_scope": {"guest_and_sdk": "LICENSE.md", "host_tools": "licenses/Acki-Nacki-Node-LICENSE.md", "dependencies": "THIRD-PARTY-NOTICES.json"},
     })
     files["SHA256SUMS"] = "".join(f"{digest(data)}  {name}\n" for name, data in sorted(files.items())).encode()
+    private = {form.encode() for path in receipt["path_roots"].values() for form in (path, json.dumps(path)[1:-1])}
+    for name, data in files.items():
+        require(name.startswith("bin/") or not any(form in data for form in private), "private build path in published " + name)
     output.mkdir(parents=True, exist_ok=False)
     archive = output / ARCHIVE
     with archive.open("xb") as destination, gzip.GzipFile(filename="", fileobj=destination, mode="wb", mtime=0) as compressed:
@@ -344,7 +403,10 @@ def package(source, sdk, build_root, output):
     checksum = output / (ARCHIVE + ".sha256")
     checksum.write_text(f"{file_digest(archive)}  {ARCHIVE}\n")
     verify_archive(archive, checksum, tag)
-    print(json.dumps({"packaged": tag, "sha256": file_digest(archive)}))
+    # The private receipt in build_root stays the evidence behind this public derivative.
+    print(json.dumps({"packaged": tag, "sha256": file_digest(archive),
+                      "private_build_receipt_sha256": digest(receipt_bytes),
+                      "published_build_receipt_sha256": digest(files["provenance/build.json"])}))
 
 
 def main():

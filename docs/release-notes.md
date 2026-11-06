@@ -6,6 +6,7 @@
 - Keep the Core-WASM V2 instruction set, admission rules and configured runtime limits.
 - Run the Revenue Hub guest ABI checks on Wasmtime 48.0.8.
 - Produce byte-for-byte reproducible release bundles from identical build inputs.
+- Record build paths in bundle provenance and license notices under fixed public roots instead of the build machine's directories; see [package contents](releases.md#package-contents-and-trust).
 - Charge each paid call for the linear memory it ends with: its 64-KiB pages at the profile's `memory_page_price`, settled with compute FUEL in one rounding and outside every FUEL budget and cap; a paid reserve must also cover the initial memory before the call starts; see [memory payment](fuel-and-fees.md#memory-payment).
 - Run contracts in ten pre-created memory classes selected by the declared maximum memory; a class changes neither FUEL nor the memory payment; see [memory classes](fuel-and-fees.md#memory-classes).
 - Derive deployment stack, ABI arena and memory maximum from each contract's own tests, with explicit overrides, stack overflow traps and local peak/growth checks; see [contract memory](contract-memory.md).
