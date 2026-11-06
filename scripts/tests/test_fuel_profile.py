@@ -63,6 +63,29 @@ class FuelProfileTests(unittest.TestCase):
             with self.subTest(after=after), self.assertRaises(ValueError):
                 parse_profile(original.replace(before, after))
 
+    def test_memory_page_price_is_one_positive_decimal_line(self):
+        lines = [line for line in priced_profile().decode().splitlines()
+                 if not line.startswith("memory_page_price=")]
+        position = next(index for index, line in enumerate(lines)
+                        if line.startswith("variable_operator_costs=")) + 1
+
+        def with_price(*prices):
+            priced = lines[:position] + ["memory_page_price=" + price for price in prices]
+            return ("\n".join(priced + lines[position:]) + "\n").encode()
+
+        for price in ("1", "1753", "18446744073709551615"):
+            self.assertEqual(parse_profile(with_price(price))["memory_page_price"], price)
+        self.assertNotIn("memory_page_price", parse_profile(with_price()))
+        for prices in [("0",), ("01",), ("+1",), ("-1",), ("1.0",), ("1_000",),
+                       ("18446744073709551616",), ("1", "1")]:
+            with self.subTest(prices=prices), self.assertRaises(ValueError):
+                parse_profile(with_price(*prices))
+        legacy = with_price("1753").replace(OPERATOR_COST.encode(), b"operator_cost=legacy_flat_v1")
+        legacy = legacy.replace(VARIABLE_COSTS.encode(), b"variable_operator_costs=all_zero")
+        legacy = legacy.replace(b"fuel_semantics_revision=4", b"fuel_semantics_revision=2")
+        with self.assertRaises(ValueError):
+            parse_profile(legacy)
+
 
 if __name__ == "__main__":
     unittest.main()

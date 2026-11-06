@@ -127,12 +127,15 @@ fuel_budget = min(
 ```
 
 The runtime enables Wasmtime FUEL, starts the execution with this budget, and
-records the exact `fuel_used`. Settlement converts used FUEL back to ordinary
-SHELL with ceiling division:
+records the exact `fuel_used`. The [memory payment](#memory-payment) never
+reduces this budget. Settlement converts used FUEL and the memory payment
+back to ordinary SHELL with one ceiling division:
 
 ```text
-charged_shells = ceil(fuel_used / fuel_per_shell)
-unused_shells = fuel_fee_shells - min(fuel_fee_shells, charged_shells)
+memory_fee_units = pages_at_end * memory_page_price
+required_shells = ceil((fuel_used + memory_fee_units) / fuel_per_shell)
+charged_shells = min(fuel_fee_shells, required_shells)
+unused_shells = fuel_fee_shells - charged_shells
 ```
 
 The sender prepays the reserve when the outbound message is materialized. The
@@ -146,6 +149,54 @@ return unused reserve.
 Fixed delivery and callback fees are separate from `fuel_fee_shells`. A
 chargeable message may therefore debit transferred SHELL, the FUEL reserve, and
 fixed fees independently.
+
+## Memory Payment
+
+A paid call also pays for the linear memory it ends with. The bundled profile's
+`memory_page_price` is the price, in FUEL-equivalent fee units, of one 64-KiB
+WASM page for one call. `pages_at_end` is the contract's linear-memory size
+in pages when the call stops, whether it succeeds, fails or traps. It counts
+every page of that size, including grown pages that were never written. A
+failed `memory.grow` adds no pages. Memory cannot shrink during a call, so
+`pages_at_end` is at least the module's initial memory.
+
+The memory payment is not FUEL. It never enters `fuel_used`, the FUEL budget
+or the message and batch caps, and it does not depend on the contract's
+[memory class](#memory-classes).
+
+Before a paid call starts, the reserve must cover the module's initial memory:
+
+```text
+ceil(initial_pages * memory_page_price / fuel_per_shell) <= fuel_fee_shells
+```
+
+Otherwise the call fails with status 56 (`VM_INSUFFICIENT_BALANCE`) before
+WASM starts, nothing is charged, and the reserve follows the callback or burn
+rules above.
+
+If a call that would otherwise succeed needs more SHELL than its reserve, it
+fails with status 56, returns no output and commits none of its effects; the
+whole reserve is charged. A call that already failed keeps its own status and
+is charged at most its reserve. Local-free calls pay neither compute nor memory.
+
+An `AccountBatch` invocation pays its ending pages once for the whole batch
+from the pooled reserve. A successful batch credits its remainder under the
+Library rules; after a failed batch the remainder remains available to the
+fallback.
+
+Size every paid reserve for the complete call:
+`fuel_used + pages_at_end * memory_page_price` must not exceed
+`fuel_fee_shells * fuel_per_shell`. Memory that a call never touches still
+costs its pages, so keep initial memory and growth as small as the contract
+tests allow; `--check-memory` reports peak linear-memory capacity.
+
+## Memory Classes
+
+The runtime runs each contract in one of ten memory classes: the first class
+whose maximum contains the module's declared maximum linear memory. Each class
+has its own pre-created engine and allocation pool. A class changes neither
+operation prices, FUEL budgets nor the memory payment: equal code, state and
+input produce equal `fuel_used`, status and `pages_at_end` in every class.
 
 ## Funding Is A Separate Concern
 
@@ -173,7 +224,9 @@ must not represent it as `vmSHELL` or infer it from `fuel_fee_shells`.
   DApp split. The local-free path will not charge it.
 - Request a callback when unused reserve must return to the sender.
 - Simulate against the same AVM configuration, code, input, and account state
-  when estimating `fuel_used`.
+  when estimating `fuel_used` and `pages_at_end`.
+- Size paid reserves for compute FUEL plus the memory payment of the ending
+  pages, not for compute alone.
 
 Any implementation that stores a `vmSHELL` balance, treats
 `fuel_fee_shells` as a separate token, charges the local-free path, or debits a

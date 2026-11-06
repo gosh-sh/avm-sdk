@@ -34,7 +34,10 @@ complete execution against the [bundled price schedule](fuel-and-fees.md#operati
 
 CLI failures after an attempted WASM execution report the VM status name,
 `fuel_used`, `fuel_budget`, and `max_message_execution_fuel`. Status **31** is
-`VM_WASM_OUT_OF_FUEL`; status **30** is `VM_WASM_TRAP`. The meter includes the
+`VM_WASM_OUT_OF_FUEL`; status **30** is `VM_WASM_TRAP`. Status **56** is
+`VM_INSUFFICIENT_BALANCE`: a paid reserve does not cover the initial memory
+before execution, or the compute FUEL plus the
+[memory payment](fuel-and-fees.md#memory-payment) after it. The meter includes the
 runtime's metered allocation, guest entrypoint and cleanup work, not just your
 method body. Validation failures before execution have no attempted FUEL to
 report. Diagnostics do not imply that a failed external call was committed.

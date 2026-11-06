@@ -138,6 +138,9 @@ def parse_profile(data):
         if fields.get("operator_cost", "").startswith("op_prices_v1;"):
             group(r"op_prices_v1;[A-Za-z0-9_:,]+", "operator_cost")
             group(r"[a-z0-9_:,]+", "variable_operator_costs")
+            if "memory_page_price" in fields:
+                # Per-page memory payment; earlier priced bundles have no page price.
+                group(r"[1-9][0-9]*", "memory_page_price")
             require(fields.get("fuel_semantics_revision") == "4",
                     "unsupported priced profile fuel semantics")
             parse_costs(fields["operator_cost"].split(";", 1)[1],
@@ -150,6 +153,8 @@ def parse_profile(data):
     require(fields.keys() == grammar.keys(), "missing or unknown profile fields")
     for name, pattern in grammar.items():
         require(re.fullmatch(pattern, fields[name]), "invalid profile value: " + name)
+    require(int(fields.get("memory_page_price", "1")) < 1 << 64,
+            "invalid profile value: memory_page_price")
     require(fields["profile_encoding_version"] == "1", "unsupported profile encoding version")
     for name in ("wasmtime_required_features", "host_features", "cranelift_flags"):
         entries = fields[name].split(",")

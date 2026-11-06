@@ -6,6 +6,8 @@
 - Keep the Core-WASM V2 instruction set, admission rules and configured runtime limits.
 - Run the Revenue Hub guest ABI checks on Wasmtime 48.0.8.
 - Produce byte-for-byte reproducible release bundles from identical build inputs.
+- Charge each paid call for the linear memory it ends with: its 64-KiB pages at the profile's `memory_page_price`, settled with compute FUEL in one rounding and outside every FUEL budget and cap; a paid reserve must also cover the initial memory before the call starts; see [memory payment](fuel-and-fees.md#memory-payment).
+- Run contracts in ten pre-created memory classes selected by the declared maximum memory; a class changes neither FUEL nor the memory payment; see [memory classes](fuel-and-fees.md#memory-classes).
 - Derive deployment stack, ABI arena and memory maximum from each contract's own tests, with explicit overrides, stack overflow traps and local peak/growth checks; see [contract memory](contract-memory.md).
 
 <a id="compatibility"></a>
@@ -16,6 +18,7 @@
 - Use the guest SDK source supplied with this release when rebuilding: its export macros provide the resource metadata needed for the checked stack layout.
 
 - The guest crate remains version `0.1.1`. Contract WASM using the Core-WASM V2 instruction set remains admissible.
+- Paid calls also pay for memory: size each reserve for `fuel_used + pages_at_end * memory_page_price`. A call that would otherwise succeed with too small a reserve fails with status 56, returns no output and commits no effects; the whole reserve is charged. Local-free calls stay free.
 - Existing WASM can consume different FUEL with the new prices. Recheck initialization, message and batch calls against their configured budgets, including allocator and cleanup work. Calls that previously succeeded can exhaust FUEL; paid calls can burn different SHELL amounts and return different unused reserves.
 - The profile records additional Wasmtime settings, so its identity, the configuration hash and prepared-cache namespaces change. Create fresh local stand state for the new bundle and keep earlier tools, profile and retained state together.
 - Verify and install SDK 0.5.0 bundles with this release's scripts; earlier checkouts reject the new profile. These scripts still verify earlier published bundles.
