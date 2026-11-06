@@ -143,7 +143,7 @@ def parse_profile(data):
                 "pooling_max_memory_size": "selected_memory_class_bytes",
                 "memory_class_selection": "declared_maximum_first_enclosing",
                 "memory_class_operator_cost": "one_common_table",
-                "store_memory_limit": "min(config.wasm.memory_limit_bytes,8388608)",
+                "store_memory_limit": "config.wasm.memory_limit_bytes",
             })
         if fields.get("operator_cost", "").startswith("op_prices_v1;"):
             group(r"op_prices_v1;[A-Za-z0-9_:,]+", "operator_cost")
@@ -167,7 +167,7 @@ def parse_profile(data):
             "invalid profile value: memory_page_price")
     if "memory_class_maxima_bytes" in fields:
         maxima = [int(value) for value in fields["memory_class_maxima_bytes"].split(",")]
-        require(maxima[0] == 2 * 65536 and maxima[-1] == 8 * 1024 * 1024
+        require(maxima[0] == 2 * 65536 and maxima[-1] == 32 * 1024 * 1024
                 and all(value % 65536 == 0 for value in maxima)
                 and all(low < high for low, high in zip(maxima, maxima[1:])),
                 "invalid profile value: memory_class_maxima_bytes")

@@ -90,7 +90,7 @@ class FuelProfileTests(unittest.TestCase):
             parse_profile(legacy)
 
     def test_memory_classes_are_ten_page_aligned_ascending_maxima(self):
-        maxima = "131072,196608,262144,327680,458752,589824,1048576,2097152,4194304,8388608"
+        maxima = "131072,196608,262144,327680,458752,589824,1048576,2097152,4194304,33554432"
         selected = {"memory_reservation": "selected_memory_class_bytes",
                     "pooling_max_memory_size": "selected_memory_class_bytes"}
         lines = [line for line in priced_profile().decode().splitlines()
@@ -100,20 +100,20 @@ class FuelProfileTests(unittest.TestCase):
 
         def with_classes(maxima, extra=("memory_class_selection=declared_maximum_first_enclosing",
                                         "memory_class_operator_cost=one_common_table",
-                                        "store_memory_limit=min(config.wasm.memory_limit_bytes,8388608)")):
+                                        "store_memory_limit=config.wasm.memory_limit_bytes")):
             return ("\n".join(lines + ["memory_class_maxima_bytes=" + maxima, *extra]) + "\n").encode()
 
         fields = parse_profile(with_classes(maxima))
         self.assertEqual(fields["memory_class_maxima_bytes"], maxima)
         self.assertEqual(fields["memory_reservation"], "selected_memory_class_bytes")
-        for changed in [maxima.replace("196608,", ""), maxima + ",8454144", maxima.replace("196608", "196609"),
+        for changed in [maxima.replace("196608,", ""), maxima + ",67108864", maxima.replace("196608", "196609"),
                         maxima.replace("262144,327680", "327680,262144"), maxima.replace("131072", "65536"),
-                        maxima.replace(",8388608", ",8454144"), maxima.replace("131072", "0131072")]:
+                        maxima.replace(",33554432", ",33619968"), maxima.replace("131072", "0131072")]:
             with self.subTest(maxima=changed), self.assertRaises(ValueError):
                 parse_profile(with_classes(changed))
         for extra in [(), ("memory_class_selection=declared_maximum_first_enclosing",
                            "memory_class_operator_cost=one_common_table",
-                           "store_memory_limit=min(config.wasm.memory_limit_bytes,16777216)")]:
+                           "store_memory_limit=min(config.wasm.memory_limit_bytes,8388608)")]:
             with self.subTest(extra=extra), self.assertRaises(ValueError):
                 parse_profile(with_classes(maxima, extra))
         unselected = with_classes(maxima).replace(b"=selected_memory_class_bytes",
