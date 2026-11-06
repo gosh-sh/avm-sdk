@@ -20,6 +20,7 @@
 
 - The guest crate remains version `0.1.1`. Contract WASM using the Core-WASM V2 instruction set remains admissible.
 - Paid calls also pay for memory: size each reserve for `fuel_used + pages_at_end * memory_page_price`. A call that would otherwise succeed with too small a reserve fails with status 56, returns no output and commits no effects; the whole reserve is charged. Local-free calls stay free.
+- The bundled profile's `memory_page_price`, `memory_class_maxima_bytes`, `signals_based_traps` and `pooling_linear_memory_keep_resident` are provisional development values: they can change before network acceptance, and a bundle with other values has a different profile identity.
 - Existing WASM can consume different FUEL with the new prices. Recheck initialization, message and batch calls against their configured budgets, including allocator and cleanup work. Calls that previously succeeded can exhaust FUEL; paid calls can burn different SHELL amounts and return different unused reserves.
 - The profile records additional Wasmtime settings, so its identity, the configuration hash and prepared-cache namespaces change. Create fresh local stand state for the new bundle and keep earlier tools, profile and retained state together.
 - Verify and install SDK 0.5.0 bundles with this release's scripts; earlier checkouts reject the new profile. These scripts still verify earlier published bundles.

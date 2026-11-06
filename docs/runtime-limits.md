@@ -5,6 +5,12 @@ configuration, not mainnet promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the
 active network configuration before estimating production costs or capacity.
 
+The bundled Wasmtime profile's engine settings `signals_based_traps` and
+`pooling_linear_memory_keep_resident` are provisional development values, as
+are its [memory page price](fuel-and-fees.md#memory-payment) and
+[memory classes](fuel-and-fees.md#memory-classes). They can change before
+network acceptance; a bundle with other values has a different profile identity.
+
 ## Inspect the configuration you are using
 
 ```bash

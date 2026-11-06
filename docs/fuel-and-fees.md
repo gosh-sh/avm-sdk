@@ -160,6 +160,10 @@ every page of that size, including grown pages that were never written. A
 failed `memory.grow` adds no pages. Memory cannot shrink during a call, so
 `pages_at_end` is at least the module's initial memory.
 
+The bundled `memory_page_price` is a provisional development value and can
+change before network acceptance. Size reserves with the price in the profile
+you run.
+
 The memory payment is not FUEL. It never enters `fuel_used`, the FUEL budget
 or the message and batch caps, and it does not depend on the contract's
 [memory class](#memory-classes).
@@ -197,6 +201,8 @@ whose maximum contains the module's declared maximum linear memory. Each class
 has its own pre-created engine and allocation pool. A class changes neither
 operation prices, FUEL budgets nor the memory payment: equal code, state and
 input produce equal `fuel_used`, status and `pages_at_end` in every class.
+The class maxima, `memory_class_maxima_bytes` in the bundled profile, are
+provisional development values and can change before network acceptance.
 
 ## Funding Is A Separate Concern
 

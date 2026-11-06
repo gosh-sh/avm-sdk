@@ -84,6 +84,41 @@ class ReleaseTextTests(unittest.TestCase):
         self.base = "missing-revision"
         self.reject()
 
+    def test_each_provisional_profile_value_needs_its_own_note(self):
+        fields = ("memory_page_price", "memory_class_maxima_bytes", "signals_based_traps",
+                  "pooling_linear_memory_keep_resident")
+        profile = self.root / "profiles/wasmtime-release-profile.v1"
+        profile.parent.mkdir()
+        profile.write_text("consume_fuel=true\n" + "".join(field + "=1\n" for field in fields))
+        (self.root / "docs").mkdir()
+        notes, guide = self.root / "docs/release-notes.md", self.root / "docs/guide.md"
+        general = "These are development settings, not mainnet promises; all values are provisional.\n"
+        own = "".join(f"- The bundled `{field}` is a provisional\n  development value.\n" for field in fields)
+        named = "".join(f"- The bundled `{field}` changed.\n" for field in fields)
+        split = "".join(f"- The bundled `{field}` changed.\n- Some values are provisional.\n" for field in fields)
+        cases = {
+            "general caveat only": ("# AVM SDK 1.0.0\n\n" + general, general),
+            "named but not provisional": ("# AVM SDK 1.0.0\n\n" + named, named),
+            "split across list items": ("# AVM SDK 1.0.0\n\n" + split, split),
+            "older release only": ("# AVM SDK 1.0.0\n\n- Changes.\n\n# AVM SDK 0.9.0\n\n" + own, own),
+            "release notes only": ("# AVM SDK 1.0.0\n\n" + own, general),
+            "user documentation only": ("# AVM SDK 1.0.0\n\n" + general, own),
+        }
+        for label, (release_notes, documentation) in cases.items():
+            with self.subTest(case=label):
+                notes.write_text(release_notes)
+                guide.write_text(documentation)
+                self.git("add", ".")
+                self.reject()
+        notes.write_text("# AVM SDK 1.0.0\n\n" + own + "\n# AVM SDK 0.9.0\n\n- Earlier.\n")
+        guide.write_text("# Settings\n\n" + own)
+        self.assertEqual(self.check().returncode, 0)
+        # A value that is no longer bundled needs no note.
+        profile.write_text("consume_fuel=true\n")
+        notes.write_text("# AVM SDK 1.0.0\n\n- Changes.\n")
+        guide.write_text("# Settings\n")
+        self.assertEqual(self.check().returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

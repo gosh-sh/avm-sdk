@@ -21,6 +21,11 @@ CYRILLIC = re.compile(
     r"[\u0400-\u052f\u1c80-\u1c8f\u2de0-\u2dff\ua640-\ua69f\U0001e030-\U0001e08f]")
 # Exact lines of intentional Unicode regression data, keyed by tracked path.
 UNICODE_TEST_LINES = {}
+# Provisional development values of the bundled profile. While a value is listed,
+# the current release notes and the user documentation each need a note naming it
+# as provisional; a general development-configuration notice does not count.
+PROVISIONAL_PROFILE_FIELDS = ("memory_page_price", "memory_class_maxima_bytes",
+                              "signals_based_traps", "pooling_linear_memory_keep_resident")
 
 
 def git(root, *args):
@@ -45,6 +50,27 @@ def violations(value, label, allowed=()):
     return result
 
 
+def provisional_notes(root, names):
+    profile = "profiles/wasmtime-release-profile.v1"
+    if profile not in names:
+        return []
+    fields = {line.split("=", 1)[0] for line in text((root / profile).read_bytes()).splitlines()}
+    notes = text((root / "docs/release-notes.md").read_bytes()) if "docs/release-notes.md" in names else ""
+    sections = re.split(r"(?m)^# ", notes)
+    places = {"current release notes": sections[1] if len(sections) > 1 else "",
+              "user documentation": "\n\n".join(text((root / name).read_bytes()) for name in sorted(names)
+                                                if name.startswith("docs/") and name.endswith(".md")
+                                                and name != "docs/release-notes.md")}
+    errors = []
+    for field in PROVISIONAL_PROFILE_FIELDS:
+        for place, value in places.items():
+            # A paragraph or one list item must name the value and call it provisional.
+            blocks = re.split(r"\n[ \t]*\n|\n(?=[ \t]*- )", value)
+            if field in fields and not any(f"`{field}`" in block and "provisional" in block.lower() for block in blocks):
+                errors.append(f"{place}: `{field}` lacks its own provisional note")
+    return errors
+
+
 def check(root, base):
     base_sha = git(root, "rev-parse", "--verify", base + "^{commit}").decode().strip()
     head = git(root, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
@@ -58,6 +84,7 @@ def check(root, base):
             scanned += 1
             errors.extend(violations(name, "path " + name))
             errors.extend(violations(value, name, UNICODE_TEST_LINES.get(name, ())))
+    errors.extend(provisional_notes(root, set(filter(None, files))))
     commits = git(root, "rev-list", base_sha + ".." + head).decode().splitlines()
     for commit in commits:
         message = git(root, "show", "-s", "--format=%B", commit).decode("utf-8")
