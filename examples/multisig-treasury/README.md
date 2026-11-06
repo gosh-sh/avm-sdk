@@ -198,3 +198,8 @@ Known limits: the solvency check cannot see a shortfall smaller than the value
 arriving in the same message; a bounce restores the spending allowance only if the
 window has not rolled over meanwhile; a single owner can freeze (that is the
 design), so the owner set must trust each member not to grief.
+
+The stand journey now requires every call probe to return the expected status at
+1 SHELL and executes the main calls with the same 1 SHELL reserve. Its state,
+payout and replay assertions therefore also run at that reserve. A probe requiring
+more FUEL fails the journey. Exact FUEL consumption remains unmeasured.

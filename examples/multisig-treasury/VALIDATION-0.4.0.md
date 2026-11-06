@@ -41,3 +41,14 @@ No heap peak, exact per-call FUEL, funded-account upgrade/migration or Mainnet
 qualification is claimed. No real funds or network transactions were used.
 Earlier README/validation figures are historical and belong to their stated
 compiler/SDK revision; use this report for the current 0.4.0 rebuild.
+
+## Main-call reserve validation — 2026-11-06
+
+The updated journey executes its main calls with the same 1 SHELL reserve used
+by the probes. Every probe must meet that bound before the main call proceeds.
+Re-executed check script (49 native tests), both guest builds, and the full
+88-call journey passed. State, payout and replay assertions now execute
+on the main state at that reserve. Exact FUEL consumption remains unmeasured.
+A simulated probe needing 2 SHELL was rejected before any main-state call;
+a simulated accepted probe was followed by a main-state call at 1 SHELL.
+See `evidence/one-shell-validation.json` and `evidence/one-shell-e2e.log`.
