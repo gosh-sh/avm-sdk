@@ -1,0 +1,182 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "1111111111111111111111111111111111111111111111111111111111111100"
+
+[abi]
+state_root_type_id = 1
+
+# `len = 100` is the HEADER only (0 rows); real state is
+# `100 + 113 * row_count` bytes once any row exists, so this ABI type only
+# ever matches the convenience decode on a freshly-deployed (0-row) pool.
+# Every other call's own `raw_state` must be read by its own documented
+# byte layout (docs/SPEC.md's "State layout"), not this ABI type. Tested
+# directly: `kind = "bytes"` (no fixed len) fails to round-trip both the
+# 0-row and 1-row cases differently from this fixed-length declaration,
+# and a fixed `len` set to the maximum possible size (`MAX_ROWS` rows)
+# fails the 0-row case. No ABI kind in this schema supports genuinely
+# variable-length state.
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "state"
+len = 100
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "init_data"
+len = 40
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+name = "stake_body"
+len = 24
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "unstake_body"
+len = 88
+
+[[abi.types]]
+id = 5
+kind = "fixed_bytes"
+name = "claim_body"
+len = 72
+
+[[abi.types]]
+id = 6
+kind = "fixed_bytes"
+name = "fund_rewards_body"
+len = 16
+
+[[abi.methods]]
+name = "staking.rewards.deploy"
+input_type_id = 2
+
+[[abi.methods]]
+name = "staking.rewards.stake"
+input_type_id = 3
+
+[[abi.methods]]
+name = "staking.rewards.unstake"
+input_type_id = 4
+
+[[abi.methods]]
+name = "staking.rewards.claim"
+input_type_id = 5
+
+[[abi.methods]]
+name = "staking.rewards.fund_rewards"
+input_type_id = 6
+
+# No "staking.rewards.callback" entry: callbacks are dispatched via the
+# INTERNAL_FLAG_CALLBACK wire flag, checked before any named-method lookup.
+# This contract's own callback `method_id` is a dynamic per-request
+# `pending_id` correlation value, not a fixed hash-derived selector.
+
+[[abi.errors]]
+status_code = 3000
+name = "invalid_args"
+message = "invalid args"
+
+[[abi.errors]]
+status_code = 3001
+name = "unauthorized"
+message = "unauthorized"
+
+[[abi.errors]]
+status_code = 3002
+name = "invalid_state"
+message = "invalid state"
+
+[[abi.errors]]
+status_code = 3003
+name = "seq_mismatch"
+message = "seq mismatch"
+
+[[abi.errors]]
+status_code = 3004
+name = "bad_expiry"
+message = "bad expiry"
+
+[[abi.errors]]
+status_code = 3005
+name = "wrong_currency"
+message = "wrong currency"
+
+[[abi.errors]]
+status_code = 3006
+name = "unsolicited_currency"
+message = "unsolicited currency"
+
+[[abi.errors]]
+status_code = 3007
+name = "pending_in_flight"
+message = "pending in flight"
+
+[[abi.errors]]
+status_code = 3008
+name = "no_pending_payout"
+message = "no pending payout"
+
+[[abi.errors]]
+status_code = 3009
+name = "below_min_stake"
+message = "below min stake"
+
+[[abi.errors]]
+status_code = 3010
+name = "exceeds_max_amount"
+message = "exceeds max amount"
+
+[[abi.errors]]
+status_code = 3011
+name = "fund_rejected_no_stakers"
+message = "fund rejected: no stakers"
+
+[[abi.errors]]
+status_code = 3012
+name = "fund_exceeds_max_acc"
+message = "fund exceeds max acc"
+
+[[abi.errors]]
+status_code = 3013
+name = "fund_delta_zero"
+message = "fund delta zero"
+
+[[abi.errors]]
+status_code = 3014
+name = "nothing_to_claim"
+message = "nothing to claim"
+
+[[abi.errors]]
+status_code = 3015
+name = "too_many_rows"
+message = "too many rows"
+
+[[abi.errors]]
+status_code = 3016
+name = "invalid_min_stake"
+message = "invalid min stake"
+
+[[abi.errors]]
+status_code = 3017
+name = "invalid_callback"
+message = "invalid callback"
+
+[[abi.errors]]
+status_code = 3018
+name = "row_not_found"
+message = "row not found"
+
+[[abi.errors]]
+status_code = 3019
+name = "invalid_fuel_reserve"
+message = "invalid fuel reserve"
+
+[[abi.errors]]
+status_code = 3020
+name = "currency_cannot_be_shell"
+message = "currency cannot be shell"
