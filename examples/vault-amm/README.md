@@ -186,3 +186,8 @@ AMM deploy body: 54,647 + 2,103 + 66 + 64 (init) + 289 (envelope) = 57,169 B of
 See [VALIDATION.md](VALIDATION.md) for the baseline failures, repaired checks,
 artifact hashes and the division between native and local-stand coverage.
 These results are local evidence; upstream CI and maintainer approval are separate.
+
+The stand journey now requires every call probe to return the expected status at
+1 SHELL and executes the main calls with the same 1 SHELL reserve. Its state,
+payout and replay assertions therefore also run at that reserve. A probe requiring
+more FUEL fails the journey. Exact FUEL consumption remains unmeasured.
