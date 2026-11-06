@@ -75,14 +75,13 @@ State is a fixed 3264-byte image, full-replaced on each call. Errors 4000–4017
 
 ## SDK version compatibility
 
-The local tests, artifact sizes and local-stand journey documented below were
-run with Rust 1.93.0 and the earlier SDK toolchain, **not** SDK 0.4.0.
-The Core-WASM V2 guest toolchain in SDK 0.4.0 requires fresh verification.
-Rebuild treasury and payee using a matching SDK 0.4.0/compiler bundle,
-check ABI identifiers and body size, rerun `scripts/check.sh` and the local
-stand journey, and record the exact artifact hashes and FUEL bounds before
-claiming compatibility. Existing-account upgrade/migration, Mainnet execution
-and fund safety are not established by the previous results.
+Fresh-deployment validation with SDK 0.4.0 / Core-WASM V2 and Rust 1.99.1
+was executed on 2026-11-06: **49 native tests**, both contract builds,
+28 rebuilt ABI IDs, and the existing local-stand journey (88 call probes)
+passed. The example-local compiler and wasm feature configuration are pinned to
+the matching 0.4.0 settings. See [VALIDATION-0.4.0.md](VALIDATION-0.4.0.md)
+for artifact sizes/hashes, logs and scope. Earlier figures below are historical
+0.3.0 evidence. No account migration, Mainnet or real-fund qualification is claimed.
 
 ## Verify
 
