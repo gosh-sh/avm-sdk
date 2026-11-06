@@ -35,6 +35,21 @@ paths, checks statuses and output bytes with the original FUEL budgets, and
 reports initial and peak memory. This command does not maintain stand state;
 rerun the original stateful tests on the selected deployment artifacts.
 
+With `--memory-payment`, every JSONL case also needs a `memory_payment` object
+with decimal-text `reserve_shells`, `route` (`paid` or `local-free`) and
+`remainder` (`callback`, `burn` or `library`), and its `fuel_budget` must be
+the FUEL budget of that reserve. The report then adds one receipt per case
+under `memory_payment_preview`: initial and ending pages, `memory_page_price`,
+memory fee units, compute FUEL, required and charged SHELL, the remainder and
+the resulting status. Receipts change no state.
+
+`avm-local-stand quote-memory-payment --wasm <module> --manifest-path
+<Cargo.toml> --wasmtime-profile <profile> --entrypoint
+<init|process_message|process_batch> --compute-fuel <FUEL> --pages-at-end
+<pages> --reserve-shells <SHELL> --route <paid|local-free> --remainder
+<callback|burn|library>` prints the same receipt for an estimated call
+without executing it.
+
 ## avm-local-stand
 
 Stateful stand commands require:
