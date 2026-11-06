@@ -1,0 +1,18 @@
+{
+  "source_parent": "cd3a0355da277d69c26fd6ddd06d2dc0d25b2872",
+  "script_sha256": "0600a10a7270b683131c738bf66c58a5b5d53f35385cd48971e2f65f2f8cdb1a",
+  "sdk_release": "avm-dev-d103b6ccc759-sdk-21364083b24a",
+  "main_call_reserve_shells": 1,
+  "call_count": 29,
+  "native_tests_passed": 47,
+  "status": "PASS",
+  "replay": {
+    "accepted_input_count": 37,
+    "account_state_root": "b515b4640f4ef8fdee83349fee5fb1f42c2ab7d778f56f9c4bb1f34fa1b5cad4",
+    "command": "replay",
+    "cumulative_fee_shells": "12519702216",
+    "receipt_count": 37,
+    "registry_root": "8f45d563f87d6f3ce902a9aac9d1d4642ddb730f7a98b9ad337a3deb81a6e198",
+    "status": "ok"
+  }
+}
