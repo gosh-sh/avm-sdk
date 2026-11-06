@@ -73,6 +73,17 @@ with `amount` = fast limit and `aux` = window seconds). Unused fields must be ze
 
 State is a fixed 3264-byte image, full-replaced on each call. Errors 4000–4017.
 
+## SDK version compatibility
+
+The local tests, artifact sizes and local-stand journey documented below were
+run with Rust 1.93.0 and the earlier SDK toolchain, **not** SDK 0.4.0.
+The Core-WASM V2 guest toolchain in SDK 0.4.0 requires fresh verification.
+Rebuild treasury and payee using a matching SDK 0.4.0/compiler bundle,
+check ABI identifiers and body size, rerun `scripts/check.sh` and the local
+stand journey, and record the exact artifact hashes and FUEL bounds before
+claiming compatibility. Existing-account upgrade/migration, Mainnet execution
+and fund safety are not established by the previous results.
+
 ## Verify
 
 ```sh
