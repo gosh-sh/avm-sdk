@@ -207,10 +207,16 @@ def build(source, sdk, output, gates):
     require(f"release: {profile['cargo_version']}" in cargo.splitlines() and f"commit-hash: {profile['cargo_commit']}" in cargo.splitlines(), "Cargo identity mismatch")
     linker = Path(shutil.which("cc")).resolve()
     native_linker = native_linker_inputs(compiler, linker, source)
+    # Private locations; the executables and package() publish them only by PUBLIC_ROOTS.
+    roots = {"cargo": str(Path(os.environ["CARGO_HOME"])), "sdk": str(Path(__file__).resolve().parents[1]),
+             "source": str(source), "target": str(target), "toolchain": str(compiler.parent.parent)}
     # Keep host feature detection dynamic. Compiling the host itself for v3 can
     # constant-fold is_x86_feature_detected! and bypass the engine's CPU rejection.
     # The accepted profile separately fixes Cranelift's guest target to v3.
-    flags = f"--cfg tokio_unstable -Ctarget-cpu=x86-64 --remap-path-prefix={source}={PUBLIC_ROOTS['source']} --remap-path-prefix={target}={PUBLIC_ROOTS['target']}"
+    # rustc applies the last matching remapping: the Cargo home goes first, so a
+    # source or target directory inside it still maps by its own root.
+    flags = "--cfg tokio_unstable -Ctarget-cpu=x86-64 " + " ".join(
+        f"--remap-path-prefix={roots[name]}={PUBLIC_ROOTS[name]}" for name in ("cargo", "source", "target"))
     flags += " " + " ".join(native_linker["rustflags"])
     environment = os.environ.copy()
     environment.update(RUSTFLAGS=flags, CARGO_INCREMENTAL="0", SOURCE_DATE_EPOCH="0",
@@ -294,12 +300,7 @@ def build(source, sdk, output, gates):
                                          "features": engine_features,
                                          "scope": "Actual shared Wasmtime artifact linked by this combined Cargo build"}
                                  for name in BINARIES},
-               "source_gates_sha256": file_digest(gates),
-               # Private locations; package() publishes them only by PUBLIC_ROOTS.
-               "path_roots": {"cargo": str(Path(os.environ["CARGO_HOME"])),
-                              "sdk": str(Path(__file__).resolve().parents[1]),
-                              "source": str(source), "target": str(target),
-                              "toolchain": str(compiler.parent.parent)}}
+               "source_gates_sha256": file_digest(gates), "path_roots": roots}
     (output / "build.json").write_bytes(json_bytes(receipt))
     print(json.dumps({"built": ids, "binaries": executed}))
 
@@ -386,9 +387,10 @@ def package(source, sdk, build_root, output):
         "license_scope": {"guest_and_sdk": "LICENSE.md", "host_tools": "licenses/Acki-Nacki-Node-LICENSE.md", "dependencies": "THIRD-PARTY-NOTICES.json"},
     })
     files["SHA256SUMS"] = "".join(f"{digest(data)}  {name}\n" for name, data in sorted(files.items())).encode()
+    # No published file, the executables included, may name a private build location.
     private = {form.encode() for path in receipt["path_roots"].values() for form in (path, json.dumps(path)[1:-1])}
     for name, data in files.items():
-        require(name.startswith("bin/") or not any(form in data for form in private), "private build path in published " + name)
+        require(not any(form in data for form in private), "private build path in published " + name)
     output.mkdir(parents=True, exist_ok=False)
     archive = output / ARCHIVE
     with archive.open("xb") as destination, gzip.GzipFile(filename="", fileobj=destination, mode="wb", mtime=0) as compressed:

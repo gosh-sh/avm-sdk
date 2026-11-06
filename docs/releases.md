@@ -33,9 +33,11 @@ The manifest and build receipt bind the shipped binaries, source identities,
 compiler, profile and runtime lockfile. Release notes describe supported
 platforms, compatibility changes and known limitations.
 
-From SDK 0.5.0, build paths in `provenance/` and `THIRD-PARTY-NOTICES.json`
-use the public roots `/avm/source`, `/avm/target`, `/avm/toolchain`,
-`/avm/cargo` and `/avm/sdk` instead of the build machine's directories.
+From SDK 0.5.0, build paths in `provenance/` and `THIRD-PARTY-NOTICES.json`,
+and the source locations compiled into the host commands, use the public roots
+`/avm/source`, `/avm/target`, `/avm/toolchain`, `/avm/cargo` and `/avm/sdk`
+instead of the build machine's directories. Packaging refuses a bundle in which
+any file, the host commands included, still contains one of those directories.
 
 The installer checks the downloaded checksum files and identity bindings before
 extracting or activating a bundle. It rejects unsafe archive entries and does

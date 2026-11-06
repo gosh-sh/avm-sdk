@@ -147,8 +147,9 @@ def private_build(base, layout):
                           "version": "LLD fixture", "shim": str(linker / "gcc-ld/ld.lld"), "shim_sha256": "7" * 64,
                           "rustflags": ["-Clink-arg=-B" + str(linker / "gcc-ld"), "-Clink-arg=-fuse-ld=lld"]},
         "argv": ["cargo", "build", "--locked", "--offline", "--release", "--message-format=json"],
-        "rustflags": f"--cfg tokio_unstable -Ctarget-cpu=x86-64 --remap-path-prefix={source}=/avm/source "
-                     f"--remap-path-prefix={target}=/avm/target -Clink-arg=-B{linker / 'gcc-ld'} -Clink-arg=-fuse-ld=lld",
+        "rustflags": f"--cfg tokio_unstable -Ctarget-cpu=x86-64 --remap-path-prefix={cargo}=/avm/cargo "
+                     f"--remap-path-prefix={source}=/avm/source --remap-path-prefix={target}=/avm/target "
+                     f"-Clink-arg=-B{linker / 'gcc-ld'} -Clink-arg=-fuse-ld=lld",
         "source_date_epoch": 0, "compiler_artifacts_sha256": digest(artifacts),
         "resolved_features": {row["package_id"]: sorted(row["features"]) for row in records
                               if row["reason"] == "compiler-artifact"},
@@ -191,10 +192,9 @@ class PublishedProvenance(unittest.TestCase):
 
     def assert_public(self, files):
         for name, data in files.items():
-            if not name.startswith("bin/"):
-                for needle in (str(self.base).encode(), b"private-"):
-                    with self.subTest(published=name, needle=needle):
-                        self.assertFalse(needle in data, f"{needle!r} is published in {name}")
+            for needle in (str(self.base).encode(), b"private-"):
+                with self.subTest(published=name, needle=needle):
+                    self.assertFalse(needle in data, f"{needle!r} is published in {name}")
 
     def test_package_publishes_public_paths_and_keeps_every_binding(self):
         fixture = private_build(self.base, "a")
@@ -302,6 +302,28 @@ class PublishedProvenance(unittest.TestCase):
         write(fixture.build / "build.json", build_release.json_bytes(receipt))
         with self.assertRaisesRegex(ValueError, "path roots"):
             package(fixture, self.base / "package-unrecorded")
+
+    def test_private_path_left_in_binary_fails_closed(self):
+        # A compiled-in registry source location, before and after the Cargo home remapping.
+        for label, refused in (("private", True), ("remapped", False)):
+            with self.subTest(binary=label):
+                fixture = private_build(self.base / label, "a")
+                cargo = fixture.roots["cargo"] if refused else PUBLIC_ROOTS["cargo"]
+                data = f"panicked at {cargo}/{INDEX}/wasmtime-48.0.8/src/runtime.rs\n".encode()
+                write(fixture.build / "bin/avm-local-stand", data)
+                write(fixture.roots["target"] / "release/avm-local-stand", data)
+                receipt = json.loads((fixture.build / "build.json").read_bytes())
+                receipt["binaries"]["bin/avm-local-stand"] = digest(data)
+                write(fixture.build / "build.json", build_release.json_bytes(receipt))
+                output = self.base / label / "package"
+                if refused:
+                    with self.assertRaisesRegex(ValueError, "private build path in published bin/avm-local-stand"):
+                        package(fixture, output)
+                    self.assertFalse(output.exists())
+                else:
+                    files, _, _ = package(fixture, output)
+                    self.assertEqual(files["bin/avm-local-stand"], data)
+                    self.assert_public(files)
 
 
 if __name__ == "__main__":
