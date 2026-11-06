@@ -118,10 +118,12 @@ The command writes `contract.wasm`, `contract.acab`, and
 `contract.descriptor` under that example's `target/avm` directory. It performs
 two builds and rejects non-reproducible output.
 
-For direct source checks:
+For direct source checks, pass the arena capacity that `avm-contract-build`
+uses, here the measured value from the example's `avm-memory.json`:
 
 ```bash
 cargo +1.99.1 fmt --manifest-path examples/contract-a-v1/Cargo.toml -- --check
+AVM_GUEST_ARENA_BYTES="$(jq -r .arena_bytes examples/contract-a-v1/avm-memory.json)" \
 cargo +1.99.1 clippy \
   --manifest-path examples/contract-a-v1/Cargo.toml \
   --target wasm32-unknown-unknown -- -D warnings

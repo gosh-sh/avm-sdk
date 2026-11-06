@@ -92,7 +92,14 @@ def example_environment(source, manifest, evidence, run):
     environment = guest_environment()
     environment.pop("AVM_CONTRACT_BINDINGS", None)
     metadata = manifest.parent / "avm-contract.toml"
-    bindings_config = tomllib.loads(metadata.read_text()).get("bindings", {}) if metadata.is_file() else {}
+    config = tomllib.loads(metadata.read_text()) if metadata.is_file() else {}
+    bindings_config = config.get("bindings", {})
+    # Lint the guest with the arena capacity that avm-contract-build passes:
+    # build.arena_bytes, else the committed avm-memory.json measurement.
+    arena = config.get("build", {}).get("arena_bytes")
+    if arena is None:
+        arena = json.loads((manifest.parent / "avm-memory.json").read_text())["arena_bytes"]
+    environment["AVM_GUEST_ARENA_BYTES"] = str(arena)
     if bindings_config.get("enabled"):
         bindings = evidence / (manifest.parent.name + "-bindings.rs")
         command = ["cargo", "run", "--quiet", "--locked", "--offline",
