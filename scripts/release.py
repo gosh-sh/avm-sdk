@@ -135,6 +135,16 @@ def parse_profile(data):
             "guest_debug": "not_compiled", "wasm_backtrace_details": "disable", "collector": "null",
             "pooling_memory_protection_keys": "no", "pooling_pagemap_scan": "no",
         })
+        if "memory_class_maxima_bytes" in fields:
+            # Ten memory classes; earlier bundles size every pool by the memory limit.
+            group(r"[1-9][0-9]*(?:,[1-9][0-9]*){9}", "memory_class_maxima_bytes")
+            literals.update({
+                "memory_reservation": "selected_memory_class_bytes",
+                "pooling_max_memory_size": "selected_memory_class_bytes",
+                "memory_class_selection": "declared_maximum_first_enclosing",
+                "memory_class_operator_cost": "one_common_table",
+                "store_memory_limit": "min(config.wasm.memory_limit_bytes,8388608)",
+            })
         if fields.get("operator_cost", "").startswith("op_prices_v1;"):
             group(r"op_prices_v1;[A-Za-z0-9_:,]+", "operator_cost")
             group(r"[a-z0-9_:,]+", "variable_operator_costs")
@@ -155,6 +165,12 @@ def parse_profile(data):
         require(re.fullmatch(pattern, fields[name]), "invalid profile value: " + name)
     require(int(fields.get("memory_page_price", "1")) < 1 << 64,
             "invalid profile value: memory_page_price")
+    if "memory_class_maxima_bytes" in fields:
+        maxima = [int(value) for value in fields["memory_class_maxima_bytes"].split(",")]
+        require(maxima[0] == 2 * 65536 and maxima[-1] == 8 * 1024 * 1024
+                and all(value % 65536 == 0 for value in maxima)
+                and all(low < high for low, high in zip(maxima, maxima[1:])),
+                "invalid profile value: memory_class_maxima_bytes")
     require(fields["profile_encoding_version"] == "1", "unsupported profile encoding version")
     for name in ("wasmtime_required_features", "host_features", "cranelift_flags"):
         entries = fields[name].split(",")

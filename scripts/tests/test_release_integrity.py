@@ -398,6 +398,8 @@ class IntegrityTests(unittest.TestCase):
         marker = b"instance_pre_abi_revision=1\n"
         legacy = current[:current.index(marker) + len(marker)].replace(
             b"wasm_component_model_more_async_builtins=", b"wasm_component_model_async_builtins=")
+        # Published Wasmtime 36 bundles size memory by the limit, not by memory class.
+        legacy = legacy.replace(b"=selected_memory_class_bytes", b"=config.wasm.memory_limit_bytes")
         self.assertEqual(len(release.parse_profile(legacy)), 80)
         for label, mixed in {"legacy-plus-new": legacy + b"collector=null\n",
                              "new-plus-legacy": current + b"wasm_component_model_async_builtins=false\n"}.items():

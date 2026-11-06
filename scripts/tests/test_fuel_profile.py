@@ -30,7 +30,10 @@ class FuelProfileTests(unittest.TestCase):
         self.assertEqual(fields["fuel_semantics_revision"], "4")
 
     def test_legacy_flat_profile_remains_verifiable(self):
-        legacy = priced_profile().replace(OPERATOR_COST.encode(), b"operator_cost=legacy_flat_v1")
+        # Flat profiles predate memory payment and never carry a page price.
+        legacy = b"".join(line for line in priced_profile().splitlines(keepends=True)
+                          if not line.startswith(b"memory_page_price="))
+        legacy = legacy.replace(OPERATOR_COST.encode(), b"operator_cost=legacy_flat_v1")
         legacy = legacy.replace(VARIABLE_COSTS.encode(), b"variable_operator_costs=all_zero")
         legacy = legacy.replace(b"fuel_semantics_revision=4", b"fuel_semantics_revision=2")
         self.assertEqual(parse_profile(legacy)["operator_cost"], "legacy_flat_v1")
@@ -85,6 +88,38 @@ class FuelProfileTests(unittest.TestCase):
         legacy = legacy.replace(b"fuel_semantics_revision=4", b"fuel_semantics_revision=2")
         with self.assertRaises(ValueError):
             parse_profile(legacy)
+
+    def test_memory_classes_are_ten_page_aligned_ascending_maxima(self):
+        maxima = "131072,196608,262144,327680,458752,589824,1048576,2097152,4194304,8388608"
+        selected = {"memory_reservation": "selected_memory_class_bytes",
+                    "pooling_max_memory_size": "selected_memory_class_bytes"}
+        lines = [line for line in priced_profile().decode().splitlines()
+                 if not line.startswith(("memory_class_", "store_memory_limit="))]
+        lines = [key + "=" + selected[key] if key in selected else line
+                 for line in lines for key in [line.split("=", 1)[0]]]
+
+        def with_classes(maxima, extra=("memory_class_selection=declared_maximum_first_enclosing",
+                                        "memory_class_operator_cost=one_common_table",
+                                        "store_memory_limit=min(config.wasm.memory_limit_bytes,8388608)")):
+            return ("\n".join(lines + ["memory_class_maxima_bytes=" + maxima, *extra]) + "\n").encode()
+
+        fields = parse_profile(with_classes(maxima))
+        self.assertEqual(fields["memory_class_maxima_bytes"], maxima)
+        self.assertEqual(fields["memory_reservation"], "selected_memory_class_bytes")
+        for changed in [maxima.replace("196608,", ""), maxima + ",8454144", maxima.replace("196608", "196609"),
+                        maxima.replace("262144,327680", "327680,262144"), maxima.replace("131072", "65536"),
+                        maxima.replace(",8388608", ",8454144"), maxima.replace("131072", "0131072")]:
+            with self.subTest(maxima=changed), self.assertRaises(ValueError):
+                parse_profile(with_classes(changed))
+        for extra in [(), ("memory_class_selection=declared_maximum_first_enclosing",
+                           "memory_class_operator_cost=one_common_table",
+                           "store_memory_limit=min(config.wasm.memory_limit_bytes,16777216)")]:
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                parse_profile(with_classes(maxima, extra))
+        unselected = with_classes(maxima).replace(b"=selected_memory_class_bytes",
+                                                  b"=config.wasm.memory_limit_bytes")
+        with self.assertRaises(ValueError):
+            parse_profile(unselected)
 
 
 if __name__ == "__main__":
