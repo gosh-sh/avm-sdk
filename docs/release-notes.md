@@ -6,7 +6,7 @@
 
 ## Compatibility
 
-- Rebuilding a contract changes its WASM, code hash, initial memory and FUEL use. Initial memory no longer includes the arena capacity, so a rebuilt contract usually starts and ends each call with fewer pages. Existing deployed WASM is unaffected until it is rebuilt and upgraded.
+- Rebuilding a contract changes its WASM, code hash, initial memory and FUEL use. Initial memory no longer includes the arena capacity, so a contract whose arena added initial pages starts each call with fewer pages after rebuilding. Existing deployed WASM is unaffected until it is rebuilt and upgraded.
 - The guest crate now uses the Rust standard library for the arena lock. Contract crates that link the standard library, as the examples do, need no change; a `#![no_std]` contract crate with its own panic handler must link the standard library to use this guest crate.
 - Existing `avm-memory.json` files keep their schema and are accepted by the builder. Rerun the contract's measurement after rebuilding to record the new initial memory, peak and tested WASM hashes before deployment.
 - The guest crate remains version `0.1.1`. Contract WASM using the Core-WASM V2 instruction set remains admissible.
