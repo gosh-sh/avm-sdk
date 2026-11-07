@@ -1,7 +1,8 @@
 # Runtime limits, rent and deployment identity
 
-These are the **SDK 0.5.0 local stand** settings. They are development
-configuration, not mainnet promises. The runtime configuration leaves
+These are the **SDK 0.5.1 local stand** settings. Its FUEL caps are the network
+execution defaults. All of them are development configuration, not mainnet
+promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the
 active network configuration before estimating production costs or capacity.
 
@@ -25,17 +26,17 @@ reports `storage_last_paid`, `storage_due_payment`, and
 
 ## FUEL and failure diagnostics
 
-The stand uses `max_message_execution_fuel = 10000000`,
-`fuel_per_shell = 1000000`, and `max_bucket_execution_fuel = 100000000`.
+The stand uses `max_message_execution_fuel = 1031871955`,
+`fuel_per_shell = 1000000`, and `max_bucket_execution_fuel = 2063743910`.
 On a chargeable isolated call the budget is the smaller of the message reserve
 converted to FUEL and the message cap. Increasing `fuel_fee_shells` beyond the
 cap cannot buy a larger execution. Local-free messages are also metered and
 capped. The bucket cap bounds one `AccountBatch` invocation; each
 `MessageIsolated` call has its own message allowance. See [FUEL and SHELL](fuel-and-fees.md).
 
-SDK 0.5.0 changes instruction prices and charges requested bytes, elements
-and growth pages. The numeric limits above remain fixed for this local stand;
-they can admit less work for a particular existing contract. Recheck the
+SDK 0.5.1 raises these caps from 10000000 and 100000000 FUEL; operation
+prices, volume charges and the memory payment are unchanged from SDK 0.5.0.
+A reserve above 10 SHELL now buys up to the message cap. Recheck the
 complete execution against the [bundled price schedule](fuel-and-fees.md#operation-prices-in-sdk-050).
 
 CLI failures after an attempted WASM execution report the VM status name,

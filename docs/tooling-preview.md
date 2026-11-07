@@ -1,12 +1,12 @@
 # SDK tooling
 
-This guide describes SDK 0.5.0. Use a matching builder and local-stand binary
+This guide describes SDK 0.5.1. Use a matching builder and local-stand binary
 for the commands below; check the source identities recorded in the distribution.
 SDK 0.2.0 does not include the constructor and CLI additions described here.
 
 ## Core-WASM V2 guest builds
 
-SDK 0.5.0 builds contracts with exact Rust/Cargo 1.99.1 and
+SDK 0.5.1 builds contracts with exact Rust/Cargo 1.99.1 and
 `-Ctarget-feature=+wide-arithmetic`. This compiler's wide-integer lowering is
 validated against a native-integer semantic regression; emitting an instruction
 alone does not prove correct arithmetic.

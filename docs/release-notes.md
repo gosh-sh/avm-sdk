@@ -1,3 +1,16 @@
+# AVM SDK 0.5.1
+
+- Run the local stand with the network execution FUEL limits: `max_message_execution_fuel = 1031871955` and `max_bucket_execution_fuel = 2063743910` instead of 10000000 and 100000000; see [runtime limits](runtime-limits.md#fuel-and-failure-diagnostics).
+- Keep the Core-WASM V2 instruction set, admission rules, operation prices, memory payment and the other runtime limits of SDK 0.5.0.
+
+## Compatibility
+
+- The stand configuration identity changes. Local stand state created with SDK 0.5.0 is rejected with a configuration mismatch: create fresh local stand state for this bundle and keep earlier tools, profile and retained state together.
+- A message reserve above 10 SHELL now buys up to 1031871955 FUEL instead of 10000000, and one `AccountBatch` invocation up to 2063743910 instead of 100000000. A call that ran out of FUEL at the old cap can complete and is charged for the FUEL it uses, at most its reserve.
+- The guest crate remains version `0.1.1`. Contract WASM using the Core-WASM V2 instruction set remains admissible.
+- The bundled profile's `memory_page_price`, `memory_class_maxima_bytes`, `signals_based_traps` and `pooling_linear_memory_keep_resident` are provisional development values: they can change before network acceptance, and a bundle with other values has a different profile identity.
+- Linux x86-64-v3 and Python 3.11+ are required; see the bundle manifest for measured GLIBC dependencies. Examples are educational, and this SDK release does not establish production-network or performance acceptance.
+
 # AVM SDK 0.5.0
 
 - Run contracts on Wasmtime 48.0.8 LTS with Cranelift 0.135.8 and wasmparser 0.254.2, replacing Wasmtime 36.0.12, which lacks upstream security fixes.
