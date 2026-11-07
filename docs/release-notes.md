@@ -1,3 +1,18 @@
+# AVM SDK 0.5.2
+
+- Take the guest ABI arena's memory on demand. The configured arena capacity still bounds the simultaneously live input and output bytes, but it is no longer reserved in initial memory: an allocation that fits a 4-KiB static region stays there, and a larger one takes heap memory during the call that makes it. Each call pays only for the pages its own input, output and work use; see [contract memory](contract-memory.md).
+- Decode the entrypoint input in place instead of copying it into the heap first, so a large input, such as an initialization message that carries the contract's own module, needs its pages once and no second copy.
+- Keep the arena capacity checks, the two live allocations freed in LIFO order, exact-pointer frees, distinct output placement, the guest ABI and the Core-WASM V2 instruction set, admission rules, operation prices, memory payment and runtime limits of SDK 0.5.1.
+
+## Compatibility
+
+- Rebuilding a contract changes its WASM, code hash, initial memory and FUEL use. Initial memory no longer includes the arena capacity, so a rebuilt contract usually starts and ends each call with fewer pages. Existing deployed WASM is unaffected until it is rebuilt and upgraded.
+- The guest crate now uses the Rust standard library for the arena lock. Contract crates that link the standard library, as the examples do, need no change; a `#![no_std]` contract crate with its own panic handler must link the standard library to use this guest crate.
+- Existing `avm-memory.json` files keep their schema and are accepted by the builder. Rerun the contract's measurement after rebuilding to record the new initial memory, peak and tested WASM hashes before deployment.
+- The guest crate remains version `0.1.1`. Contract WASM using the Core-WASM V2 instruction set remains admissible.
+- The bundled profile's `memory_page_price`, `memory_class_maxima_bytes`, `signals_based_traps` and `pooling_linear_memory_keep_resident` are provisional development values: they can change before network acceptance, and a bundle with other values has a different profile identity.
+- Linux x86-64-v3 and Python 3.11+ are required; see the bundle manifest for measured GLIBC dependencies. Examples are educational, and this SDK release does not establish production-network or performance acceptance.
+
 # AVM SDK 0.5.1
 
 - Run the local stand with the network execution FUEL limits: `max_message_execution_fuel = 1031871955` and `max_bucket_execution_fuel = 2063743910` instead of 10000000 and 100000000; see [runtime limits](runtime-limits.md#fuel-and-failure-diagnostics).

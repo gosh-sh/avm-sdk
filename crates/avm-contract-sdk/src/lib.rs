@@ -5,9 +5,12 @@
 //!
 //! The crate deliberately has no host imports. The export macros install the
 //! required AVM entrypoints over a bounded arena in the module's own linear
-//! memory.
+//! memory. Small live input/output allocations use a 4 KiB static region;
+//! larger ones take heap memory on demand. The standard library supplies only
+//! the arena lock.
 
 extern crate alloc;
+extern crate std;
 
 mod input;
 mod output;

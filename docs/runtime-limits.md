@@ -1,6 +1,6 @@
 # Runtime limits, rent and deployment identity
 
-These are the **SDK 0.5.1 local stand** settings. Its FUEL caps are the network
+These are the **SDK 0.5.2 local stand** settings. Its FUEL caps are the network
 execution defaults. All of them are development configuration, not mainnet
 promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the

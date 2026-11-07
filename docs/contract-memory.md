@@ -9,8 +9,11 @@ Missing measurements require explicit settings or a complete test measurement.
 The stack is the smallest passing size on a **16-byte ABI alignment** grid.
 The arena holds the simultaneously live raw ABI input and output allocations;
 its measured capacity is their largest combined byte length, without rounding.
-The arena is separate from Rust's dynamically allocated heap. The linker reserves
-no extra initial heap page. The total memory maximum is the larger of initial
+The capacity bounds the live bytes; it is not reserved memory. An allocation
+that fits the remaining space of a 4-KiB static region stays in initial memory.
+A larger one takes heap memory during the call that makes it, so each call pays
+only for the pages its own input, output and work use. The linker reserves no
+extra initial heap page. The total memory maximum is the larger of initial
 memory and the test peak, rounded up to a **64-KiB WASM page**. Stack and arena
 are not rounded to memory pages.
 
