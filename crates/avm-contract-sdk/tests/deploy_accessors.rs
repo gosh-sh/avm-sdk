@@ -93,6 +93,25 @@ fn constructor_accessors_borrow_only_the_requested_payload_for_both_callers() {
 }
 
 #[test]
+fn code_deploy_init_reads_its_constructor_with_a_nonzero_function_count() {
+    // avm-contracts.md: body offset 286 is function_count, 0 when code_len == 0.
+    let mut body = envelope(true);
+    body[286..288].copy_from_slice(&0x0102u16.to_le_bytes());
+    let bytes = frame(&body, true, true);
+    let input = decode_message_input(&bytes).unwrap();
+    let deploy = input.deploy().unwrap();
+    assert_eq!(deploy.package_id(), [0x21; 32]);
+    assert_eq!(deploy.salt(), &[0x61]);
+    assert_eq!(deploy.init_data(), &0x0123_4567_89ab_cdefu64.to_le_bytes());
+    assert_eq!(input.message.body(), body);
+
+    let mut body = envelope(false);
+    body[286..288].copy_from_slice(&1u16.to_le_bytes());
+    let bytes = frame(&body, true, true);
+    assert_eq!(decode_message_input(&bytes).unwrap().deploy(), Err(DecodeError::InvalidValue));
+}
+
+#[test]
 fn deploy_accessor_requires_the_deploy_flag() {
     let bytes = frame(&envelope(false), false, false);
     assert_eq!(decode_message_input(&bytes).unwrap().deploy(), Err(DecodeError::InvalidValue));

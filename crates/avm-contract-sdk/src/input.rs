@@ -358,8 +358,12 @@ impl<'a> MessageInput<'a> {
         if flags & !0x3f != 0 {
             return Err(DecodeError::UnknownTag);
         }
-        if read_u16_at(body, 6)? != 0 || read_u16_at(body, 286)? != 0 {
+        if read_u16_at(body, 6)? != 0 {
             return Err(DecodeError::NonZeroReserved);
+        }
+        // Offset 286 is function_count: the inline code's functions, 0 without code.
+        if read_u32_at(body, 272)? == 0 && read_u16_at(body, 286)? != 0 {
+            return Err(DecodeError::InvalidValue);
         }
         let owner_key = read_fixed_at::<32>(body, 200)?;
         let owner_key_set = flags & 0x10 != 0;
