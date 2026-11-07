@@ -1,0 +1,179 @@
+{
+  "date_utc": "2026-11-06",
+  "source_parent": "aca5c8dc78e311d0df5088bb6a32aa27a87aef0c",
+  "sdk_release": "avm-dev-d103b6ccc759-sdk-21364083b24a",
+  "bundle_sha256": "7476847a764fedc22fae47ba7ec63b607ba445280a7d4bcdb02fda77a85573f6",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "profile_sha256": "6d533f0804924b13bbea811691b4f24dd2922528d2473a3f0541d08d8d2560bf",
+  "native_tests_passed": 47,
+  "abi_ids_checked_against_generated_rust": 22,
+  "artifacts": {
+    "lending": {
+      "contract.acab": {
+        "bytes": 1861,
+        "sha256": "1cc13bffc0f9bfde8551c509a65ec4c6ac0ec27df2754d161031cfe9b4c40128"
+      },
+      "contract.descriptor": {
+        "bytes": 66,
+        "sha256": "502ed689c2e6ccd07db8f2f08d2b99c05c057fc20a7902c9306e1c9d1bcd7517"
+      },
+      "contract.wasm": {
+        "bytes": 58576,
+        "sha256": "08f81113dae4db56cc5ef84786e63fd4f3c8d1568ecc2688884e121fda6e608d"
+      }
+    },
+    "payee": {
+      "contract.acab": {
+        "bytes": 343,
+        "sha256": "ece21bd4f0200bf0a7e5bbaed533b29b9af976c894367c1bede5aa07b0205dec"
+      },
+      "contract.descriptor": {
+        "bytes": 66,
+        "sha256": "fee83e77e80d9e77fb9f6f867dd770d9210ab8fab3b70bc6a6ff8362c089371f"
+      },
+      "contract.wasm": {
+        "bytes": 28430,
+        "sha256": "50e654325078dacb61d1ece10caad04af09e760db369810b70ec03da2e81745f"
+      }
+    }
+  },
+  "stand": {
+    "status": "PASS",
+    "call_probes": 29,
+    "fuel_reserve_shells": [
+      [
+        "lend.topup",
+        1
+      ],
+      [
+        "lend.payee.bind",
+        1
+      ],
+      [
+        "lend.set_price",
+        1
+      ],
+      [
+        "lend.set_price",
+        1
+      ],
+      [
+        "lend.deposit",
+        1
+      ],
+      [
+        "lend.deposit",
+        1
+      ],
+      [
+        "lend.deposit",
+        1
+      ],
+      [
+        "lend.supply",
+        1
+      ],
+      [
+        "lend.add_collateral",
+        1
+      ],
+      [
+        "lend.borrow",
+        1
+      ],
+      [
+        "lend.borrow",
+        1
+      ],
+      [
+        "lend.set_price",
+        1
+      ],
+      [
+        "lend.set_price",
+        1
+      ],
+      [
+        "lend.set_price",
+        1
+      ],
+      [
+        "lend.liquidate",
+        1
+      ],
+      [
+        "lend.set_price",
+        1
+      ],
+      [
+        "lend.liquidate",
+        1
+      ],
+      [
+        "lend.set_price",
+        1
+      ],
+      [
+        "lend.liquidate",
+        1
+      ],
+      [
+        "lend.set_price",
+        1
+      ],
+      [
+        "lend.liquidate",
+        1
+      ],
+      [
+        "lend.liquidate",
+        1
+      ],
+      [
+        "lend.write_off",
+        1
+      ],
+      [
+        "lend.redeem",
+        1
+      ],
+      [
+        "lend.withdraw",
+        1
+      ],
+      [
+        "lend.payee.reject",
+        1
+      ],
+      [
+        "lend.withdraw",
+        1
+      ],
+      [
+        "lend.payee.reject",
+        1
+      ],
+      [
+        "lend.withdraw",
+        1
+      ]
+    ],
+    "inspect": {
+      "account_state_root": "861018043c0833833ea97fade60e7b05c583d90edaff3531cc4067d467b74f01",
+      "registry_root": "6c9c5fd76c7e24d8b7221ab87bbc2702e6d78745de1804a6cb04a21a7b37a2eb",
+      "cumulative_fee_shells": "12522602187",
+      "accepted_input_count": 37
+    },
+    "replay": {
+      "account_state_root": "861018043c0833833ea97fade60e7b05c583d90edaff3531cc4067d467b74f01",
+      "registry_root": "6c9c5fd76c7e24d8b7221ab87bbc2702e6d78745de1804a6cb04a21a7b37a2eb",
+      "cumulative_fee_shells": "12522602187",
+      "accepted_input_count": 37
+    }
+  },
+  "limits": [
+    "Local/fork evidence only; no upstream CI or maintainer approval.",
+    "Native-only edge cases remain outside the existing journey.",
+    "Heap peak, account upgrade/migration, exact FUEL and Mainnet are not qualified."
+  ]
+}
