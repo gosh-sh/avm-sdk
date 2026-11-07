@@ -27,6 +27,10 @@ The available stand commands are listed in the
   callback accounting checked against an independent arithmetic oracle.
 - [fungible-token](fungible-token/README.md): a fixed-supply internal token ledger
   with bounded holder slots, transfer errors and event/replay checks.
+- [multisig-treasury](multisig-treasury/README.md): an m-of-n treasury with a
+  timelock, per-currency spending policies, a freeze switch and acknowledged
+  payouts, checked by behaviour, integration and randomized invariant tests and
+  by a journey on `avm-local-stand`.
 - [factory-child-provenance](factory-child-provenance/README.md): derived-address
   checks and their limits. A derived address does not authenticate current code.
 
