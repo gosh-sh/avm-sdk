@@ -24,6 +24,26 @@ class FixtureOracleTests(unittest.TestCase):
         self.assertEqual(batch_reserve_shells(False), 1)
         self.assertEqual(batch_reserve_shells(True, operation_prices=False), 1)
 
+    def test_function_count_reads_the_function_section_entries(self):
+        from fixture_oracle import function_count
+        header = b"\0asm\x01\0\0\0"
+        types = b"\x01\x04\x01\x60\0\0"
+        self.assertEqual(function_count(header + types + b"\x03\x03\x02\0\0"), 2)
+        self.assertEqual(function_count(header + b"\0\x02\x01x" + types + b"\x03\x03\x02\0\0"), 2)
+        many = b"\x03\xae\x02\xac\x02" + bytes(300)
+        self.assertEqual(function_count(header + types + many), 300)
+        self.assertEqual(function_count(header + types), 0)
+
+    def test_publication_fee_matches_the_published_compile_estimate_examples(self):
+        from fixture_oracle import publication_fee
+        self.assertEqual(publication_fee(1, 1), 1000)
+        self.assertEqual(publication_fee(40_960, 256), 1000)
+        self.assertEqual(publication_fee(40_961, 148), 2000)
+        self.assertEqual(publication_fee(40_960, 257), 2000)
+        self.assertEqual(publication_fee(40_958, 10_208), 10_000)
+        self.assertEqual(publication_fee(1 << 20, 3_000), 26_000)
+        self.assertEqual(publication_fee(2 << 20, 6_000), 52_000)
+
     def test_empty_and_singleton_roots_use_the_selected_domains_and_maximal_path(self):
         for compact in (False, True):
             empty = b"AVM_MULTI_MAP_COMPACT_EMPTY_V1" if compact else b"AVM_MULTI_MAP_EMPTY"

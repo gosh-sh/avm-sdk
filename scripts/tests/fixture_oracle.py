@@ -19,6 +19,37 @@ def le(value, width):
     return value.to_bytes(width, "little")
 
 
+def leb128(data, position):
+    value = shift = 0
+    while True:
+        byte = data[position]
+        position += 1
+        value |= (byte & 0x7F) << shift
+        shift += 7
+        if byte < 0x80:
+            return value, position
+
+
+def function_count(wasm):
+    """Entries of the module's function section, the deploy body's function_count."""
+    assert wasm[:8] == b"\0asm\x01\0\0\0"
+    position = 8
+    while position < len(wasm):
+        section = wasm[position]
+        size, position = leb128(wasm, position + 1)
+        if section == 3:
+            return leb128(wasm, position)[0]
+        position += size
+    return 0
+
+
+def publication_fee(code_len, functions):
+    """Code Library publication fee in SHELL of a code deploy, by gas-and-fees.md."""
+    units = -(-code_len // 40_960)
+    estimate = 159_904 * units + 136 * (functions - min(functions, 256 * units))
+    return 1000 * -(-estimate // 159_904)
+
+
 def map_root(entries, width, compact):
     assert 0 < width <= 64 and len(entries) <= 32, "fixture bound exceeded"
     rows = sorted(entries.items())
@@ -286,7 +317,9 @@ def expected_journey(bundle, label, identities, transcript, times, current):
         body += selections[index] + package + codes[index] + descriptors[index] + user + h(b"")
         body += (owner if index == 0 else bytes(32)) + abis[index]
         body += bytes(2) + le(len(name), 2) + bytes(4)
-        body += le(len(artifact["wasm"]), 4) + le(len(artifact["descriptor"]), 4) + le(len(artifact["acab"]), 4) + bytes(4)
+        functions = function_count(artifact["wasm"]) if current else 0
+        body += le(len(artifact["wasm"]), 4) + le(len(artifact["descriptor"]), 4) + le(len(artifact["acab"]), 4)
+        body += bytes(2) + le(functions, 2)
         body += name.encode() + artifact["wasm"] + artifact["descriptor"] + artifact["acab"]
         wire = transcript[transcript_index]
         external(wire, index, developer if index == 0 else owner, 1, times[transcript_index], 0, body, deploy=True)
@@ -307,9 +340,10 @@ def expected_journey(bundle, label, identities, transcript, times, current):
         expected["accounts"][addresses[index]] = image
         expected["account_leaves"][addresses[index]] = account_leaf(addresses[index], image, lt, start + paid)
 
-    # Config prices: publication=1000, init=10, external delivery=1,
-    # requested FUEL=1, callback=1, rent=canonical_image_bytes*elapsed_seconds.
-    funded = 1_000_000 - (1000 + 10 + 1 + 1)
+    # Config prices: publication=1000 per started unit of code, init=10, external
+    # delivery=1, requested FUEL=1, callback=1, rent=canonical_image_bytes*elapsed_seconds.
+    funded = [1_000_000 - ((publication_fee(len(item["wasm"]), function_count(item["wasm"]))
+                            if current else 1000) + 10 + 1 + 1) for item in artifacts]
     if version:
         version_method = int.from_bytes(h(b"causal.a.version")[:8], "little")
         external(transcript[1], 0, user, 1, start + 2, version_method, b"")
@@ -328,8 +362,8 @@ def expected_journey(bundle, label, identities, transcript, times, current):
             state[48:72] = migration
         state[16] = 2 if current else 1
         account(0, selections[1] if current else selections[0], 0,
-                funded - 5 * 2 - (39 + 20 + 72) * 7, {}, bytes(state), 9, 8)
-        account(1, selections[1], 0, funded, {}, bytes(72), 5, 4)
+                funded[0] - 5 * 2 - (39 + 20 + 72) * 7, {}, bytes(state), 9, 8)
+        account(1, selections[1], 0, funded[1], {}, bytes(72), 5, 4)
         return expected
 
     method_name = "causal.batch.patch" if batch else "causal.b.drain" if label in {"trap", "out-of-fuel"} else "causal.b.receive"
@@ -344,12 +378,12 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     delivered += first + second_address + (b"" if batch else handler) + le(0, 4) + le(37, 16) + le(7, 4) + le(11, 16) + b"\x42" * 16
     assert transcript[3] == delivered, "complete VM-produced message differs"
     sender = bytearray(le(1, 8) + bytes(64))
-    sender_shells = funded - (39 + 20 + 72) * 2 - 2 - (batch_reserve if batch else 1)
+    sender_shells = funded[0] - (39 + 20 + 72) * 2 - 2 - (batch_reserve if batch else 1)
     if batch:
         external(transcript[4], 1, user, 1, start + 4, int.from_bytes(method, "little"), b"")
         receiver = le(65536, 4) + le(1, 8) + bytes(65528)
         account(0, selections[0], 63, sender_shells, {7: 29}, bytes(sender), 5, 3)
-        account(1, selections[1], 37, funded - (39 + 20 + 65540) - (39 + 60 + 65540) - 2,
+        account(1, selections[1], 37, funded[1] - (39 + 20 + 65540) - (39 + 60 + 65540) - 2,
                 {7: 11}, receiver, 8, 4)
     else:
         status = {"trap": 30, "out-of-fuel": 31, "invalid-event": 44}.get(label, 0)
@@ -376,6 +410,6 @@ def expected_journey(bundle, label, identities, transcript, times, current):
                     expected["rings"][key] = b"AIER\x01\0\0\0" + le(len(event), 4) + event
         account(0, selections[0], 100 if failure else 63, sender_shells,
                 {7: 40 if failure else 29}, bytes(sender), 9, 3)
-        account(1, selections[1], 0 if failure else 37, funded - (39 + 20 + 128),
+        account(1, selections[1], 0 if failure else 37, funded[1] - (39 + 20 + 128),
                 {} if failure else {7: 11}, receiver, 7, 3)
     return expected
