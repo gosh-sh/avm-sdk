@@ -1,12 +1,12 @@
 # SDK tooling
 
-This guide describes SDK 0.5.2. Use a matching builder and local-stand binary
+This guide describes SDK 0.6.0. Use a matching builder and local-stand binary
 for the commands below; check the source identities recorded in the distribution.
 SDK 0.2.0 does not include the constructor and CLI additions described here.
 
 ## Core-WASM V2 guest builds
 
-SDK 0.5.2 builds contracts with exact Rust/Cargo 1.99.1 and
+SDK 0.6.0 builds contracts with exact Rust/Cargo 1.99.1 and
 `-Ctarget-feature=+wide-arithmetic`. This compiler's wide-integer lowering is
 validated against a native-integer semantic regression; emitting an instruction
 alone does not prove correct arithmetic.
@@ -34,6 +34,9 @@ In `init`, `input.deploy()?` returns a borrowed view with `init_data()`, `salt()
 `ui_name()`, `owner_id()` and `package_id()`. An empty name is possible. These
 accessors check envelope structure; host admission still validates signatures,
 hashes and configured limits. Decode `init_data()` using the ABI init type.
+A deploy that carries code declares the number of functions of its module in
+the envelope's `function_count` field at offset 286; `input.deploy()` accepts it
+and rejects a non-zero count in a deploy without code.
 
 ## Generated IDs and dispatch
 

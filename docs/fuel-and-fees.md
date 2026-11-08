@@ -204,6 +204,28 @@ input produce equal `fuel_used`, status and `pages_at_end` in every class.
 The class maxima, `memory_class_maxima_bytes` in the bundled profile, are
 provisional development values and can change before network acceptance.
 
+## Code Publication Fee
+
+A deploy that carries new code pays a one-time Code Library publication fee in
+SHELL from the funding of its deploy address. The fee follows the size of the
+WASM module and its declared function count:
+
+```text
+units    = ceil(code_len / 40960)
+estimate = 159904 * units + 136 * (function_count - min(function_count, 256 * units))
+fee      = 1000 * ceil(estimate / 159904)
+```
+
+`code_len` is the byte length of the module and `function_count` the number of
+entries in its function section, which the deploy declares in its body. Every
+started 40 KiB unit pays 1000 SHELL and includes 256 functions, so a contract
+with at most 256 functions per started unit pays 1000 SHELL per unit: 2000 SHELL
+for a 41441-byte contract, 26000 SHELL for 1 MiB and 52000 SHELL for 2 MiB.
+A deploy that adds a new selection over already published code carries no code
+bytes and pays 1000 SHELL; a deploy that reuses a published selection pays no
+publication fee. Fund the deploy address for this fee, the account
+initialization fee and the deploy's FUEL reserve before deploying.
+
 ## Funding Is A Separate Concern
 
 The FUEL reserve is message-scoped. It is not a DApp credit account, spending

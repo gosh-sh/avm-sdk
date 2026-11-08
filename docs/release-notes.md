@@ -1,11 +1,20 @@
-# AVM SDK 0.5.2
+# AVM SDK 0.6.0
 
+- Deploy contracts whose deploy body exceeds 65536 bytes: a deploy that carries code may have a body of up to 2228224 bytes (`max_code_deploy_body_size`); every other message keeps the 65536-byte body limit. Its `init` input keeps the 1048576-byte input cap, so a deploy that carries more than about 1 MiB of code fails at `init`; see [runtime limits](runtime-limits.md#state-output-and-deploy-body-are-different-limits).
+- Charge the Code Library publication fee of a deploy that carries code by the module's size and function count: 1000 SHELL for every started 40 KiB unit, with 256 functions included per unit; see [code publication fee](fuel-and-fees.md#code-publication-fee). A new selection over published code still pays 1000 SHELL.
+- Declare the module's function count in the deploy body: the stand writes the number of entries of the WASM function section at body offset 286 (`function_count`), and `MessageInput::deploy()` accepts it. A deploy without code keeps it 0.
+- Sign a deploy that carries code without its code bytes: its signatures cover the deploy with the WASM module omitted, under a separate hash domain, and still bind `code_hash`, `code_len` and `function_count`. Deploys without code keep their signing.
+- Reject a `br_table` instruction with more than 65520 targets in code admission.
 - Take the guest ABI arena's memory on demand. The configured arena capacity still bounds the simultaneously live input and output bytes, but it is no longer reserved in initial memory: an allocation that fits a 4-KiB static region stays there, and a larger one takes heap memory during the call that makes it. Each call pays only for the pages its own input, output and work use; see [contract memory](contract-memory.md).
 - Decode the entrypoint input in place instead of copying it into the heap first, so a large input, such as an initialization message that carries the contract's own module, needs its pages once and no second copy.
-- Keep the arena capacity checks, the two live allocations freed in LIFO order, exact-pointer frees, distinct output placement, the guest ABI and the Core-WASM V2 instruction set, admission rules, operation prices, memory payment and runtime limits of SDK 0.5.1.
+- Keep the arena capacity checks, the two live allocations freed in LIFO order, exact-pointer frees, distinct output placement, the guest ABI, the Core-WASM V2 instruction set, operation prices, memory payment and the other runtime limits of SDK 0.5.1.
 
 ## Compatibility
 
+- The stand configuration identity changes. Local stand state created with an earlier SDK is rejected with a configuration mismatch: create fresh local stand state for this bundle and keep earlier tools, profile and retained state together.
+- Rebuild contracts with this release's guest crate before deploying them with code. An `init` built with an earlier guest crate rejects the non-zero `function_count` of such a deploy: its `input.deploy()` returns `NonZeroReserved`.
+- A contract above 40 KiB pays more to publish, for example 2000 SHELL instead of 1000 for a 41441-byte module. Fund deploy addresses for the new fee.
+- A deploy that carries code and was signed for an earlier release does not verify under this release.
 - Rebuilding a contract changes its WASM, code hash, initial memory and FUEL use. Initial memory no longer includes the arena capacity, so a contract whose arena added initial pages starts each call with fewer pages after rebuilding. Existing deployed WASM is unaffected until it is rebuilt and upgraded.
 - The guest crate now uses the Rust standard library for the arena lock. Contract crates that link the standard library, as the examples do, need no change; a `#![no_std]` contract crate with its own panic handler must link the standard library to use this guest crate.
 - Existing `avm-memory.json` files keep their schema and are accepted by the builder. Rerun the contract's measurement after rebuilding to record the new initial memory, peak and tested WASM hashes before deployment.
