@@ -235,7 +235,7 @@ def main():
         test(package, [])
     test("avm-effect-materializer", ["--test", "zero_intent_checkpoint"])
     test("avm-contract-sdk", ["--test", "canonical_io"])
-    test("avm-contract-sdk", ["--lib"], ["runtime::tests::" + case for case in "input_copy_preserves_bytes_and_live_bounds_at_chunk_boundaries dispatch_preserves_live_input_and_lifo_output_ownership dispatch_failure_capacity_and_overflow_leave_input_owned direct_dispatch_writes_once_without_the_vec_growth_path batch_dispatch_preserves_count_mode_and_failed_index_checks bounded_writer_failures_release_only_the_output_reservation direct_message_sections_and_batch_match_the_public_serializer".split()])
+    test("avm-contract-sdk", ["--lib"], ["runtime::tests::" + case for case in "input_view_borrows_live_bytes_and_bounds_at_chunk_boundaries dispatch_preserves_live_input_and_lifo_output_ownership dispatch_failure_capacity_and_overflow_leave_input_owned direct_dispatch_writes_once_without_the_vec_growth_path batch_dispatch_preserves_count_mode_and_failed_index_checks bounded_writer_failures_release_only_the_output_reservation direct_message_sections_and_batch_match_the_public_serializer".split()])
     test("avm-contract-build", ["--test", "reproducible_build"])
     for target_name in ("sdk_issue_abi", "sdk_issue_bindings", "sdk_issue_diagnostics", "sdk_issue_dispatch_wasm"):
         test("avm-contract-build", ["--test", target_name])
