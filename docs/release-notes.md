@@ -1,7 +1,7 @@
 # AVM SDK 0.6.0
 
 - Deploy contracts whose deploy body exceeds 65536 bytes: a deploy that carries code may have a body of up to 2228224 bytes (`max_code_deploy_body_size`); every other message keeps the 65536-byte body limit. Its `init` input keeps the 1048576-byte input cap, so a deploy that carries more than about 1 MiB of code fails at `init`; see [runtime limits](runtime-limits.md#state-output-and-deploy-body-are-different-limits).
-- Charge the Code Library publication fee of a deploy that carries code by the module's size and function count: 1000 SHELL for every started 40 KiB unit, with 256 functions included per unit; see [code publication fee](fuel-and-fees.md#code-publication-fee). A new selection over published code still pays 1000 SHELL.
+- Charge the Code Library publication fee of a deploy that carries code by the module's size and function count: 1000 SHELL for every started 40 KiB unit, with 256 functions included per unit; see [code publication fee](fuel-and-fees.md#code-publication-fee). Reusing a published selection still pays no publication fee.
 - Declare the module's function count in the deploy body: the stand writes the number of entries of the WASM function section at body offset 286 (`function_count`), and `MessageInput::deploy()` accepts it. A deploy without code keeps it 0.
 - Sign a deploy that carries code without its code bytes: its signatures cover the deploy with the WASM module omitted, under a separate hash domain, and still bind `code_hash`, `code_len` and `function_count`. Deploys without code keep their signing.
 - Reject a `br_table` instruction with more than 65520 targets in code admission.
