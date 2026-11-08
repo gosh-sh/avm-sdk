@@ -97,13 +97,17 @@ def main():
         stand("init", "init", dapp_id="11" * 32)
         address, _ = deploy("measure")
         control, _ = stand("call", "control-growth", address=address, method="memory.probe", args_json="0", identity="user", check_memory=True, **timing())
+        # The input is read in place, so the probe sees the initial memory; the output then
+        # takes a heap page. One grown page therefore peaks one page above the control call.
         control_pages = int.from_bytes(read_state(state)[0][address]["data"], "little")
+        assert control_pages * 65_536 == control["memory_check"]["runs"][0]["initial_bytes"]
+        control_peak = control["memory_check"]["runs"][0]["peak_bytes"]
         grown, _ = stand("call", "successful-growth", address=address, method="memory.probe", args_json="1", identity="user", check_memory=True, **timing())
-        assert grown["memory_check"]["runs"][0]["peak_bytes"] == (control_pages + 1) * 65_536
+        assert grown["memory_check"]["runs"][0]["peak_bytes"] == control_peak + 65_536
         run([args.builder.resolve(), "record-memory", "--manifest-path", fixture / "Cargo.toml", "--report", report], "record")
         record = json.loads((fixture / "avm-memory.json").read_text())
         peak = record["peak_memory_bytes"]
-        assert peak == (control_pages + 1) * 65_536 and record["test_calls"] >= 3
+        assert peak == control_peak + 65_536 and record["test_calls"] >= 3
         assert record["version"] == 2 and record["stack_bytes"] == 16384 and record["arena_bytes"] == 65536
         manifest.write_text(descriptor)
         deployment = build("deployment-build")
