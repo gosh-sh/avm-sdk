@@ -11,6 +11,8 @@ from pathlib import Path
 import struct
 import subprocess
 
+from fixture_oracle import function_count, publication_fee
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -128,7 +130,11 @@ def main():
     assert len(after_second["code_blobs"]) == len(before_second["code_blobs"]) + 1
     assert stand("inspect", "--account", address) == after_account
     assert bytes.fromhex(stand("inspect", "--account", second_address)["raw_state"]) == bytes(128)
-    assert int(after_second["cumulative_fee_shells"]) - int(before_second["cumulative_fee_shells"]) == 11011
+    # The other charges of the second deploy stay 10,011 SHELL; its Code Library publication
+    # fee follows the size and function count of the published module.
+    second_wasm = (second_artifact / "contract.wasm").read_bytes()
+    assert int(after_second["cumulative_fee_shells"]) - int(before_second["cumulative_fee_shells"]) == (
+        10011 + publication_fee(len(second_wasm), function_count(second_wasm)))
     assert after_second["counters"]["init_executor_calls"] == before_second["counters"]["init_executor_calls"] + 1
     call("tools.add", {"a": 8, "b": 9})
     assert inspect() == struct.pack("<Q", 17), "first package must remain executable"
