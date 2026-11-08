@@ -1,4 +1,4 @@
-"""The real qualification entrypoint accepts exactly two available CPUs."""
+"""Qualification admits any allowed CPU set of at least two CPUs with as many build jobs."""
 import importlib.util
 import os
 from pathlib import Path
@@ -21,7 +21,7 @@ class ManualGateAffinityTests(unittest.TestCase):
             environment = {
                 **os.environ,
                 "AVM_SDK_QUALIFICATION": "1",
-                "CARGO_BUILD_JOBS": "2",
+                "CARGO_BUILD_JOBS": str(len(cpus)),
                 "RUST_TEST_THREADS": "2",
                 "TMPDIR": str(root), "TMP": str(root), "TEMP": str(root),
             }
@@ -55,22 +55,28 @@ class ManualGateAffinityTests(unittest.TestCase):
     def test_one_available_cpu_is_rejected_before_optimizer(self):
         cpus = sorted(os.sched_getaffinity(0))
         result = self.run_entrypoint([0 if 0 in cpus else cpus[0]])
-        self.assertIn("qualification requires exactly 2 allowed CPUs", result.stderr)
+        self.assertIn("qualification requires at least 2 allowed CPUs", result.stderr)
         self.assertNotIn("pass --optimizer", result.stderr)
 
-    def test_more_than_two_cpus_are_rejected_before_optimizer(self):
+    def run_unit_entrypoint(self, jobs, expected):
         with tempfile.TemporaryDirectory(prefix="sdk-affinity-unit-") as directory:
             root = Path(directory)
             evidence = root / "evidence"
             argv = ["manual_gates.py", "--source", str(root), "--sdk", str(root),
                     "--evidence", str(evidence), "--optimizer", str(root / "absent-optimizer")]
-            # This negative unit input also runs on CI workers exposing exactly two CPUs.
-            with mock.patch.dict(os.environ, {"AVM_SDK_QUALIFICATION": "1", "CARGO_BUILD_JOBS": "2"}), \
+            # These unit inputs also run on CI workers exposing exactly two CPUs.
+            with mock.patch.dict(os.environ, {"AVM_SDK_QUALIFICATION": "1", "CARGO_BUILD_JOBS": jobs}), \
                     mock.patch.object(os, "sched_getaffinity", return_value={3, 8, 19}), \
                     mock.patch.object(sys, "argv", argv):
-                with self.assertRaisesRegex(ValueError, "qualification requires exactly 2 allowed CPUs"):
+                with self.assertRaisesRegex(ValueError, expected):
                     manual_gates.main()
-            self.assertFalse(evidence.exists(), "negative unit probe must not start release gates")
+            self.assertFalse(evidence.exists(), "unit probe must not start release gates")
+
+    def test_more_than_two_cpus_with_as_many_jobs_reach_optimizer(self):
+        self.run_unit_entrypoint("3", "pass --optimizer with checksum-pinned Binaryen 133 wasm-opt")
+
+    def test_jobs_other_than_the_cpu_count_are_rejected_before_optimizer(self):
+        self.run_unit_entrypoint("2", "CARGO_BUILD_JOBS must equal the allowed CPU count")
 
 
 class BuildReleaseAffinityTests(unittest.TestCase):
@@ -81,7 +87,7 @@ class BuildReleaseAffinityTests(unittest.TestCase):
             output = root / "output"
             environment = {
                 **os.environ,
-                "AVM_SDK_QUALIFICATION": "1", "CARGO_BUILD_JOBS": "2",
+                "AVM_SDK_QUALIFICATION": "1", "CARGO_BUILD_JOBS": str(len(cpus)),
                 "RUST_TEST_THREADS": "2",
                 "TMPDIR": str(root), "TMP": str(root), "TEMP": str(root),
             }
@@ -108,21 +114,31 @@ class BuildReleaseAffinityTests(unittest.TestCase):
     def test_one_available_cpu_is_rejected_before_source_identity(self):
         cpus = sorted(os.sched_getaffinity(0))
         result = self.run_entrypoint([0 if 0 in cpus else cpus[0]])
-        self.assertIn("build requires exactly 2 allowed CPUs and jobs=2", result.stderr)
+        self.assertIn("build requires at least 2 allowed CPUs and jobs equal to their count", result.stderr)
         self.assertNotIn("absent-source-sentinel", result.stderr)
 
-    def test_more_than_two_cpus_are_rejected_before_source_identity(self):
+    def build_with_three_cpus(self, jobs):
         script = Path(__file__).resolve().parents[1] / "build-release.py"
         spec = importlib.util.spec_from_file_location("affinity_build_release", script)
         builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(builder)
         with tempfile.TemporaryDirectory(prefix="sdk-build-affinity-unit-") as directory:
             root = Path(directory)
-            with mock.patch.dict(os.environ, {"AVM_SDK_QUALIFICATION": "1", "CARGO_BUILD_JOBS": "2"}), \
-                    mock.patch.object(os, "sched_getaffinity", return_value={3, 8, 19}):
-                with self.assertRaisesRegex(ValueError, "build requires exactly 2 allowed CPUs and jobs=2"):
+            try:
+                with mock.patch.dict(os.environ, {"AVM_SDK_QUALIFICATION": "1", "CARGO_BUILD_JOBS": jobs}), \
+                        mock.patch.object(os, "sched_getaffinity", return_value={3, 8, 19}):
                     builder.build(root / "absent-source-sentinel", root, root / "output", root / "absent-gates")
-            self.assertFalse((root / "output").exists())
+            finally:
+                self.assertFalse((root / "output").exists())
+
+    def test_more_than_two_cpus_with_as_many_jobs_reach_source_identity(self):
+        with self.assertRaises(subprocess.CalledProcessError) as caught:
+            self.build_with_three_cpus("3")
+        self.assertIn("absent-source-sentinel", " ".join(map(str, caught.exception.cmd)))
+
+    def test_jobs_other_than_the_cpu_count_are_rejected_before_source_identity(self):
+        with self.assertRaisesRegex(ValueError, "build requires at least 2 allowed CPUs and jobs equal to their count"):
+            self.build_with_three_cpus("2")
 
 
 if __name__ == "__main__":

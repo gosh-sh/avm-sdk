@@ -141,8 +141,9 @@ def main():
     source, sdk, evidence = args.source.resolve(), args.sdk.resolve(), args.evidence.resolve()
     require(os.environ.get("AVM_SDK_QUALIFICATION") == "1"
             or os.environ.get("AVM_SDK_POD_QUALIFICATION") == "1", "use a bounded qualification launcher")
-    require(len(os.sched_getaffinity(0)) == 2, "qualification requires exactly 2 allowed CPUs")
-    require(os.environ.get("CARGO_BUILD_JOBS") == "2", "CARGO_BUILD_JOBS must be 2")
+    cpus = len(os.sched_getaffinity(0))
+    require(cpus >= 2, "qualification requires at least 2 allowed CPUs")
+    require(os.environ.get("CARGO_BUILD_JOBS") == str(cpus), "CARGO_BUILD_JOBS must equal the allowed CPU count")
     require(args.optimizer is not None and args.optimizer.is_file()
             and os.access(args.optimizer, os.X_OK), "pass --optimizer with checksum-pinned Binaryen 133 wasm-opt")
     optimizer = args.optimizer.resolve()
