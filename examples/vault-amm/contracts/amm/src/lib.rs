@@ -1,4 +1,5 @@
-#![forbid(unsafe_code)]
+#![cfg_attr(not(target_arch = "wasm32"), forbid(unsafe_code))]
+#![cfg_attr(target_arch = "wasm32", deny(unsafe_code), no_std)]
 
 //! Vault AMM: a constant-product pool for two ECC currencies.
 //!
@@ -8,6 +9,10 @@
 //! unresolved payout never blocks other holders, and a bounced payout returns
 //! to its holder's balance.
 
+extern crate alloc;
+
+use alloc::{vec, vec::Vec};
+
 use avm_contract_sdk::{
     encode_event_fields, AccountAddress, CallbackIntent, Caller, CanonicalMessage, Contract,
     CurrencyAmount, CurrencyAmounts, EventField, EventIntent, EventKind, EventValue, MessageInput,
@@ -16,6 +21,9 @@ use avm_contract_sdk::{
 
 pub mod ids;
 pub mod math;
+#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+#[allow(unsafe_code)]
+mod rt;
 pub mod state;
 
 pub use state::{

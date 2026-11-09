@@ -7,4 +7,5 @@ python3 scripts/gen_ids.py --check
 python3 scripts/gen_vectors.py --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --target wasm32-unknown-unknown -p avm-vault-amm -p avm-vault-receiver -- -D warnings
 cargo test --workspace

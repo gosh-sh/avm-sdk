@@ -1,5 +1,7 @@
 //! Fixed-layout state, canonical decoding and the accounting invariants.
 
+use alloc::{vec, vec::Vec};
+
 use avm_contract_sdk::AccountAddress;
 
 use crate::{

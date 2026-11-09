@@ -1,13 +1,25 @@
-#![forbid(unsafe_code)]
+#![cfg_attr(not(target_arch = "wasm32"), forbid(unsafe_code))]
+#![cfg_attr(target_arch = "wasm32", deny(unsafe_code), no_std)]
 
 //! Companion fixture: a payout destination bound to one Vault AMM. It accepts
 //! a withdrawal, records the receipt and echoes it in its callback, or it
 //! deliberately rejects the delivery so the AMM's bounce path can run.
 
+extern crate alloc;
+
+use alloc::{vec, vec::Vec};
+
 use avm_contract_sdk::{
     AccountAddress, Caller, CanonicalMessage, Contract, MessageInput, MessageOutput, StateUpdate,
 };
-use avm_vault_amm::ids;
+#[allow(dead_code)]
+#[path = "../../amm/src/ids.rs"]
+mod ids;
+
+#[cfg(target_arch = "wasm32")]
+#[allow(unsafe_code)]
+#[path = "../../amm/src/rt.rs"]
+mod rt;
 
 pub const STATE_BYTES: usize = 144;
 pub const ERR_AUTH: u32 = 2200;
