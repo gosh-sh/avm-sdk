@@ -25,6 +25,8 @@ The available stand commands are listed in the
   state experiments with native/WASM vectors and replay.
 - [vesting-streams](vesting-streams/README.md): grant accrual, cancellation and
   callback accounting checked against an independent arithmetic oracle.
+- [wallet](wallet/README.md): an owner wallet that keeps its owner key in its
+  data and turns one signed external call into one internal message with value
 - [fungible-token](fungible-token/README.md): a fixed-supply internal token ledger
   with bounded holder slots, transfer errors and event/replay checks.
 - [factory-child-provenance](factory-child-provenance/README.md): derived-address

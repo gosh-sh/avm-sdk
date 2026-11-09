@@ -44,8 +44,8 @@ def main():
         if name in projects:
             raise ValueError("ambiguous contract package name")
         projects[name] = path.parent.relative_to(sdk).as_posix()
-    if len(projects) != 17:
-        raise ValueError("expected all 17 example contracts")
+    if len(projects) != 18:
+        raise ValueError("expected all 18 example contracts")
     (output / "projects.json").write_text(json.dumps(projects, indent=2) + "\n")
     report, builds = output / "memory-runs.jsonl", output / "builds.jsonl"
     report.write_text("")
@@ -101,6 +101,7 @@ def main():
         run(name, command)
     run("vesting-streams", ["bash", sdk / "examples/vesting-streams/scripts/check.sh", sdk, sdk / "bin/wasm-opt"],
         extra={"AVM_EVIDENCE_DIR": output / "vesting-streams"})
+    run("wallet", ["bash", sdk / "examples/wallet/stand-e2e.sh"], extra={"AVM_WALLET_WORK": output / "wallet"})
     run("fungible-token", ["bash", sdk / "examples/fungible-token/stand-e2e.sh"], extra={"AVM_TOKEN_WORK": output / "fungible-token"})
     run("factory-child", ["bash", sdk / "examples/factory-child-provenance/prove.sh"],
         extra={"PROVENANCE_OUT": output / "factory-child", "PROVENANCE_KEEP": "1"})
@@ -134,7 +135,7 @@ def main():
     (output / "result.json").write_text(json.dumps({"passed": True, "examples": results}, indent=2) + "\n")
     for project in projects.values():
         shutil.copy2(sdk / project / "avm-memory.json", source / project / "avm-memory.json")
-    print("PASS: all 17 examples measured through their own complete test scenarios")
+    print("PASS: all 18 examples measured through their own complete test scenarios")
 
 
 if __name__ == "__main__":

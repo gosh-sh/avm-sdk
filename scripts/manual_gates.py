@@ -282,6 +282,9 @@ def main():
         consumer_sdk, environment=application_environment)
     application_environment.update(AVM_TOKEN_WORK=str(evidence / "fungible-token"),
                                    PROVENANCE_OUT=str(evidence / "factory-child-provenance"), PROVENANCE_KEEP="1")
+    run("wallet-application-checks", ["bash",
+        str(consumer_sdk / "examples/wallet/stand-e2e.sh")], consumer_sdk,
+        environment={**application_environment, "AVM_WALLET_WORK": str(evidence / "wallet")})
     run("fungible-token-application-checks", ["bash",
         str(consumer_sdk / "examples/fungible-token/stand-e2e.sh")], consumer_sdk,
         environment=application_environment)

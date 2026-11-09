@@ -1,0 +1,86 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "7070707070707070707070707070707070707070707070707070707070707070"
+# The account data is the owner key alone.
+owner_key_offset = 0
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "wallet_owner_key"
+len = 32
+
+[[abi.types]]
+id = 2
+kind = "bytes"
+name = "wallet_send_args"
+
+[[abi.types]]
+id = 3
+kind = "u64"
+name = "wallet_status_code"
+
+[[abi.types]]
+id = 4
+kind = "bytes"
+name = "wallet_currency_amounts"
+
+[[abi.methods]]
+name = "wallet.send"
+input_type_id = 2
+
+[[abi.methods]]
+name = "wallet.set_owner_key"
+input_type_id = 1
+
+[[abi.methods]]
+name = "wallet.receive"
+
+[[abi.methods]]
+name = "wallet.callback"
+
+[[abi.events]]
+name = "wallet.callback"
+
+[[abi.events.fields]]
+id = 1
+type_id = 4
+name = "extra"
+
+[[abi.events.fields]]
+id = 2
+type_id = 3
+name = "status_code"
+
+[[abi.errors]]
+status_code = 1700
+name = "invalid_state"
+message = "wallet data must be exactly the 32-byte owner key"
+
+[[abi.errors]]
+status_code = 1701
+name = "external_caller_required"
+message = "send and set_owner_key must be external calls signed by the owner key"
+
+[[abi.errors]]
+status_code = 1702
+name = "invalid_send_args"
+message = "send expects destination 64 | method id u64 | fuel u128 | callback u8 | count u8 | sorted extra | payload"
+
+[[abi.errors]]
+status_code = 1703
+name = "invalid_owner_key"
+message = "set_owner_key expects a 32-byte key"
+
+[[abi.errors]]
+status_code = 1704
+name = "unknown_method"
+message = "method is not part of the wallet ABI"
+
+[[abi.errors]]
+status_code = 1705
+name = "invalid_callback"
+message = "callback message has no callback header or its event could not be encoded"
