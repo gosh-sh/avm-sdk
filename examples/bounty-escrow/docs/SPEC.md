@@ -3,15 +3,21 @@
 ## Authority and asset model
 
 The configured owner approves work and requests expired refunds. The configured
-worker submits work. Either configured party triggers an approved payout. Status
-and SHELL fee donations accept any external signer. Business operations reject
-ordinary internal messages. The only internal entrypoint is a native callback.
+worker submits work. Either configured party triggers an approved payout. The
+owner calls by external messages under its owner key and funds through its own
+wallet, because an external message carries no value. The worker calls through
+its own wallet, so the escrow sees its wallet address as an internal caller.
+Status accepts any caller; SHELL fee donations accept any internal caller.
+Business operations reject every other caller.
 
-The owner must match the `Caller::External` identity supplied during AVM init.
-The tested stand initializes these receiver fixtures with the developer identity
-and initializes the escrow with the developer identity. The demo
-sets its client key accordingly. Do not infer wallet identity behavior from these
-local fixture identities for an untested deployment environment.
+The escrow keeps the owner key in the first config field, at state offset 0,
+and its descriptor declares `owner_key_offset = 0`: the node admits an external
+call to the escrow only when it is signed by that key. Init requires the key to
+equal the deploy `owner_id`. The receiver fixtures keep the deploy `owner_id` at
+state offset 0 the same way and accept bind and reject only from that key. The
+tested stand deploys the escrow and both receivers with the developer identity
+as `owner_id`, and one wallet per identity: developer (owner), user (worker) and
+package-owner (a foreign wallet).
 
 Principal uses the example's explicit `PRINCIPAL_CURRENCY_ID = 0` ECC entry.
 This is an application choice for new instances, not a token assignment or a
@@ -56,60 +62,63 @@ All amounts are unsigned 128-bit integers with checked arithmetic. Wire fields
 are little-endian. State uses a fixed length and enforces zero padding, valid
 phases, nonzero active delivery hashes, and a canonical receipt ledger.
 
-## Config wire layout (360 bytes)
+## Config wire layout (456 bytes)
 
 | Offset | Size | Field |
 | --- | --- | --- |
-| 0 | 32 | Client external public key |
-| 32 | 32 | Worker external public key |
-| 64 | 64 | Refund destination: DApp ID then account ID |
-| 128 | 64 | Payment destination: DApp ID then account ID |
-| 192 | 16 | Total principal |
-| 208 | 4 | Deadline (AVM logical block time) |
-| 212 | 1 | Milestone count, 1 through 8 |
-| 213 | 3 | Zero padding |
-| 216 | 128 | Eight milestone amounts; unused entries zero |
-| 344 | 16 | Nonzero outbound SHELL compute reserve |
+| 0 | 32 | Client owner key (`owner_key_offset = 0`), equal to the deploy `owner_id` |
+| 32 | 64 | Client wallet: DApp ID then account ID |
+| 96 | 64 | Worker wallet: DApp ID then account ID |
+| 160 | 64 | Refund destination: DApp ID then account ID |
+| 224 | 64 | Payment destination: DApp ID then account ID |
+| 288 | 16 | Total principal |
+| 304 | 4 | Deadline (AVM logical block time) |
+| 308 | 1 | Milestone count, 1 through 8 |
+| 309 | 3 | Zero padding |
+| 312 | 128 | Eight milestone amounts; unused entries zero |
+| 440 | 16 | Nonzero outbound SHELL compute reserve |
+
+The owner key and both wallets are nonzero and the two wallets differ.
 
 Initialization extracts this config from the canonical ACDP deployment body.
 It does not confuse the deployment envelope with raw configuration. The ACDP
 parser validates its declared variable-section lengths and zero reserved bytes.
 Runtime package/hash/signature validation remains the runtime's responsibility.
 
-## State wire layout (2,768 bytes)
+## State wire layout (2,864 bytes)
 
 | Offset | Size | Field |
 | --- | --- | --- |
-| 0 | 360 | Immutable config |
-| 360 | 16 | Funded principal (zero or exact total) |
-| 376 | 16 | Paid principal |
-| 392 | 16 | Refunded principal |
-| 408 | 8 | Total dispatch attempts |
-| 416 | 1 | Pending kind: idle 0, payment 1, refund 2 |
-| 417 | 1 | Pending milestone index; refund uses 255 |
-| 418 | 6 | Zero padding |
-| 424 | 16 | Pending principal |
-| 440 | 8 | Pending attempt number |
-| 448 | 8 | Milestone phases (0/1/2/3/4) |
-| 456 | 256 | Eight delivery hashes |
-| 712 | 8 | Number of accepted callback causal hashes |
-| 720 | 2,048 | Up to 64 accepted causal hashes; unused slots zero |
+| 0 | 456 | Immutable config |
+| 456 | 16 | Funded principal (zero or exact total) |
+| 472 | 16 | Paid principal |
+| 488 | 16 | Refunded principal |
+| 504 | 8 | Total dispatch attempts |
+| 512 | 1 | Pending kind: idle 0, payment 1, refund 2 |
+| 513 | 1 | Pending milestone index; refund uses 255 |
+| 514 | 6 | Zero padding |
+| 520 | 16 | Pending principal |
+| 536 | 8 | Pending attempt number |
+| 544 | 8 | Milestone phases (0/1/2/3/4) |
+| 552 | 256 | Eight delivery hashes |
+| 808 | 8 | Number of accepted callback causal hashes |
+| 816 | 2,048 | Up to 64 accepted causal hashes; unused slots zero |
 
 Idle pending fields must all be zero. A pending attempt is the most recent
 dispatch. Receipt count equals attempts minus one when pending, and equals
 attempts when idle. Accepted receipt hashes are nonzero and distinct.
 
-## External method bodies
+## Method bodies
 
 | Method | Body | Authority |
 | --- | --- | --- |
-| `bounty.escrow.fund` | Empty; exact total as the sole ECC 0 entry | Client |
-| `bounty.escrow.submit` | Index (1 byte) + delivery hash (32 bytes) | Worker |
-| `bounty.escrow.approve` | Index + exact submitted hash | Client |
-| `bounty.escrow.pay` | Index (1 byte) | Client or worker |
-| `bounty.escrow.refund` | Empty | Client |
-| `bounty.escrow.status` | Empty | Any external signer |
-| `bounty.escrow.topup` | Empty; only transferred SHELL (ECC 2) | Any external signer |
+| `bounty.escrow.fund` | Empty; exact total as the sole ECC 0 entry | Client wallet |
+| `bounty.escrow.submit` | Index (1 byte) + delivery hash (32 bytes) | Worker wallet |
+| `bounty.escrow.approve` | Index + exact submitted hash | Client owner key |
+| `bounty.escrow.pay` | Index (1 byte) | Client owner key or worker wallet |
+| `bounty.escrow.refund` | Empty | Client owner key |
+| `bounty.escrow.status` | Empty | Any caller |
+| `bounty.escrow.topup` | Empty; only transferred SHELL (ECC 2) | Any internal caller |
 
 No extra principal or currencies are accepted by business/status operations.
 There is no code-upgrade entrypoint. Method/event IDs in `ids.rs` are extracted

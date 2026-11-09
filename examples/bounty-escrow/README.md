@@ -11,12 +11,12 @@ example, with no production deployment or audit claim.
 `PRINCIPAL_CURRENCY_ID = 0` is an explicit application choice for this new
 ECC-only example. It does not name a live token, reserve that ID, identify the
 former unnamed main asset, or convert existing accounts. Funding supplies one
-ECC entry with this ID and the exact configured total, for example the local
-stand call option `--extra-currencies 0:1000`. Wrong currencies and mixed
+ECC entry with this ID and the exact configured total as the internal message
+value of the client wallet's `wallet.send`. Wrong currencies and mixed
 funding are rejected. Payouts and refunds carry this same ID and exact amount.
 
-SHELL (ECC 2) funds execution separately. A fee donation uses the topup method
-with `--extra-currencies 2:10000`. A successful callback may return unused FUEL
+SHELL (ECC 2) funds execution separately. A fee donation is an internal topup
+message, for example from a wallet, carrying only SHELL. A successful callback may return unused FUEL
 fees as SHELL; a failed callback must return exact principal plus optional
 SHELL. The operating-reserve precheck is not a complete fee/rent estimator;
 the runtime enforces actual fees and route requirements.
@@ -42,8 +42,13 @@ the historical SDK 0.2.0 distribution is incompatible with these guests.
 The existing entry point checks formatting, locked native Clippy and all 37
 regressions, both WASM guests, the official builder's two clean builds, canonical
 method/event IDs, required exports and zero host imports. Its actual local-stand
-journey uses quote/fund/deploy and exercises unauthorized calls, wrong currency,
+journey uses quote/fund/deploy, one keyed [wallet](../wallet/README.md) per
+identity, and exercises unauthorized and foreign-wallet calls, wrong currency,
 rejected payout/refund with exact return, retries, and payment after expiry.
+Wallet calls request a callback, so the exact escrow status comes from the
+`wallet.callback` event. The node rejections of an external to another
+identity's wallet, of a foreign-key external to the escrow and of an external
+carrying value are checked as well.
 The fixed outcome is `1000 = 700 paid + 300 refunded`, five attempts, no pending
 transfer and an empty queue. Journal replay must reproduce roots, accepted input
 count and cumulative SHELL fees. These are correctness checks, not throughput,
@@ -53,10 +58,10 @@ network, production pricing or release qualification.
 
 See [the specification](docs/SPEC.md) for fixed state layouts, authority,
 accounting and error codes. Init reads the constructor through the SDK's
-borrowed deployment view. The configured owner must equal the actual external
-init caller; the local journey selects its developer identity for that role.
-The worker is a distinct configured identity. Both receiver bindings are
-immutable and owner-authorized.
+borrowed deployment view. The configured owner key must equal the deploy
+`owner_id`; the local journey selects its developer identity for that role.
+The client and worker wallets are distinct configured addresses. Both receiver
+bindings are immutable and owner-authorized.
 
 There are at most eight milestones and 64 outbound attempts. A missing callback
 or exhausted attempt bound can leave principal locked. There is no timeout

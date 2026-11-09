@@ -1,6 +1,6 @@
 [descriptor]
 execution_mode = "message_isolated"
-state_schema_id = "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1"
+state_schema_id = "f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2"
 
 [abi]
 state_root_type_id = 1
@@ -9,13 +9,13 @@ state_root_type_id = 1
 id = 1
 kind = "fixed_bytes"
 name = "fungible_token_state"
-len = 336
+len = 592
 
 [[abi.types]]
 id = 2
 kind = "fixed_bytes"
 name = "fungible_token_transfer_args"
-len = 40
+len = 72
 
 [[abi.types]]
 id = 3
@@ -26,7 +26,7 @@ name = "event_amount"
 id = 4
 kind = "fixed_bytes"
 name = "event_holder"
-len = 32
+len = 64
 
 [[abi.methods]]
 name = "token.transfer"
@@ -52,13 +52,13 @@ name = "to"
 
 [[abi.errors]]
 status_code = 1300
-name = "external_caller_required"
-message = "token deploy and transfers must be signed external messages"
+name = "wallet_caller_required"
+message = "token transfers must be internal messages from the holder wallet"
 
 [[abi.errors]]
 status_code = 1301
 name = "invalid_transfer_args"
-message = "token accepts only token.transfer with a 32-byte recipient and a non-zero u64 amount"
+message = "token accepts only token.transfer with a nonzero 64-byte recipient wallet address and a non-zero u64 amount"
 
 [[abi.errors]]
 status_code = 1302
@@ -79,3 +79,8 @@ message = "token ledger has no free holder slot for a new recipient"
 status_code = 1305
 name = "invalid_event"
 message = "token transfer event fields could not be encoded"
+
+[[abi.errors]]
+status_code = 1306
+name = "invalid_initial_holder"
+message = "token init data must be the nonzero 64-byte wallet address of the initial holder"

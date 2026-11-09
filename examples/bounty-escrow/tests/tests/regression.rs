@@ -1,20 +1,26 @@
 use avm_bounty_escrow::*;
 use avm_bounty_receiver::Receiver;
 use avm_contract_sdk::{
-    decode_message_input, encode_message_output, AccountAddress, Contract, MessageOutput,
+    decode_message_input, encode_message_output, AccountAddress, Caller, Contract, MessageOutput,
     StateUpdate,
 };
 
-const OWNER: [u8; 32] = [0x41; 32];
-const WORKER: [u8; 32] = [0x42; 32];
-const STRANGER: [u8; 32] = [0x43; 32];
-fn address(id: u8) -> AccountAddress {
+const OWNER_KEY: [u8; 32] = [0x41; 32];
+const STRANGER_KEY: [u8; 32] = [0x43; 32];
+// The owner calls by externals under its key and funds through its wallet;
+// the worker calls through its wallet; a stranger is a foreign wallet.
+const OWNER: Caller = Caller::External(OWNER_KEY);
+const OWNER_WALLET: Caller = Caller::Internal(address(5));
+const WORKER: Caller = Caller::Internal(address(6));
+const STRANGER: Caller = Caller::Internal(address(7));
+const fn address(id: u8) -> AccountAddress {
     AccountAddress { dapp_id: [0x11; 32], account_id: [id; 32] }
 }
 fn config() -> Config {
     Config {
-        owner: OWNER,
-        worker: WORKER,
+        owner: OWNER_KEY,
+        owner_wallet: address(5),
+        worker_wallet: address(6),
         refund_to: address(2),
         pay_to: address(3),
         total: 1000,
@@ -25,9 +31,10 @@ fn config() -> Config {
     }
 }
 
-fn envelope(init: &[u8]) -> Vec<u8> {
+fn envelope(owner_id: [u8; 32], init: &[u8]) -> Vec<u8> {
     let mut b = vec![0; 288];
     b[..4].copy_from_slice(b"ACDP");
+    b[136..168].copy_from_slice(&owner_id);
     b[268..272].copy_from_slice(&(init.len() as u32).to_le_bytes());
     b.extend_from_slice(init);
     b
@@ -111,16 +118,55 @@ fn external(
     b.extend_from_slice(&[0; 64]);
     b
 }
+// An ordinary internal message from `source` to the escrow at address(1).
+fn internal(source: AccountAddress, method: u64, body: &[u8], entries: &[(u32, u128)]) -> Vec<u8> {
+    let mut b = vec![0; 176];
+    b[2..4].copy_from_slice(&(entries.len() as u16).to_le_bytes());
+    b[4..8].copy_from_slice(&(body.len() as u32).to_le_bytes());
+    b[8..16].copy_from_slice(&method.to_le_bytes());
+    b[32..40].copy_from_slice(&5u64.to_le_bytes());
+    b[40..44].copy_from_slice(&20u32.to_le_bytes());
+    write_address(&mut b, 48, source);
+    write_address(&mut b, 112, address(1));
+    for (id, n) in entries {
+        b.extend_from_slice(&id.to_le_bytes());
+        b.extend_from_slice(&n.to_le_bytes());
+    }
+    b.extend_from_slice(body);
+    b
+}
+// The escrow input frame for `caller`: an external under its key or an
+// internal message from its wallet, carrying the `entries` value.
+fn call_frame(
+    state: &[u8],
+    caller: Caller,
+    method: u64,
+    body: &[u8],
+    entries: &[(u32, u128)],
+    time: u32,
+    balance: u128,
+) -> Vec<u8> {
+    match caller {
+        Caller::External(actor) => {
+            let message = external(body, actor, method, 0, address(1), false, entries);
+            frame(&message, state, actor, None, address(1), time, balance)
+        }
+        Caller::Internal(source) => {
+            let message = internal(source, method, body, entries);
+            frame(&message, state, [0; 32], Some(source), address(1), time, balance)
+        }
+    }
+}
 fn evaluate(
     state: &[u8],
-    actor: [u8; 32],
+    actor: Caller,
     method: u64,
     body: &[u8],
     value: u128,
     time: u32,
 ) -> MessageOutput {
-    let message = external(body, actor, method, value, address(1), false, &[]);
-    let b = frame(&message, state, actor, None, address(1), time, 10000);
+    let entries: &[(u32, u128)] = if value == 0 { &[] } else { &[(PRINCIPAL_CURRENCY_ID, value)] };
+    let b = call_frame(state, actor, method, body, entries, time, 10000);
     let out = Escrow::process_message(decode_message_input(&b).unwrap());
     encode_message_output(&out).expect("every returned effect set must be canonical");
     out
@@ -141,12 +187,13 @@ fn failure(out: MessageOutput, code: u32) {
     );
 }
 fn initialized() -> Vec<u8> {
-    let message = external(&envelope(&config().encode()), OWNER, 0, 0, address(1), true, &[]);
-    let b = frame(&message, &[], OWNER, None, address(1), 10, 0);
+    let init = envelope(OWNER_KEY, &config().encode());
+    let message = external(&init, OWNER_KEY, 0, 0, address(1), true, &[]);
+    let b = frame(&message, &[], OWNER_KEY, None, address(1), 10, 0);
     state_from(&Escrow::init(decode_message_input(&b).unwrap()))
 }
 fn funded() -> Vec<u8> {
-    state_from(&evaluate(&initialized(), OWNER, ids::FUND, &[], 1000, 11))
+    state_from(&evaluate(&initialized(), OWNER_WALLET, ids::FUND, &[], 1000, 11))
 }
 fn hash_args(index: u8, hash: u8) -> Vec<u8> {
     let mut b = vec![index];
@@ -207,15 +254,29 @@ fn config_roundtrip_and_state_roundtrip() {
 }
 #[test]
 fn init_requires_owner_signature() {
-    let msg = external(&envelope(&config().encode()), STRANGER, 0, 0, address(1), true, &[]);
-    let b = frame(&msg, &[], STRANGER, None, address(1), 10, 0);
+    let msg = external(
+        &envelope(STRANGER_KEY, &config().encode()),
+        OWNER_KEY,
+        0,
+        0,
+        address(1),
+        true,
+        &[],
+    );
+    let b = frame(&msg, &[], OWNER_KEY, None, address(1), 10, 0);
     failure(Escrow::init(decode_message_input(&b).unwrap()), ERR_AUTH);
 }
 #[test]
 fn config_rejects_zero_or_duplicate_identities() {
     for zero in [false, true] {
         let mut c = config();
-        c.worker = if zero { [0; 32] } else { c.owner };
+        c.worker_wallet = if zero { address(0) } else { c.owner_wallet };
+        assert_eq!(Config::decode(&c.encode()), Err(ERR_ARGS));
+        let mut c = config();
+        c.owner_wallet = address(0);
+        assert_eq!(Config::decode(&c.encode()), Err(ERR_ARGS));
+        let mut c = config();
+        c.owner = [0; 32];
         assert_eq!(Config::decode(&c.encode()), Err(ERR_ARGS));
     }
 }
@@ -260,10 +321,10 @@ fn config_and_state_reject_truncation_without_panics() {
 }
 #[test]
 fn deployment_envelope_lengths_are_checked() {
-    let b = envelope(&config().encode());
+    let b = envelope(OWNER_KEY, &config().encode());
     let extract = |body: &[u8]| {
-        let message = external(body, OWNER, 0, 0, address(1), true, &[]);
-        let bytes = frame(&message, &[], OWNER, None, address(1), 10, 0);
+        let message = external(body, OWNER_KEY, 0, 0, address(1), true, &[]);
+        let bytes = frame(&message, &[], OWNER_KEY, None, address(1), 10, 0);
         decode_message_input(&bytes).unwrap().deploy().map(|d| d.init_data().to_vec())
     };
     assert_eq!(extract(&b).unwrap(), config().encode());
@@ -278,15 +339,18 @@ fn deployment_envelope_lengths_are_checked() {
 fn funding_is_exact_and_once() {
     let s = initialized();
     for value in [0, 999, 1001] {
-        failure(evaluate(&s, OWNER, ids::FUND, &[], value, 11), ERR_VALUE);
+        failure(evaluate(&s, OWNER_WALLET, ids::FUND, &[], value, 11), ERR_VALUE);
     }
     let s = funded();
-    failure(evaluate(&s, OWNER, ids::FUND, &[], 1000, 12), ERR_PHASE);
+    failure(evaluate(&s, OWNER_WALLET, ids::FUND, &[], 1000, 12), ERR_PHASE);
 }
 #[test]
 fn funding_requires_owner_and_live_deadline() {
     failure(evaluate(&initialized(), STRANGER, ids::FUND, &[], 1000, 11), ERR_AUTH);
-    failure(evaluate(&initialized(), OWNER, ids::FUND, &[], 1000, 100), ERR_DEADLINE);
+    failure(evaluate(&initialized(), WORKER, ids::FUND, &[], 1000, 11), ERR_AUTH);
+    // An external carries no value, so the owner key cannot fund directly.
+    failure(evaluate(&initialized(), OWNER, ids::FUND, &[], 1000, 11), ERR_AUTH);
+    failure(evaluate(&initialized(), OWNER_WALLET, ids::FUND, &[], 1000, 100), ERR_DEADLINE);
 }
 #[test]
 fn unfunded_contract_rejects_work_and_refund() {
@@ -295,7 +359,9 @@ fn unfunded_contract_rejects_work_and_refund() {
 }
 #[test]
 fn submit_requires_worker_and_nonzero_hash() {
-    failure(evaluate(&funded(), OWNER, ids::SUBMIT, &hash_args(0, 1), 0, 12), ERR_AUTH);
+    for caller in [OWNER, OWNER_WALLET, STRANGER] {
+        failure(evaluate(&funded(), caller, ids::SUBMIT, &hash_args(0, 1), 0, 12), ERR_AUTH);
+    }
     failure(evaluate(&funded(), WORKER, ids::SUBMIT, &hash_args(0, 0), 0, 12), ERR_ARGS);
 }
 #[test]
@@ -314,7 +380,9 @@ fn approving_an_old_revision_fails() {
 fn approval_requires_owner_and_submission() {
     failure(evaluate(&funded(), OWNER, ids::APPROVE, &hash_args(0, 1), 0, 12), ERR_PHASE);
     let s = approved(0);
-    failure(evaluate(&s, WORKER, ids::APPROVE, &hash_args(0, 0x51), 0, 14), ERR_AUTH);
+    for caller in [WORKER, OWNER_WALLET, STRANGER] {
+        failure(evaluate(&s, caller, ids::APPROVE, &hash_args(0, 0x51), 0, 14), ERR_AUTH);
+    }
 }
 #[test]
 fn deadline_is_exclusive_for_submit_and_approve() {
@@ -325,7 +393,9 @@ fn deadline_is_exclusive_for_submit_and_approve() {
 #[test]
 fn pay_requires_approval_and_authorization() {
     failure(evaluate(&funded(), WORKER, ids::PAY, &[0], 0, 12), ERR_PHASE);
-    failure(evaluate(&approved(0), STRANGER, ids::PAY, &[0], 0, 14), ERR_AUTH);
+    for caller in [STRANGER, OWNER_WALLET, Caller::External(STRANGER_KEY)] {
+        failure(evaluate(&approved(0), caller, ids::PAY, &[0], 0, 14), ERR_AUTH);
+    }
 }
 #[test]
 fn pending_transfer_blocks_second_payment_and_refund() {
@@ -433,7 +503,7 @@ fn attempt_budget_is_bounded_without_forgetting_old_receipts() {
 #[test]
 fn corruption_of_accounting_or_pending_fields_fails_closed() {
     let s = funded();
-    for offset in [376, 392, 408, 416, 417, 418, 424, 440, 448, 456, 712, 720] {
+    for offset in [472, 488, 504, 512, 513, 514, 520, 536, 544, 552, 808, 816] {
         let mut b = s.clone();
         b[offset] ^= 0x7f;
         assert!(State::decode(&b).is_err(), "offset {offset}");
@@ -461,10 +531,10 @@ fn malformed_arguments_and_attached_value_have_no_effects() {
 #[test]
 fn reserved_config_and_state_bytes_are_canonical() {
     let mut c = config().encode();
-    c[213] = 1;
+    c[309] = 1;
     assert_eq!(Config::decode(&c), Err(ERR_ARGS));
     let mut s = initialized();
-    s[418] = 1;
+    s[514] = 1;
     assert!(State::decode(&s).is_err());
 }
 #[test]
@@ -474,13 +544,13 @@ fn status_is_nonmutating_and_available_while_pending() {
 }
 #[test]
 fn receiver_binding_is_owner_only_and_immutable() {
-    let message = external(&envelope(&[]), OWNER, 0, 0, address(3), true, &[]);
-    let b = frame(&message, &[], OWNER, None, address(3), 10, 0);
+    let message = external(&envelope(OWNER_KEY, &[]), STRANGER_KEY, 0, 0, address(3), true, &[]);
+    let b = frame(&message, &[], STRANGER_KEY, None, address(3), 10, 0);
     let out = Receiver::init(decode_message_input(&b).unwrap());
     let Some(StateUpdate::FullReplace(s)) = out.state_update else { panic!() };
     let mut body = vec![0; 64];
     write_address(&mut body, 0, address(1));
-    for (actor, expected) in [(STRANGER, 2100), (OWNER, 0)] {
+    for (actor, expected) in [(STRANGER_KEY, 2100), (OWNER_KEY, 0)] {
         let msg = external(&body, actor, ids::BIND, 0, address(3), false, &[]);
         let b = frame(&msg, &s, actor, None, address(3), 11, 0);
         let out = Receiver::process_message(decode_message_input(&b).unwrap());
@@ -499,9 +569,8 @@ fn receiver_binding_is_owner_only_and_immutable() {
 #[test]
 fn payout_refuses_insolvent_principal_or_missing_fee_reserve() {
     let s = approved(0);
-    let message = external(&[0], WORKER, ids::PAY, 0, address(1), false, &[]);
-    let b = frame(&message, &s, WORKER, None, address(1), 14, 10000);
-    let insolvent = frame(&message, &s, WORKER, None, address(1), 14, 999);
+    let b = call_frame(&s, WORKER, ids::PAY, &[0], &[], 14, 10000);
+    let insolvent = call_frame(&s, WORKER, ids::PAY, &[0], &[], 14, 999);
     failure(Escrow::process_message(decode_message_input(&insolvent).unwrap()), ERR_BALANCE);
     let mut b = b;
     // ACMI extra count260; principal entry262..282; SHELL amount286..302.
@@ -518,8 +587,9 @@ fn only_shell_can_be_donated_to_execution_fees() {
         (vec![(2, 10000)], 1, ERR_VALUE),
         (vec![], 0, ERR_VALUE),
     ] {
-        let msg = external(&[], STRANGER, ids::TOPUP, value, address(1), false, &extra);
-        let b = frame(&msg, &state, STRANGER, None, address(1), 12, 0);
+        let mut entries = if value == 0 { vec![] } else { vec![(PRINCIPAL_CURRENCY_ID, value)] };
+        entries.extend_from_slice(&extra);
+        let b = call_frame(&state, STRANGER, ids::TOPUP, &[], &entries, 12, 0);
         let out = Escrow::process_message(decode_message_input(&b).unwrap());
         assert_eq!(out.status_code, expected);
         if expected == 0 {
@@ -596,8 +666,7 @@ fn generated_action_sequences_preserve_principal_conservation() {
 #[test]
 fn funding_and_outbound_use_only_the_selected_principal_currency() {
     for entries in [vec![(2, 1000)], vec![(7, 1000)], vec![(0, 1000), (2, 1)]] {
-        let msg = external(&[], OWNER, ids::FUND, 0, address(1), false, &entries);
-        let bytes = frame(&msg, &initialized(), OWNER, None, address(1), 11, 1000);
+        let bytes = call_frame(&initialized(), OWNER_WALLET, ids::FUND, &[], &entries, 11, 1000);
         failure(Escrow::process_message(decode_message_input(&bytes).unwrap()), ERR_VALUE);
     }
     let out = evaluate(&approved(0), WORKER, ids::PAY, &[0], 0, 14);

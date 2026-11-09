@@ -16,8 +16,8 @@ pub fn principal(extra: CurrencyAmounts<'_>) -> u128 {
     extra.iter().find(|c| c.currency_id == PRINCIPAL_CURRENCY_ID).map_or(0, |c| c.amount)
 }
 
-pub const CONFIG_BYTES: usize = 360;
-pub const STATE_BYTES: usize = 2768;
+pub const CONFIG_BYTES: usize = 456;
+pub const STATE_BYTES: usize = 2864;
 pub const MAX_MILESTONES: usize = 8;
 pub const MAX_ATTEMPTS: usize = 64;
 pub const OPEN: u8 = 0;
@@ -40,8 +40,10 @@ type Result<T> = std::result::Result<T, u32>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
+    /// Owner key, at state offset 0 (`owner_key_offset = 0` in the descriptor).
     pub owner: [u8; 32],
-    pub worker: [u8; 32],
+    pub owner_wallet: AccountAddress,
+    pub worker_wallet: AccountAddress,
     pub refund_to: AccountAddress,
     pub pay_to: AccountAddress,
     pub total: u128,
@@ -53,30 +55,32 @@ pub struct Config {
 
 impl Config {
     pub fn decode(bytes: &[u8]) -> Result<Self> {
-        if bytes.len() != CONFIG_BYTES || bytes[213..216] != [0; 3] {
+        if bytes.len() != CONFIG_BYTES || bytes[309..312] != [0; 3] {
             return Err(ERR_ARGS);
         }
         let mut amounts = [0; MAX_MILESTONES];
         for (i, amount) in amounts.iter_mut().enumerate() {
-            *amount = read_u128(bytes, 216 + i * 16)?;
+            *amount = read_u128(bytes, 312 + i * 16)?;
         }
         let config = Self {
             owner: array(bytes, 0)?,
-            worker: array(bytes, 32)?,
-            refund_to: read_address(bytes, 64)?,
-            pay_to: read_address(bytes, 128)?,
-            total: read_u128(bytes, 192)?,
-            deadline: u32::from_le_bytes(array(bytes, 208)?),
-            count: bytes[212],
+            owner_wallet: read_address(bytes, 32)?,
+            worker_wallet: read_address(bytes, 96)?,
+            refund_to: read_address(bytes, 160)?,
+            pay_to: read_address(bytes, 224)?,
+            total: read_u128(bytes, 288)?,
+            deadline: u32::from_le_bytes(array(bytes, 304)?),
+            count: bytes[308],
             amounts,
-            fuel_reserve: read_u128(bytes, 344)?,
+            fuel_reserve: read_u128(bytes, 440)?,
         };
         let n = usize::from(config.count);
         if n == 0
             || n > MAX_MILESTONES
             || config.owner == [0; 32]
-            || config.worker == [0; 32]
-            || config.owner == config.worker
+            || !nonzero_address(config.owner_wallet)
+            || !nonzero_address(config.worker_wallet)
+            || config.owner_wallet == config.worker_wallet
             || !nonzero_address(config.pay_to)
             || !nonzero_address(config.refund_to)
             || config.pay_to == config.refund_to
@@ -98,16 +102,17 @@ impl Config {
     pub fn encode(&self) -> Vec<u8> {
         let mut b = vec![0; CONFIG_BYTES];
         b[..32].copy_from_slice(&self.owner);
-        b[32..64].copy_from_slice(&self.worker);
-        write_address(&mut b, 64, self.refund_to);
-        write_address(&mut b, 128, self.pay_to);
-        b[192..208].copy_from_slice(&self.total.to_le_bytes());
-        b[208..212].copy_from_slice(&self.deadline.to_le_bytes());
-        b[212] = self.count;
+        write_address(&mut b, 32, self.owner_wallet);
+        write_address(&mut b, 96, self.worker_wallet);
+        write_address(&mut b, 160, self.refund_to);
+        write_address(&mut b, 224, self.pay_to);
+        b[288..304].copy_from_slice(&self.total.to_le_bytes());
+        b[304..308].copy_from_slice(&self.deadline.to_le_bytes());
+        b[308] = self.count;
         for (i, amount) in self.amounts.iter().enumerate() {
-            b[216 + i * 16..232 + i * 16].copy_from_slice(&amount.to_le_bytes());
+            b[312 + i * 16..328 + i * 16].copy_from_slice(&amount.to_le_bytes());
         }
-        b[344..360].copy_from_slice(&self.fuel_reserve.to_le_bytes());
+        b[440..456].copy_from_slice(&self.fuel_reserve.to_le_bytes());
         b
     }
 }
@@ -148,20 +153,20 @@ impl State {
         }
     }
     pub fn decode(b: &[u8]) -> Result<Self> {
-        if b.len() != STATE_BYTES || b[418..424] != [0; 6] {
+        if b.len() != STATE_BYTES || b[514..520] != [0; 6] {
             return Err(ERR_STATE);
         }
-        let receipt_count = u64::from_le_bytes(array(b, 712)?);
+        let receipt_count = u64::from_le_bytes(array(b, 808)?);
         if receipt_count > MAX_ATTEMPTS as u64 {
             return Err(ERR_STATE);
         }
         let mut hashes = [[0; 32]; MAX_MILESTONES];
         for (i, hash) in hashes.iter_mut().enumerate() {
-            *hash = array(b, 456 + i * 32)?;
+            *hash = array(b, 552 + i * 32)?;
         }
         let mut receipts = Vec::new();
         for i in 0..MAX_ATTEMPTS {
-            let hash = array(b, 720 + i * 32)?;
+            let hash = array(b, 816 + i * 32)?;
             if i < receipt_count as usize {
                 receipts.push(hash);
             } else if hash != [0; 32] {
@@ -170,17 +175,17 @@ impl State {
         }
         let state = Self {
             config: Config::decode(&b[..CONFIG_BYTES]).map_err(|_| ERR_STATE)?,
-            funded: read_u128(b, 360)?,
-            paid: read_u128(b, 376)?,
-            refunded: read_u128(b, 392)?,
-            attempts: u64::from_le_bytes(array(b, 408)?),
+            funded: read_u128(b, 456)?,
+            paid: read_u128(b, 472)?,
+            refunded: read_u128(b, 488)?,
+            attempts: u64::from_le_bytes(array(b, 504)?),
             pending: Pending {
-                kind: b[416],
-                index: b[417],
-                amount: read_u128(b, 424)?,
-                attempt: u64::from_le_bytes(array(b, 440)?),
+                kind: b[512],
+                index: b[513],
+                amount: read_u128(b, 520)?,
+                attempt: u64::from_le_bytes(array(b, 536)?),
             },
-            phases: array(b, 448)?,
+            phases: array(b, 544)?,
             delivery_hashes: hashes,
             receipts,
         };
@@ -257,21 +262,21 @@ impl State {
         let mut b = vec![0; STATE_BYTES];
         b[..CONFIG_BYTES].copy_from_slice(&self.config.encode());
         for (offset, value) in
-            [(360, self.funded), (376, self.paid), (392, self.refunded), (424, self.pending.amount)]
+            [(456, self.funded), (472, self.paid), (488, self.refunded), (520, self.pending.amount)]
         {
             b[offset..offset + 16].copy_from_slice(&value.to_le_bytes());
         }
-        b[408..416].copy_from_slice(&self.attempts.to_le_bytes());
-        b[416] = self.pending.kind;
-        b[417] = self.pending.index;
-        b[440..448].copy_from_slice(&self.pending.attempt.to_le_bytes());
-        b[448..456].copy_from_slice(&self.phases);
+        b[504..512].copy_from_slice(&self.attempts.to_le_bytes());
+        b[512] = self.pending.kind;
+        b[513] = self.pending.index;
+        b[536..544].copy_from_slice(&self.pending.attempt.to_le_bytes());
+        b[544..552].copy_from_slice(&self.phases);
         for (i, h) in self.delivery_hashes.iter().enumerate() {
-            b[456 + i * 32..488 + i * 32].copy_from_slice(h);
+            b[552 + i * 32..584 + i * 32].copy_from_slice(h);
         }
-        b[712..720].copy_from_slice(&(self.receipts.len() as u64).to_le_bytes());
+        b[808..816].copy_from_slice(&(self.receipts.len() as u64).to_le_bytes());
         for (i, h) in self.receipts.iter().enumerate() {
-            b[720 + i * 32..752 + i * 32].copy_from_slice(h);
+            b[816 + i * 32..848 + i * 32].copy_from_slice(h);
         }
         b
     }
@@ -292,8 +297,11 @@ fn wrap(result: Result<MessageOutput>) -> MessageOutput {
 }
 
 fn initialize(input: MessageInput<'_>) -> Result<MessageOutput> {
-    let config = Config::decode(input.deploy().map_err(|_| ERR_ARGS)?.init_data())?;
-    if input.caller != Caller::External(config.owner) {
+    let deploy = input.deploy().map_err(|_| ERR_ARGS)?;
+    let config = Config::decode(deploy.init_data())?;
+    // The config's first field is the owner key slot: init keeps the deploy
+    // owner_id there, so owner externals are signed by the deploying owner.
+    if config.owner != deploy.owner_id() {
         return Err(ERR_AUTH);
     }
     if !input.state.is_empty() || config.deadline <= input.context.block_time {
@@ -311,9 +319,6 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
     if input.message.is_callback() {
         return callback(input, state);
     }
-    let Caller::External(actor) = input.caller else {
-        return Err(ERR_AUTH);
-    };
     let method = input.message.method_id();
     if method == ids::STATUS {
         empty(input.message.body())?;
@@ -333,12 +338,21 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
         }
         return finish(state, "escrow.fees_added", 255, 0);
     }
+    // The owner calls by externals under its owner key and funds through its
+    // wallet, because an external carries no value; the worker calls through
+    // its wallet. Any other caller is rejected.
+    let owner = input.caller == Caller::External(state.config.owner);
+    let owner_wallet = input.caller == Caller::Internal(state.config.owner_wallet);
+    let worker = input.caller == Caller::Internal(state.config.worker_wallet);
+    if !(owner || owner_wallet || worker) {
+        return Err(ERR_AUTH);
+    }
     if state.pending.kind != 0 {
         return Err(ERR_PENDING);
     }
     if method == ids::FUND {
         empty(input.message.body())?;
-        if actor != state.config.owner {
+        if !owner_wallet {
             return Err(ERR_AUTH);
         }
         if input.context.block_time >= state.config.deadline {
@@ -364,7 +378,7 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
     }
     match method {
         ids::SUBMIT => {
-            if actor != state.config.worker {
+            if !worker {
                 return Err(ERR_AUTH);
             }
             if input.context.block_time >= state.config.deadline {
@@ -386,7 +400,7 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
             finish(state, "escrow.submitted", index as u8, 0)
         }
         ids::APPROVE => {
-            if actor != state.config.owner {
+            if !owner {
                 return Err(ERR_AUTH);
             }
             if input.context.block_time >= state.config.deadline {
@@ -408,7 +422,7 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
             finish(state, "escrow.approved", index as u8, 0)
         }
         ids::PAY => {
-            if actor != state.config.owner && actor != state.config.worker {
+            if !owner && !worker {
                 return Err(ERR_AUTH);
             }
             if input.message.body().len() != 1 {
@@ -422,7 +436,7 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
             dispatch(input, state, 1, i as u8, amount)
         }
         ids::REFUND => {
-            if actor != state.config.owner {
+            if !owner {
                 return Err(ERR_AUTH);
             }
             empty(input.message.body())?;

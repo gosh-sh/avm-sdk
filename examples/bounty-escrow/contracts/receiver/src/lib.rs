@@ -16,11 +16,14 @@ pub struct Receiver;
 
 impl Contract for Receiver {
     fn init(input: MessageInput<'_>) -> MessageOutput {
-        let Caller::External(owner) = input.caller else {
-            return MessageOutput::failure(ERR_AUTH);
+        let Ok(deploy) = input.deploy() else {
+            return MessageOutput::failure(ERR_ARGS);
         };
+        // The deploy owner_id becomes the owner key at state offset 0
+        // (`owner_key_offset = 0`); only its externals bind or reject.
+        let owner = deploy.owner_id();
         if !input.state.is_empty()
-            || !input.deploy().is_ok_and(|d| d.init_data().is_empty())
+            || !deploy.init_data().is_empty()
             || !input.message.extra().is_empty()
         {
             return MessageOutput::failure(ERR_ARGS);

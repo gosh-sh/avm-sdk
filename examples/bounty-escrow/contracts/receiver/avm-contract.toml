@@ -1,6 +1,7 @@
 [descriptor]
 execution_mode = "message_isolated"
 state_schema_id = "417424813f525a795bd5024853672f2c815cca771c4a4b5f78922622cca91b0e"
+owner_key_offset = 0
 
 [abi]
 state_root_type_id = 1
