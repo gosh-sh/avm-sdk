@@ -237,20 +237,6 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
     let body = input.message.body();
     let value = input.message.extra();
     match input.message.method_id() {
-        ids::STATUS => {
-            expect_len(body, 0)?;
-            no_value(value)?;
-            let event = Ev::new("amm.status")
-                .topic(state.config.admin)
-                .u128("fees0", state.fees[0])
-                .u128("fees1", state.fees[1])
-                .u128("lp_total", state.lp_total)
-                .u64("ops", state.ops)
-                .u64("paused", u64::from(state.paused))
-                .u128("reserve0", state.reserve[0])
-                .u128("reserve1", state.reserve[1]);
-            finish(&state, event)
-        }
         ids::TOPUP => {
             expect_len(body, 0)?;
             let mut shell = 0u128;
