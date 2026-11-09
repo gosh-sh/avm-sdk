@@ -153,8 +153,10 @@ AMM deploy body: 54,647 + 2,103 + 66 + 64 (init) + 289 (envelope) = 57,169 B of
   payouts to a receiver that accepts value but deliberately returns an empty
   receipt, followed by a successful withdrawal by another holder. Each pending
   slot is released. Receiver `reject` fixture modes: 0 = echo, 1 = reject,
-  2 = accept without receipt. After each step the decoded
-  ledger and reserves are compared with figures the script computes itself.
+  2 = accept without receipt. Selected decoded accounting fields, reserves and
+  payout outcomes are checked at checkpoints against expected values. The complete
+  ledger is not independently compared after every call; the repeated empty-receipt
+  payout loop checks pending-slot release and receiver delivery counts.
 * Each of the 32 calls of that journey completes within a 1 SHELL FUEL reserve
   (1,000,000 FUEL; the per-message cap is 10,000,000). This is an upper bound:
   the stand does not report the exact `fuel_used` for successful calls.
@@ -191,3 +193,13 @@ The stand journey now requires every call probe to return the expected status at
 1 SHELL and executes the main calls with the same 1 SHELL reserve. Its state,
 payout and replay assertions therefore also run at that reserve. A probe requiring
 more FUEL fails the journey. Exact FUEL consumption remains unmeasured.
+
+The stand journey does not exercise `vault.amm.set_params`,
+`vault.amm.collect_fees`, or a nonzero protocol-fee configuration. Extreme TWAP
+ratios and injected deposit-shortfall cases remain native-test coverage only.
+
+The 1-SHELL reserve bound applies to the listed direct journey calls, including
+calls expected to return a contract error. Deployment uses a separate reserve.
+Outbound payouts are configured with a separate 10,000-SHELL fuel reserve;
+successful settlement does not establish a 1-SHELL bound for each downstream
+payout or callback message. Exact FUEL consumption remains unmeasured.

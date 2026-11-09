@@ -7,8 +7,11 @@ Run after `avm-contract-build build` produced both artifact triples:
 
 It deploys the AMM and a receiver, binds them, then deposits, adds liquidity,
 swaps exact-in and exact-out, checks the TWAP accumulators, reads the status view,
-withdraws to the receiver (accepted and rejected payouts) and replays the journal. After every step the decoded AMM ledger is checked against the amounts
-the script computed on its own. The stand does not expose per-account ECC
+withdraws to the receiver (accepted and rejected payouts) and replays the journal.
+Selected decoded accounting fields, reserves and payout outcomes are checked at
+checkpoints against expected values. The complete ledger is not independently
+compared after every call. The repeated empty-receipt payout loop checks
+pending-slot release and receiver delivery counts. The stand does not expose per-account ECC
 balances, so the vault's real balances are checked indirectly: the contract's
 own solvency check compares post-credit `input.extra` on external calls (including the new ledger on deposits) and
 fails the call with 3012 if the vault holds less than the ledger promises.
