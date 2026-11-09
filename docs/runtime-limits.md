@@ -1,7 +1,5 @@
 # Runtime limits, rent and deployment identity
 
-
-
 These are the **SDK 0.4.0 local stand** settings. They are development
 configuration, not mainnet promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the
