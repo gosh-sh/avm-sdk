@@ -6,7 +6,7 @@
 //! Holders deposit ECC into an internal ledger, trade and provide liquidity
 //! against it, and withdraw to any account through an acknowledged payout. The
 //! ledger design keeps every user operation synchronous and independent: one
-//! unresolved payout never blocks other holders, and a bounced payout returns
+//! malformed success receipt does not block other holders, and a bounced payout returns
 //! to its holder's balance.
 
 extern crate alloc;
@@ -187,10 +187,9 @@ fn bump(state: &mut State) {
     state.ops = state.ops.saturating_add(1);
 }
 
-/// The vault must physically hold everything it keeps for holders, the pool
-/// and the protocol, in every pool currency. The check holds whether
-/// `input.extra` is the balance before or after this message's own transfer,
-/// so it never depends on that detail.
+/// The post-credit vault balance must cover the ledger. Ordinary external calls
+/// check the old ledger first; deposit also checks the newly credited ledger.
+/// Native callbacks validate their returned principal separately.
 fn check_solvency(state: &State, balance: CurrencyAmounts<'_>) -> Result<()> {
     for side in 0..2 {
         if amount_of(balance, state.config.currency[side]) < state.held(side)? {
@@ -207,8 +206,14 @@ fn accrue(state: &mut State, now: u32) {
     }
     let elapsed = u128::from(now - state.last_ts);
     let q64 = 1u128 << 64;
-    let price0 = math::mul_div_floor(state.reserve[1], q64, state.reserve[0]).unwrap_or(u128::MAX);
-    let price1 = math::mul_div_floor(state.reserve[0], q64, state.reserve[1]).unwrap_or(u128::MAX);
+    // Reduce the full quotient modulo 2^128, rather than saturating the price.
+    // Both reserves are nonzero in every validated live state.
+    let price = |numerator, denominator| {
+        math::div_rem(math::mul_wide(numerator, q64), denominator)
+            .map_or(0, |(quotient, _)| quotient.lo)
+    };
+    let price0 = price(state.reserve[1], state.reserve[0]);
+    let price1 = price(state.reserve[0], state.reserve[1]);
     state.cumulative[0] = state.cumulative[0].wrapping_add(price0.wrapping_mul(elapsed));
     state.cumulative[1] = state.cumulative[1].wrapping_add(price1.wrapping_mul(elapsed));
     state.last_ts = now;
@@ -293,6 +298,7 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
         ids::DEPOSIT => {
             expect_len(body, 0)?;
             let event = deposit(&mut state, actor, value)?;
+            check_solvency(&state, input.extra)?;
             finish(&state, event)
         }
         ids::ADD_LIQUIDITY => {
@@ -636,11 +642,12 @@ fn callback(input: &MessageInput<'_>, mut state: State) -> Result<MessageOutput>
         return Err(ERR_CALLBACK);
     }
     let returned = amount_of(message.extra, entry.currency);
-    let receipt = payout_receipt(entry.currency, entry.id, entry.amount);
     let success = header.status_code == 0;
     if success {
-        // Delivered: the receiver must echo the receipt and return no principal.
-        if returned != 0 || message.body != receipt.as_slice() {
+        // The authenticated native status proves delivery. The receiver controls
+        // callback_result_body, so a bad echo must not retain a global pending slot.
+        // The runtime returns unused SHELL only; principal on success is invalid.
+        if returned != 0 {
             return Err(ERR_CALLBACK);
         }
     } else {
