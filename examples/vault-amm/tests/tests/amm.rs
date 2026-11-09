@@ -143,10 +143,12 @@ fn identifiers_are_unique_nonzero_and_cover_every_event() {
         ids::ADD_LIQUIDITY,
         ids::REMOVE_LIQUIDITY,
         ids::SWAP_EXACT_IN,
+        ids::SWAP_EXACT_OUT,
         ids::WITHDRAW,
         ids::CALLBACK,
         ids::COLLECT_FEES,
         ids::SET_PARAMS,
+        ids::STATUS,
         ids::TOPUP,
         ids::RECEIVER_BIND,
         ids::RECEIVER_REJECT,
@@ -172,6 +174,7 @@ fn every_emitted_event_matches_its_manifest_declaration() {
     run(sim.remove_liquidity(ALICE, 1_000, (0, 0), NEVER));
     run(sim.call(ADMIN, ids::COLLECT_FEES, &[], &[]));
     run(sim.set_params(ADMIN, 25, 1_000, false));
+    run(sim.call(ALICE, ids::STATUS, &[], &[]));
     run(sim.call(MALLORY, ids::TOPUP, &[], &[(SHELL_CURRENCY_ID, 5)]));
     run(sim.withdraw(ALICE, C0, 100, addr(5)));
     run(sim.settle(addr(5), Settle::Delivered(payout_receipt(C0, 0, 100))));
@@ -241,7 +244,7 @@ fn init_is_admin_only_valueless_and_validated() {
     failure(&try_init(ADMIN, &bad, None, &[]), ERR_ARGS);
     // An ordinary call against an uninitialized account is refused.
     let sim = sim();
-    failure(&raw_call(&sim, &[], ADMIN, ids::DEPOSIT, &[]), ERR_STATE);
+    failure(&raw_call(&sim, &[], ADMIN, ids::STATUS, &[]), ERR_STATE);
 }
 
 #[test]
@@ -313,6 +316,7 @@ fn first_liquidity_mints_the_root_and_locks_the_minimum() {
     assert_eq!(pool.lp_total, 1_000_000);
     assert_eq!(sim.ledger(ALICE), ([0, 0], 999_000));
     assert_eq!(pool.locked_liquidity(), MINIMUM_LIQUIDITY);
+    assert_eq!(pool.last_ts, 100);
     sim.assert_accounting();
     // Asymmetric seed: sqrt(5e5 * 2e6) = 1e6.
     let mut sim = Sim::new(config(30, 0));
@@ -415,6 +419,18 @@ fn exact_input_swaps_match_the_independent_oracle() {
 }
 
 #[test]
+fn exact_output_swaps_charge_the_rounded_up_price() {
+    let mut sim = seeded(30, 0);
+    accepted(&sim.deposit(BOB, 20_000, 0));
+    failure(&sim.swap_exact_out(BOB, 0, 9_000, 9_109), ERR_SLIPPAGE);
+    accepted(&sim.swap_exact_out(BOB, 0, 9_000, 9_110));
+    assert_eq!(sim.ledger(BOB), ([20_000 - 9_110, 9_000], 0));
+    failure(&sim.swap_exact_out(BOB, 0, 2_000_000, u128::MAX), ERR_NO_LIQUIDITY);
+    failure(&sim.swap_exact_out(BOB, 0, 0, 1), ERR_ARGS);
+    sim.assert_accounting();
+}
+
+#[test]
 fn the_protocol_fee_is_skimmed_from_the_swap_fee_only() {
     let mut sim = seeded(30, 5_000);
     accepted(&sim.deposit(BOB, 10_000, 0));
@@ -468,7 +484,11 @@ fn trades_never_lower_the_invariant() {
     for (index, amount) in [1u128, 2, 3, 7, 999, 1_000, 12_345, 100_000, 400_000].iter().enumerate()
     {
         let direction = (index % 2) as u8;
-        let output = sim.swap_exact_in(BOB, direction, *amount, 0);
+        let output = if index % 3 == 0 {
+            sim.swap_exact_out(BOB, direction, *amount, u128::MAX)
+        } else {
+            sim.swap_exact_in(BOB, direction, *amount, 0)
+        };
         if output.status_code == 0 {
             let next = product(&sim.pool());
             assert!(next >= k, "k fell from {k} to {next} on swap #{index}");
@@ -486,6 +506,27 @@ fn fee_changes_apply_to_later_swaps_only() {
     accepted(&sim.swap_exact_in(BOB, 0, 10_000, 0));
     // No fee: floor(1e6 * 10_000 / 1_010_000) = 9_900.
     assert_eq!(sim.ledger(BOB).0[1], 9_900);
+}
+
+// ----------------------------------------------------------------- TWAP ---
+
+#[test]
+fn the_price_accumulators_use_the_pre_trade_price() {
+    let mut sim = Sim::new(config(30, 0));
+    sim.seed(ALICE, 1_000_000, 4_000_000);
+    accepted(&sim.deposit(BOB, 10_000, 0));
+    sim.advance(50);
+    accepted(&sim.swap_exact_in(BOB, 0, 1_000, 0));
+    let pool = sim.pool();
+    assert_eq!(pool.last_ts, 150);
+    assert_eq!(pool.cumulative[0], (4u128 << 64) * 50);
+    assert_eq!(pool.cumulative[1], (1u128 << 62) * 50);
+    // Time that does not advance, or runs backwards, adds nothing and never underflows.
+    let before = pool.cumulative;
+    sim.time = 90;
+    accepted(&sim.swap_exact_in(BOB, 0, 1_000, 0));
+    assert_eq!(sim.pool().cumulative, before);
+    assert_eq!(sim.pool().last_ts, 150);
 }
 
 // ------------------------------------------------------------- payouts ---
@@ -627,7 +668,7 @@ fn forged_or_inexact_callbacks_are_rejected_and_the_payout_stays_pending() {
     let ok = Settle::Delivered(receipt.clone());
     failure(&forged(&mut sim, ok, ids::CALLBACK, addr(6)), ERR_CALLBACK);
     let ok = Settle::Delivered(receipt.clone());
-    failure(&forged(&mut sim, ok, ids::DEPOSIT, addr(5)), ERR_CALLBACK);
+    failure(&forged(&mut sim, ok, ids::STATUS, addr(5)), ERR_CALLBACK);
     // Bounced with the wrong principal: short, long, wrong currency, extra currency, nothing.
     for returned in [
         vec![(C0, 999)],
@@ -695,8 +736,7 @@ fn the_receipt_ring_wraps_without_losing_consistency() {
 #[test]
 fn only_callbacks_may_arrive_from_other_accounts() {
     let mut sim = alice_with_funds();
-    for method in
-        [ids::DEPOSIT, ids::WITHDRAW, ids::SWAP_EXACT_IN, ids::COLLECT_FEES, ids::CALLBACK]
+    for method in [ids::STATUS, ids::WITHDRAW, ids::SWAP_EXACT_IN, ids::COLLECT_FEES, ids::CALLBACK]
     {
         failure(&internal_call(&sim, addr(5), method, &[]), ERR_AUTH);
     }
@@ -717,10 +757,11 @@ fn pausing_blocks_new_activity_but_never_exits() {
     failure(&sim.deposit(BOB, 1, 0), ERR_PAUSED);
     failure(&sim.add_liquidity(BOB, (1_000, 1_000), (0, 0), NEVER), ERR_PAUSED);
     failure(&sim.swap_exact_in(BOB, 0, 100, 0), ERR_PAUSED);
+    failure(&sim.swap_exact_out(BOB, 0, 10, u128::MAX), ERR_PAUSED);
     accepted(&sim.remove_liquidity(BOB, 1, (0, 0), NEVER));
     accepted(&sim.withdraw(ALICE, C0, 100, addr(5)));
     accepted(&sim.settle(addr(5), Settle::Bounced(vec![(C0, 100)])));
-    accepted(&sim.call(ALICE, ids::TOPUP, &[], &[(SHELL_CURRENCY_ID, 1)]));
+    accepted(&sim.call(ALICE, ids::STATUS, &[], &[]));
     accepted(&sim.set_params(ADMIN, 30, 0, false));
     accepted(&sim.deposit(BOB, 1, 0));
     sim.assert_accounting();
@@ -741,9 +782,17 @@ fn parameters_are_admin_only_and_bounded() {
 }
 
 #[test]
-fn topup_only_takes_shell_and_leaves_the_state_alone() {
+fn status_is_read_only_and_topup_only_takes_shell() {
     let mut sim = seeded(30, 0);
     let before = sim.state.clone();
+    for caller in [ALICE, MALLORY] {
+        let output = sim.call(caller, ids::STATUS, &[], &[]);
+        accepted(&output);
+        assert_eq!(output.event_intents.len(), 1);
+        assert_eq!(sim.state, before, "status must not change the account");
+    }
+    failure(&sim.call(ALICE, ids::STATUS, &[], &[(C0, 1)]), ERR_VALUE);
+    failure(&sim.call(ALICE, ids::STATUS, &[1], &[]), ERR_ARGS);
     accepted(&sim.call(MALLORY, ids::TOPUP, &[], &[(SHELL_CURRENCY_ID, 77)]));
     assert_eq!(sim.state, before);
     failure(&sim.call(MALLORY, ids::TOPUP, &[], &[(C0, 5)]), ERR_VALUE);
@@ -756,7 +805,6 @@ fn topup_only_takes_shell_and_leaves_the_state_alone() {
 const OFF_FLAGS: usize = 64;
 const OFF_RESERVES: usize = 72;
 const OFF_LP_TOTAL: usize = 136;
-const OFF_RESERVED: usize = 152;
 const OFF_SEQ: usize = 200;
 const OFF_RECEIPT_POS: usize = 208;
 const OFF_RECEIPTS: usize = 216;
@@ -784,8 +832,6 @@ fn the_decoder_rejects_every_non_canonical_state() {
         ("reserve zeroed while live", set(OFF_RESERVES, &[0; 16])),
         ("LP supply off by one", set(OFF_LP_TOTAL, &1_001u128.to_le_bytes())),
         ("LP supply below the locked minimum", set(OFF_LP_TOTAL, &1u128.to_le_bytes())),
-        ("reserved bytes (first)", set(OFF_RESERVED, &[1])),
-        ("reserved bytes (last)", set(OFF_RESERVED + 39, &[1])),
         ("receipt count without a receipt", set(OFF_RECEIPT_POS, &2u64.to_le_bytes())),
         ("receipt slot written but empty", set(OFF_RECEIPTS, &[0; 32])),
         ("stray receipt", set(OFF_RECEIPTS + 5 * 32, &[9; 32])),
@@ -802,7 +848,7 @@ fn the_decoder_rejects_every_non_canonical_state() {
     ];
     for (name, state) in mutations {
         assert!(State::decode(&state).is_err(), "decoder accepted: {name}");
-        let output = raw_call(&sim, &state, ALICE, ids::DEPOSIT, &[]);
+        let output = raw_call(&sim, &state, ALICE, ids::STATUS, &[]);
         failure(&output, ERR_STATE);
     }
     let mut short = good.clone();
@@ -817,7 +863,7 @@ fn an_underfunded_vault_refuses_to_operate() {
     sim.vault.insert(C0, sim.balance(C0) - 10);
     failure(&sim.deposit(BOB, 1, 0), ERR_INSOLVENT);
     failure(&sim.swap_exact_in(BOB, 0, 10, 0), ERR_INSOLVENT);
-    failure(&sim.call(ALICE, ids::TOPUP, &[], &[(SHELL_CURRENCY_ID, 1)]), ERR_INSOLVENT);
+    failure(&sim.call(ALICE, ids::STATUS, &[], &[]), ERR_INSOLVENT);
 }
 
 #[test]

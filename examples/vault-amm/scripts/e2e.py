@@ -6,8 +6,8 @@ Run after `avm-contract-build build` produced both artifact triples:
     python3 scripts/e2e.py --sdk ~/.local/share/avm-sdk/current
 
 It deploys the AMM and a receiver, binds them, then deposits, adds liquidity,
-swaps, withdraws to the receiver (accepted and rejected payouts) and replays the
-journal. After every step the decoded AMM ledger is checked against the amounts
+swaps exact-in and exact-out, checks the TWAP accumulators, reads the status view,
+withdraws to the receiver (accepted and rejected payouts) and replays the journal. After every step the decoded AMM ledger is checked against the amounts
 the script computed on its own. The stand does not expose per-account ECC
 balances, so the vault's real balances are checked indirectly: the contract's
 own solvency check compares `input.extra` with its ledger on every call and
@@ -69,6 +69,9 @@ class Stand:
     def timestamps(self, fee=100_000):
         self.time += 1
         return dict(block_time=self.time, created_at=self.time, expire_at=self.time + 3600, fuel_fee_shells=fee)
+
+    def advance(self, seconds):
+        self.time += seconds
 
     def deploy(self, contract, salt, init=b""):
         artifacts = ROOT / "contracts" / contract / "target/avm"
@@ -157,8 +160,26 @@ def amm_view(raw):
         accounts[key.hex()] = ([u128(raw, base + 32), u128(raw, base + 48)], u128(raw, base + 64))
     pending = [raw[3288 + 136 * i] for i in range(8)].count(1)
     return dict(reserve=[u128(raw, 72), u128(raw, 88)], fees=[u128(raw, 104), u128(raw, 120)],
-                lp_total=u128(raw, 136), ops=u64(raw, 192), seq=u64(raw, 200), receipts=u64(raw, 208),
-                accounts=accounts, pending=pending)
+                lp_total=u128(raw, 136), last_ts=int.from_bytes(raw[152:156], "little"),
+                cumulative=[u128(raw, 160), u128(raw, 176)], ops=u64(raw, 192), seq=u64(raw, 200),
+                receipts=u64(raw, 208), accounts=accounts, pending=pending)
+
+
+def twap_after(pre, now):
+    """What the accumulators must hold after a trade at `now`: the elapsed time folded in at the
+    pre-trade price (UQ64.64, wrapping), computed here independently of the contract."""
+    if pre["lp_total"] == 0 or now <= pre["last_ts"]:
+        return pre["cumulative"], pre["last_ts"]
+    elapsed = now - pre["last_ts"]
+    q64, mask = 1 << 64, (1 << 128) - 1
+    price0 = pre["reserve"][1] * q64 // pre["reserve"][0]
+    price1 = pre["reserve"][0] * q64 // pre["reserve"][1]
+    return [(pre["cumulative"][0] + price0 * elapsed) & mask,
+            (pre["cumulative"][1] + price1 * elapsed) & mask], now
+
+
+def ceil_div(a, b):
+    return -(-a // b)
 
 
 def receiver_view(raw):
@@ -171,7 +192,8 @@ def event_names(result):
     for event in result["events"]:
         blob = bytes.fromhex(event)
         for name in ("amm.deposited", "amm.liquidity_added", "amm.liquidity_removed", "amm.swapped",
-                     "amm.withdraw_pending", "amm.withdraw_settled", "amm.withdraw_failed", "amm.created"):
+                     "amm.withdraw_pending", "amm.withdraw_settled", "amm.withdraw_failed", "amm.created",
+                     "amm.status"):
             if name.encode() in blob:
                 names.append(name)
     return names
@@ -215,10 +237,14 @@ def run(sdk, output):
             # Bob deposits 10_000 of currency 0 and swaps it: 10_000 in, 9_871 out at 30 bps.
             stand.call(amm, "vault.amm.deposit", extra=f"{C0}:10000", identity="package-owner")
             body = b"\x00" + le(10_000, 16) + le(9_871, 16) + le(NEVER, 4)
+            before_swap = amm_view(stand.account_state(amm))
             result = stand.call(amm, "vault.amm.swap_exact_in", body, identity="package-owner")
             assert "amm.swapped" in event_names(result), event_names(result)
             view = amm_view(stand.account_state(amm))
             assert view["reserve"] == [1_010_000, 990_129], view
+            # The TWAP accumulators folded in the elapsed time at the pre-trade price.
+            assert (view["cumulative"], view["last_ts"]) == twap_after(before_swap, stand.time), (view, before_swap)
+            assert view["cumulative"] != before_swap["cumulative"]
             assert view["accounts"][bob] == ([0, 9_871], 0), view
 
             # A swap whose bound cannot be met fails without effects (3006 = slippage).
@@ -262,6 +288,39 @@ def run(sdk, output):
             stand.call(amm, "vault.amm.remove_liquidity", body, identity="user")
             view = amm_view(stand.account_state(amm))
             assert view["lp_total"] == 500_000 and view["reserve"] == [505_000, 495_065], view
+
+            # Exact-out swap: Alice buys exactly 10_000 of currency 1 and pays the input the double
+            # round-up formula gives; a bound one unit too tight is refused without effects.
+            stand.call(amm, "vault.amm.deposit", extra=f"{C0}:100000", identity="user")
+            stand.advance(1_000)
+            pre = amm_view(stand.account_state(amm))
+            want_out = 10_000
+            r_in, r_out = pre["reserve"]
+            need = ceil_div(ceil_div(r_in * want_out, r_out - want_out) * 10_000, 10_000 - 30)
+            body = b"\x00" + le(want_out, 16) + le(need - 1, 16) + le(NEVER, 4)
+            stand.call(amm, "vault.amm.swap_exact_out", body, identity="user", expected=3006)
+            assert amm_view(stand.account_state(amm)) == pre, "a refused swap changes nothing"
+            body = b"\x00" + le(want_out, 16) + le(need, 16) + le(NEVER, 4)
+            result = stand.call(amm, "vault.amm.swap_exact_out", body, identity="user")
+            assert "amm.swapped" in event_names(result), event_names(result)
+            post = amm_view(stand.account_state(amm))
+            assert post["reserve"] == [r_in + need, r_out - want_out], (post, need)
+            assert post["reserve"][0] * post["reserve"][1] >= r_in * r_out, "k never decreases"
+            (b0, b1), shares = pre["accounts"][alice]
+            assert post["accounts"][alice] == ([b0 - need, b1 + want_out], shares), post["accounts"][alice]
+            assert (post["cumulative"], post["last_ts"]) == twap_after(pre, stand.time)
+            assert post["cumulative"][0] > pre["cumulative"][0] and post["cumulative"][1] > pre["cumulative"][1]
+
+            # The status view reports the pool without changing it.
+            before_status = amm_view(stand.account_state(amm))
+            result = stand.call(amm, "vault.amm.status", identity="developer")
+            assert "amm.status" in event_names(result), event_names(result)
+            blob = b"".join(bytes.fromhex(event) for event in result["events"])
+            for value in (post["reserve"][0], post["reserve"][1], post["lp_total"]):
+                assert value < 1 << 64 and le(value, 8) in blob, value  # small u128 fields use 8 bytes
+            after_status = amm_view(stand.account_state(amm))
+            assert after_status["reserve"] == before_status["reserve"] and after_status["lp_total"] == before_status["lp_total"]
+            view = after_status
 
             events = stand.command("events")
             inspect = stand.command("inspect")

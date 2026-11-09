@@ -200,6 +200,20 @@ fn check_solvency(state: &State, balance: CurrencyAmounts<'_>) -> Result<()> {
     Ok(())
 }
 
+/// Folds the elapsed time at the pre-trade price into the TWAP accumulators.
+fn accrue(state: &mut State, now: u32) {
+    if !state.live() || now <= state.last_ts {
+        return;
+    }
+    let elapsed = u128::from(now - state.last_ts);
+    let q64 = 1u128 << 64;
+    let price0 = math::mul_div_floor(state.reserve[1], q64, state.reserve[0]).unwrap_or(u128::MAX);
+    let price1 = math::mul_div_floor(state.reserve[0], q64, state.reserve[1]).unwrap_or(u128::MAX);
+    state.cumulative[0] = state.cumulative[0].wrapping_add(price0.wrapping_mul(elapsed));
+    state.cumulative[1] = state.cumulative[1].wrapping_add(price1.wrapping_mul(elapsed));
+    state.last_ts = now;
+}
+
 fn price_error(error: math::PriceError) -> u32 {
     match error {
         math::PriceError::InvalidInput => ERR_ARGS,
@@ -245,6 +259,20 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
     let body = input.message.body();
     let value = input.message.extra();
     match input.message.method_id() {
+        ids::STATUS => {
+            expect_len(body, 0)?;
+            no_value(value)?;
+            let event = Ev::new("amm.status")
+                .topic(state.config.admin)
+                .u128("fees0", state.fees[0])
+                .u128("fees1", state.fees[1])
+                .u128("lp_total", state.lp_total)
+                .u64("ops", state.ops)
+                .u64("paused", u64::from(state.paused))
+                .u128("reserve0", state.reserve[0])
+                .u128("reserve1", state.reserve[1]);
+            finish(&state, event)
+        }
         ids::TOPUP => {
             expect_len(body, 0)?;
             let mut shell = 0u128;
@@ -279,7 +307,12 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
         }
         ids::SWAP_EXACT_IN => {
             no_value(value)?;
-            let event = swap(&mut state, actor, body, now)?;
+            let event = swap(&mut state, actor, body, now, Exactness::In)?;
+            finish(&state, event)
+        }
+        ids::SWAP_EXACT_OUT => {
+            no_value(value)?;
+            let event = swap(&mut state, actor, body, now, Exactness::Out)?;
             finish(&state, event)
         }
         ids::WITHDRAW => {
@@ -335,6 +368,7 @@ fn add_liquidity(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> R
     if desired0 == 0 || desired1 == 0 {
         return Err(ERR_ARGS);
     }
+    accrue(state, now);
     let first = !state.live();
     let (amount0, amount1, shares) = if first {
         let root = math::sqrt_product(desired0, desired1);
@@ -375,6 +409,9 @@ fn add_liquidity(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> R
     state.reserve[1] = state.reserve[1].checked_add(amount1).ok_or(ERR_OVERFLOW)?;
     let minted = if first { shares.checked_add(MINIMUM_LIQUIDITY) } else { Some(shares) };
     state.lp_total = state.lp_total.checked_add(minted.ok_or(ERR_OVERFLOW)?).ok_or(ERR_OVERFLOW)?;
+    if first {
+        state.last_ts = now;
+    }
     bump(state);
     Ok(Ev::new("amm.liquidity_added")
         .topic(actor)
@@ -400,6 +437,7 @@ fn remove_liquidity(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -
     if state.accounts[index].lp < shares {
         return Err(ERR_BALANCE);
     }
+    accrue(state, now);
     let amount0 =
         math::mul_div_floor(shares, state.reserve[0], state.lp_total).ok_or(ERR_OVERFLOW)?;
     let amount1 =
@@ -428,16 +466,26 @@ fn remove_liquidity(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -
         .u128("shares", shares))
 }
 
-/// Exact-input swap. (`math::swap_in` prices the exact-output direction; the
-/// contract does not expose it, to keep the guest under the deploy-body limit.)
-fn swap(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> Result<Ev> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Exactness {
+    In,
+    Out,
+}
+
+fn swap(
+    state: &mut State,
+    actor: [u8; 32],
+    body: &[u8],
+    now: u32,
+    exactness: Exactness,
+) -> Result<Ev> {
     not_paused(state)?;
     expect_len(body, SWAP_ARGS_BYTES)?;
     let direction = body[0];
     if direction > 1 {
         return Err(ERR_ARGS);
     }
-    let (amount_in, min_out) = (read_u128(body, 1)?, read_u128(body, 17)?);
+    let (exact, bound) = (read_u128(body, 1)?, read_u128(body, 17)?);
     before_deadline(now, read_u32(body, 33)?)?;
     if !state.live() {
         return Err(ERR_NO_LIQUIDITY);
@@ -445,14 +493,25 @@ fn swap(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> Result<Ev>
     let (side_in, side_out) = (usize::from(direction), 1 - usize::from(direction));
     let (reserve_in, reserve_out) = (state.reserve[side_in], state.reserve[side_out]);
     let fee = state.config.swap_fee_bps;
-    let amount_out =
-        math::swap_out(reserve_in, reserve_out, amount_in, fee).map_err(price_error)?;
-    if amount_out == 0 {
-        return Err(ERR_ZERO);
-    }
-    if amount_out < min_out {
-        return Err(ERR_SLIPPAGE);
-    }
+    let (amount_in, amount_out) = match exactness {
+        Exactness::In => {
+            let out = math::swap_out(reserve_in, reserve_out, exact, fee).map_err(price_error)?;
+            if out == 0 {
+                return Err(ERR_ZERO);
+            }
+            if out < bound {
+                return Err(ERR_SLIPPAGE);
+            }
+            (exact, out)
+        }
+        Exactness::Out => {
+            let paid = math::swap_in(reserve_in, reserve_out, exact, fee).map_err(price_error)?;
+            if paid > bound {
+                return Err(ERR_SLIPPAGE);
+            }
+            (paid, exact)
+        }
+    };
     // Split the fee: the protocol's cut leaves the pool, the rest stays in the
     // reserve and so raises the value of every LP share.
     let after_fee = math::amount_after_fee(amount_in, fee).ok_or(ERR_OVERFLOW)?;
@@ -473,6 +532,7 @@ fn swap(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> Result<Ev>
         account.balance[side_in].checked_sub(amount_in).ok_or(ERR_BALANCE)?;
     account.balance[side_out] =
         account.balance[side_out].checked_add(amount_out).ok_or(ERR_OVERFLOW)?;
+    accrue(state, now);
     state.reserve[side_in] = new_reserve_in;
     state.reserve[side_out] = new_reserve_out;
     state.fees[side_in] = state.fees[side_in].checked_add(protocol_cut).ok_or(ERR_OVERFLOW)?;
