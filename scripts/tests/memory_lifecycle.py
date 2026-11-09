@@ -94,12 +94,16 @@ def main():
         manifest.write_text("[build]\nstack_bytes = 16384\narena_bytes = 65536\n\n" + descriptor)
         build("bounded-resource-test-build", testing=True)
         initial, testing_maximum = memory_limits((artifacts / "contract.wasm").read_bytes())
-        stand("init", "init", dapp_id="11" * 32)
+        initialized, _ = stand("init", "init", dapp_id="11" * 32)
+        user_key = initialized["identities"]["user"]
         address, _ = deploy("measure")
         control, _ = stand("call", "control-growth", address=address, method="memory.probe", args_json="0", identity="user", check_memory=True, **timing())
         # The input is read in place, so the probe sees the initial memory; the output then
         # takes a heap page. One grown page therefore peaks one page above the control call.
-        control_pages = int.from_bytes(read_state(state)[0][address]["data"], "little")
+        # The data starts with the owner key, the deploy's owner_id (the user).
+        control_data = read_state(state)[0][address]["data"]
+        assert control_data[:32] == bytes.fromhex(user_key)
+        control_pages = int.from_bytes(control_data[32:], "little")
         assert control_pages * 65_536 == control["memory_check"]["runs"][0]["initial_bytes"]
         control_peak = control["memory_check"]["runs"][0]["peak_bytes"]
         grown, _ = stand("call", "successful-growth", address=address, method="memory.probe", args_json="1", identity="user", check_memory=True, **timing())
@@ -123,7 +127,7 @@ def main():
         assert rejected["status"] == "ok" and not rejected["memory_check"]["passed"]
         assert rejected["memory_check"]["runs"][0]["rejected_growths"] == 1
         assert "memory.grow was rejected" in diagnostic
-        assert int.from_bytes(read_state(state)[0][measured_address]["data"], "little") == 0xFFFFFFFF
+        assert int.from_bytes(read_state(state)[0][measured_address]["data"][32:], "little") == 0xFFFFFFFF
         before_overflow = read_state(state)[0][measured_address]["data"]
         before_overflow_state = state.read_bytes()
         trapped, _ = stand("call", "stack-overflow", expected=2, address=measured_address, method="memory.probe", args_json=str(0x8000_0000 | 1024), identity="user", check_memory=True, **timing())

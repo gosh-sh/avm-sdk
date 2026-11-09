@@ -7,6 +7,7 @@
 //! message, optionally with a callback request, and records any callback it
 //! receives. As a child its `init` records how it was deployed.
 
+use avm_contract_sdk::set_owner_key;
 use avm_contract_sdk::AccountAddress;
 use avm_contract_sdk::CallbackIntent;
 use avm_contract_sdk::Caller;
@@ -29,8 +30,10 @@ use avm_contract_sdk::StateUpdate;
 //   [48..52]  init body length u32
 //   [52]      init body captured: 0 or 1
 //   [56..64]  callback SHELL value u64 (bounded by this example)
-//   [64..]    init body, when it fits
+//   [64..1024] init body, when it fits
+//   [1024..1056] owner key (`owner_key_offset`), the deploy's owner_id
 const STATE_BYTES: usize = 1024;
+const DATA_BYTES: usize = STATE_BYTES + 32;
 const BODY_OFFSET: usize = 64;
 const FORWARD_HEADER_BYTES: usize = 73;
 
@@ -53,7 +56,7 @@ impl Contract for DeployCallbackRepro {
         let Ok(body_len) = u32::try_from(body.len()) else {
             return MessageOutput::failure(INIT_BODY_TOO_LARGE);
         };
-        let mut state = vec![0; STATE_BYTES];
+        let mut state = vec![0; DATA_BYTES];
         state[1] = match input.caller {
             Caller::External(_) => 1,
             Caller::Internal(_) => 2,
@@ -62,15 +65,19 @@ impl Contract for DeployCallbackRepro {
         state[40..48].copy_from_slice(&input.message.method_id().to_le_bytes());
         state[48..52].copy_from_slice(&body_len.to_le_bytes());
         // A deploy that carries WASM does not fit; only its length is kept.
-        if let Some(capture) = state.get_mut(BODY_OFFSET..BODY_OFFSET + body.len()) {
+        if let Some(capture) = state[..STATE_BYTES].get_mut(BODY_OFFSET..BODY_OFFSET + body.len()) {
             capture.copy_from_slice(body);
             state[52] = 1;
+        }
+        if let Ok(deploy) = input.deploy() {
+            // The key slot is inside the state built above.
+            let _ = set_owner_key(&mut state, STATE_BYTES as u32, deploy.owner_id());
         }
         MessageOutput::success(StateUpdate::FullReplace(state))
     }
 
     fn process_message(input: MessageInput<'_>) -> MessageOutput {
-        if input.state.len() != STATE_BYTES {
+        if input.state.len() != DATA_BYTES {
             return MessageOutput::failure(INVALID_STATE);
         }
         if input.message.is_callback() {

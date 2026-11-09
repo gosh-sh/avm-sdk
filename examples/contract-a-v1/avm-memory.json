@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "stack_bytes": 2640,
-  "arena_bytes": 43372,
+  "stack_bytes": 2672,
+  "arena_bytes": 44521,
   "initial_memory_bytes": 65536,
   "peak_memory_bytes": 131072,
-  "test_calls": 76,
+  "test_calls": 72,
   "test_wasm_hashes": [
-    "66017908a1dc592e419867d242e31cad01f2d1db5f232e9122ba4c68219d37b9"
+    "8a74485848f67f4baf3b5c28c9484d131aff8cbfbf6ed089c839208e6a3a141b"
   ]
 }

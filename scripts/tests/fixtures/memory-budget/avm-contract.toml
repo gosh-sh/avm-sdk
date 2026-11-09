@@ -4,6 +4,8 @@ max_memory_bytes = 2097152
 [descriptor]
 execution_mode = "message_isolated"
 state_schema_id = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+# The account data starts with the owner key that authorizes external calls.
+owner_key_offset = 0
 
 [abi]
 state_root_type_id = 1
@@ -21,3 +23,8 @@ input_type_id = 1
 status_code = 1000
 name = "invalid_page_count"
 message = "page count must contain four bytes"
+
+[[abi.errors]]
+status_code = 1001
+name = "invalid_state"
+message = "state must start with the 32-byte owner key"

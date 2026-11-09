@@ -35,6 +35,7 @@ trap cleanup EXIT
 state="${work}/stand.state"
 dapp_id="1111111111111111111111111111111111111111111111111111111111111111"
 accept_method_le="41ed76d491639b31" # factory.accept 0x319b6391d476ed41, little-endian
+report_method_le="ace9611695a2bc2c" # child.report 0x2cbca2951661e9ac, little-endian
 logical_time=1800000000
 failures=0
 
@@ -82,21 +83,26 @@ cli_create() {
   run "$command" "$@" "${timestamps[@]}" | jq -e '.status == "ok"' >/dev/null || fail "$command"
 }
 
-# Signed external call. Sets $status to the contract status as 8 hex digits.
+# External call signed by the user, the owner_id of the factory and the relays.
+# Sets $status to the contract status as 8 hex digits.
 call() {
   local address="$1" method="$2" args="$3"
   tick
-  run call --address "$address" --method "$method" --args-json "$args" --identity developer \
+  run call --address "$address" --method "$method" --args-json "$args" --identity user \
     --extra-currencies '' "${timestamps[@]}" >"${work}/call.json"
   [[ "$(jq -r '.raw_executor_output[0:8]' "${work}/call.json")" == 41434d4f ]] || fail "non-ACMO response"
   status="$(jq -r '.raw_executor_output[8:16]' "${work}/call.json")"
 }
 
-# Hex state of an account, read through a no-op call. Sets $hex.
+# Hex state of an account. Sets $hex.
 read_state() {
-  call "$1" provenance.ping null
-  [[ "$status" == 00000000 ]] || fail "ping $1"
-  hex="$(jq -r .raw_state "${work}/call.json")"
+  hex="$(run inspect --account "$1" | jq -r .raw_state)"
+  [[ -n "$hex" && "$hex" != null ]] || fail "inspect $1"
+}
+
+# A child takes no external call: its report is sent by a relay. Sets $status.
+report() {
+  call "$1" relay.send "\"0x${2/:/}${report_method_le}\""
 }
 
 # Byte range [start, end) of a hex string.
@@ -183,7 +189,7 @@ case_1() {
 expect_ok "1 spawn: the factory derives the stand's child address; child init saw the factory" case_1
 
 # 2. The child reports; the factory accepts it.
-call "$child_1" child.report null
+report "$relay_v1" "$child_1"
 case_2() {
   count_reports
   [[ "$reports" == 1 && "$(slice "$hex" 116 180)" == "${child_1/:/}" ]]
@@ -211,7 +217,7 @@ relay_state_before="$hex"
 funding_before="$(run inspect | jq -er --arg a "$child_4" '.funding[] | select(.address == $a) | .extra[] | select(.currency_id == 2) | .amount | tonumber')"
 tick
 run call --address "$relay_v1" --method relay.forge --args-json "\"0x${factory/:/}${salt_4}\"" \
-  --identity developer --extra-currencies '' "${timestamps[@]}" >"${work}/failed-init.json"
+  --identity user --extra-currencies '' "${timestamps[@]}" >"${work}/failed-init.json"
 funding_after="$(run inspect | jq -er --arg a "$child_4" '.funding[] | select(.address == $a) | .extra[] | select(.currency_id == 2) | .amount | tonumber')"
 case_4() {
   ! has_account "$child_4" && [[ "$funding_after" == $((funding_before - 10)) ]] &&
@@ -241,7 +247,7 @@ result NOTE "5 the stand quotes the same child address for both code selections"
 fund "$child_5"
 tick
 run call --address "$relay_v2" --method relay.forge --args-json "\"0x${factory/:/}${salt_5}\"" \
-  --identity developer --extra-currencies '' "${timestamps[@]}" >"${work}/different-version-deploy.json"
+  --identity user --extra-currencies '' "${timestamps[@]}" >"${work}/different-version-deploy.json"
 count_reports
 reports_before="$reports"
 forged=no
@@ -250,7 +256,7 @@ if has_account "$child_5"; then
   [[ "$(slice "$hex" 176 240)" == "${relay_v2/:/}" ]] && forged=yes
 fi
 [[ "$forged" == yes ]] || fail "same-package permissive child was not exercised"
-call "$child_5" child.report null
+report "$relay_v2" "$child_5"
 count_reports
 [[ "$reports" == $((reports_before + 1)) && "$(slice "$hex" 116 180)" == "${child_5/:/}" ]] || fail "documented derived-address limitation changed"
 result LIMITATION "5 derived address accepts another code version's child; it does not prove current code or deployer"

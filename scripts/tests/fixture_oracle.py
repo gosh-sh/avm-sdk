@@ -284,8 +284,10 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     user = bytes.fromhex(identities["user"])
     owner = bytes.fromhex(identities["package_owner"])
     developer = bytes.fromhex(identities["developer"])
-    addresses = [b"\x11" * 32 + h(b"AVM_ACCOUNT_ID\0\0" + package + user
-                 + le(len(name), 2) + name.encode() + h(b"")) for name in names]
+    # The version journey deploys contract-a-v1 with the package owner as owner_id.
+    owner_ids = [owner if version else user, user]
+    addresses = [b"\x11" * 32 + h(b"AVM_ACCOUNT_ID\0\0" + package + owner_id
+                 + le(len(name), 2) + name.encode() + h(b"")) for name, owner_id in zip(names, owner_ids)]
     first, second_address = addresses
     expected = {"accounts": {}, "account_leaves": {}, "registry": {},
                 "code": dict(zip(codes, [a["wasm"] for a in artifacts])),
@@ -300,7 +302,9 @@ def expected_journey(bundle, label, identities, transcript, times, current):
         registry[b"\x05" + selection] = selection + abi
 
     start = 1_800_000_000
-    offsets = [1, 2, 4, 5, 6, 7, 8] if version else [1, 2, 3, 3, 4 if batch else 3]
+    # Admission rejects a call under a key other than the owner key: the
+    # user's upgrade and the external to the keyless batch receiver are no input.
+    offsets = [1, 2, 4, 6, 7, 8] if version else [1, 2, 3, 3] if batch else [1, 2, 3, 3, 3]
     assert times == [start + offset for offset in offsets] and len(transcript) == len(offsets)
 
     def external(wire, index, pubkey, nonce, at, method, body, deploy=False, extras=()):
@@ -314,7 +318,7 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     for index, transcript_index in enumerate((0, 2 if version else 1)):
         artifact, name, address = artifacts[index], names[index], addresses[index]
         body = b"ACDP" + le(0x17 if index == 0 else 2, 2) + bytes(2)
-        body += selections[index] + package + codes[index] + descriptors[index] + user + h(b"")
+        body += selections[index] + package + codes[index] + descriptors[index] + owner_ids[index] + h(b"")
         body += (owner if index == 0 else bytes(32)) + abis[index]
         body += bytes(2) + le(len(name), 2) + bytes(4)
         functions = function_count(artifact["wasm"]) if current else 0
@@ -324,7 +328,7 @@ def expected_journey(bundle, label, identities, transcript, times, current):
         wire = transcript[transcript_index]
         external(wire, index, developer if index == 0 else owner, 1, times[transcript_index], 0, body, deploy=True)
         fields = [("account", "address", address), ("init_data_hash", "data", h(b"")),
-                  ("owner", "data", user), ("package", "data", package),
+                  ("owner", "data", owner_ids[index]), ("package", "data", package),
                   ("salt", "data", name.encode()), ("selected_code", "data", selections[index]),
                   ("ui_name", "data", b"")]
         lt = 2 if index == 0 else 5 if version else 4
@@ -346,14 +350,13 @@ def expected_journey(bundle, label, identities, transcript, times, current):
                             if current else 1000) + 10 + 1 + 1) for item in artifacts]
     if version:
         version_method = int.from_bytes(h(b"causal.a.version")[:8], "little")
-        external(transcript[1], 0, user, 1, start + 2, version_method, b"")
+        external(transcript[1], 0, owner, 1, start + 2, version_method, b"")
         migration = b"avm-a-v2-migrate-state!!"
-        for pos, pubkey, nonce, payload in ((3, user, 2, migration),
-                                          (4, owner, 1, b"avm-a-v2-migrate-state!?"),
-                                          (5, owner, 2, migration)):
+        for pos, pubkey, nonce, payload in ((3, owner, 2, b"avm-a-v2-migrate-state!?"),
+                                          (4, owner, 3, migration)):
             body = b"ACUG" + selections[1] + codes[1] + le(len(payload), 4) + payload
             external(transcript[pos], 0, pubkey, nonce, times[pos], 0xc2c6c51bc610249d, body)
-        external(transcript[6], 0, user, 3, start + 8, version_method, b"")
+        external(transcript[5], 0, owner, 4, start + 8, version_method, b"")
         state = bytearray(72)
         if current:
             state[16:20] = b"V1MG"
@@ -362,8 +365,8 @@ def expected_journey(bundle, label, identities, transcript, times, current):
             state[48:72] = migration
         state[16] = 2 if current else 1
         account(0, selections[1] if current else selections[0], 0,
-                funded[0] - 5 * 2 - (39 + 20 + 72) * 7, {}, bytes(state), 9, 8)
-        account(1, selections[1], 0, funded[1], {}, bytes(72), 5, 4)
+                funded[0] - 4 * 2 - (39 + 20 + 104) * 7, {}, bytes(state) + owner, 8, 8)
+        account(1, selections[1], 0, funded[1], {}, bytes(72) + user, 5, 4)
         return expected
 
     method_name = "causal.batch.patch" if batch else "causal.b.drain" if label in {"trap", "out-of-fuel"} else "causal.b.receive"
@@ -372,19 +375,18 @@ def expected_journey(bundle, label, identities, transcript, times, current):
         h(b"causal.a.version")[:8] if label == "out-of-fuel" else le(0xc2c6c51bc610249d, 8))
     forward = second_address + method + handler
     external(transcript[2], 0, user, 1, start + 3,
-             int.from_bytes(h(b"causal.a.forward")[:8], "little"), forward, extras=[(0, 100), (7, 40)])
+             int.from_bytes(h(b"causal.a.forward")[:8], "little"), forward)
     delivered = struct.pack("<BBHI", 0, 0 if batch else 4, 2, 16) + method
     delivered += le(batch_reserve if batch else 0, 16) + le(6, 8) + le(start + 3, 4) + bytes(4)
     delivered += first + second_address + (b"" if batch else handler) + le(0, 4) + le(37, 16) + le(7, 4) + le(11, 16) + b"\x42" * 16
     assert transcript[3] == delivered, "complete VM-produced message differs"
     sender = bytearray(le(1, 8) + bytes(64))
-    sender_shells = funded[0] - (39 + 20 + 72) * 2 - 2 - (batch_reserve if batch else 1)
+    # The sender is prefunded with ECC 0 and currency 7 next to its SHELL.
+    sender_shells = funded[0] - (39 + 3 * 20 + 104) * 2 - 2 - (batch_reserve if batch else 1)
     if batch:
-        external(transcript[4], 1, user, 1, start + 4, int.from_bytes(method, "little"), b"")
         receiver = le(65536, 4) + le(1, 8) + bytes(65528)
-        account(0, selections[0], 63, sender_shells, {7: 29}, bytes(sender), 5, 3)
-        account(1, selections[1], 37, funded[1] - (39 + 20 + 65540) - (39 + 60 + 65540) - 2,
-                {7: 11}, receiver, 8, 4)
+        account(0, selections[0], 63, sender_shells, {7: 29}, bytes(sender) + user, 5, 3)
+        account(1, selections[1], 37, funded[1] - (39 + 20 + 65540), {7: 11}, receiver, 7, 3)
     else:
         status = {"trap": 30, "out-of-fuel": 31, "invalid-event": 44}.get(label, 0)
         callback = struct.pack("<BBHI", 0, 1, 2 if failure else 0, 0 if failure else 16) + handler
@@ -409,7 +411,7 @@ def expected_journey(bundle, label, identities, transcript, times, current):
                     key = h(b"AVM_INTERNAL_EVENT_RING_KEY" + second_address + le(event_class, 8))
                     expected["rings"][key] = b"AIER\x01\0\0\0" + le(len(event), 4) + event
         account(0, selections[0], 100 if failure else 63, sender_shells,
-                {7: 40 if failure else 29}, bytes(sender), 9, 3)
+                {7: 40 if failure else 29}, bytes(sender) + user, 9, 3)
         account(1, selections[1], 0 if failure else 37, funded[1] - (39 + 20 + 128),
                 {} if failure else {7: 11}, receiver, 7, 3)
     return expected

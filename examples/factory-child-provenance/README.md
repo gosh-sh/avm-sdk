@@ -15,6 +15,14 @@ One package has three constructor-selected roles:
   its constructor, then can report its salt to that factory.
 - A relay forwards a message or sends the same child deploy envelope itself.
 
+The descriptor declares `owner_key_offset = 256`: the last 32 bytes of the
+account data hold the owner key, which `init` writes from the deploy's
+`owner_id` with `avm_contract_sdk::set_owner_key`. The factory and the relays
+are deployed with the default `owner_id`, the user's key, which signs their
+external calls. A child's `owner_id` is its factory's account id, which is no
+signing key, so a child takes no external call; the script sends its report
+through a relay.
+
 The address commits package identity, owner, salt and constructor hash. It does
 not commit the selected code version or prove who deployed that account. A
 package owner can publish another code version whose child accepts any internal

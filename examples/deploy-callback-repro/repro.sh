@@ -95,7 +95,7 @@ call() {
   local state="$1" address="$2" method="$3" args="$4" receipt="$5"
   tick
   run "$state" call --address "$address" --method "$method" --args-json "$args" \
-    --identity developer --extra-currencies '' "${timestamps[@]}" >"$receipt"
+    --identity user --extra-currencies '' "${timestamps[@]}" >"$receipt"
   [[ "$(jq -r '.raw_executor_output[8:16]' "$receipt")" == 00000000 ]] ||
     fail "$method returned a non-zero status"
 }

@@ -1,6 +1,8 @@
 [descriptor]
 execution_mode = "message_isolated"
 state_schema_id = "f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1f0c1"
+# The last 32 bytes of the account data hold the owner key for external calls.
+owner_key_offset = 256
 
 [abi]
 state_root_type_id = 1
@@ -10,7 +12,7 @@ init_input_type_id = 5
 id = 1
 kind = "fixed_bytes"
 name = "provenance_state"
-len = 256
+len = 288
 
 [[abi.types]]
 id = 2

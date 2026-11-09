@@ -1,6 +1,8 @@
 [descriptor]
 execution_mode = "message_isolated"
 state_schema_id = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+# The 72 contract bytes are followed by the owner key for external calls.
+owner_key_offset = 72
 
 [abi]
 state_root_type_id = 1
@@ -9,7 +11,7 @@ state_root_type_id = 1
 id = 1
 kind = "fixed_bytes"
 name = "causal_a_state"
-len = 72
+len = 104
 
 [[abi.types]]
 id = 2

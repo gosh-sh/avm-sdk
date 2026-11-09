@@ -1,6 +1,8 @@
 [descriptor]
 execution_mode = "message_isolated"
 state_schema_id = "7575757575757575757575757575757575757575757575757575757575757575"
+# The account data starts with the owner key that authorizes external calls.
+owner_key_offset = 0
 
 [bindings]
 enabled = true

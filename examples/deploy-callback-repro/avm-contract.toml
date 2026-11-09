@@ -1,6 +1,8 @@
 [descriptor]
 execution_mode = "message_isolated"
 state_schema_id = "d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0"
+# The last 32 bytes of the account data hold the owner key for external calls.
+owner_key_offset = 1024
 
 [abi]
 state_root_type_id = 1
@@ -9,7 +11,7 @@ state_root_type_id = 1
 id = 1
 kind = "fixed_bytes"
 name = "repro_state"
-len = 1024
+len = 1056
 
 [[abi.types]]
 id = 2

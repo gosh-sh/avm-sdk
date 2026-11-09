@@ -1,12 +1,18 @@
 #![forbid(unsafe_code)]
 
-use avm_contract_sdk::{MessageInput, MessageOutput, OutboundIntent, StateUpdate};
+use avm_contract_sdk::{
+    owner_key, set_owner_key, MessageInput, MessageOutput, OutboundIntent, StateUpdate,
+    OWNER_KEY_BYTES,
+};
 
 // Build regenerates this file before each clean compilation. No copied IDs.
 pub mod generated {
     include!(env!("AVM_CONTRACT_BINDINGS"));
 }
 use generated::{errors, methods, types, DispatchError, External, Internal};
+
+/// `owner_key_offset` in `avm-contract.toml`: the data is the owner key, then the value.
+const OWNER_KEY_OFFSET: u32 = 0;
 
 struct Handlers;
 
@@ -16,7 +22,13 @@ impl generated::Handlers for Handlers {
             return MessageOutput::failure(errors::INVALID_BODY);
         };
         match generated::decode_type2(deploy.init_data()) {
-            Ok(bytes) => MessageOutput::success(StateUpdate::FullReplace(bytes)),
+            Ok(bytes) => {
+                let mut data = vec![0; OWNER_KEY_BYTES];
+                // The key slot is inside the data built above.
+                let _ = set_owner_key(&mut data, OWNER_KEY_OFFSET, deploy.owner_id());
+                data.extend_from_slice(&bytes);
+                MessageOutput::success(StateUpdate::FullReplace(data))
+            }
             Err(_) => MessageOutput::failure(errors::INVALID_BODY),
         }
     }
@@ -41,10 +53,11 @@ impl generated::Handlers for Handlers {
         if ctx.sender != ctx.input.destination {
             return MessageOutput::failure(errors::WRONG_CALLER);
         }
+        let key = owner_key(ctx.input.state, OWNER_KEY_OFFSET).unwrap_or_default();
         match args.a.checked_add(args.b) {
-            Some(value) => {
-                MessageOutput::success(StateUpdate::FullReplace(value.to_le_bytes().to_vec()))
-            }
+            Some(value) => MessageOutput::success(StateUpdate::FullReplace(
+                [&key[..], &value.to_le_bytes()].concat(),
+            )),
             None => MessageOutput::failure(errors::OVERFLOW),
         }
     }

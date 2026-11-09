@@ -204,7 +204,7 @@ class Journey:
         return dict(block_time=self.time, created_at=self.time,
                     expire_at=self.time + 3600, fuel_fee_shells=fee)
 
-    def deploy(self, example, command="deploy", **extra):
+    def deploy(self, example, command="deploy", funding_extra="", **extra):
         artifacts = self.bundle / "examples" / example / "target/avm"
         options = dict(wasm=artifacts / "contract.wasm", acab=artifacts / "contract.acab",
                        descriptor=artifacts / "contract.descriptor", salt_hex=example.encode().hex(),
@@ -216,7 +216,10 @@ class Journey:
         address = missing["address"]
         # The 64-KiB batch fixture incurs rent at each later logical second.
         # Fund the entire journey so its error probe reaches real guest code.
-        self.run("fund-user", address=address, shells=1000000)
+        # An external carries no value: the account is funded with any
+        # currency it later sends.
+        funding = {"extra_currencies": funding_extra} if funding_extra else {}
+        self.run("fund-user", address=address, shells=1000000, **funding)
         deployed = self.run(command, **options)
         assert int(deployed["receipt"]["charged_shells"]) > 0
         assert address in read_accounts(self.state)[0]
@@ -224,7 +227,7 @@ class Journey:
 
     def call(self, address, method, args=None, **extra):
         return self.run("call", address=address, method=method, args_json=json.dumps(args),
-                        identity="user",
+                        identity=extra.pop("identity", "user"),
                         extra_currencies=extra.pop("extra_currencies", ""),
                         **self.timing(), **extra)
 
@@ -346,7 +349,8 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
         assert process.stdout.decode().splitlines() == [f"{name} {digest.hex()}" for name, digest in expected]
         assert values["contract.wasm"][:8] == b"\0asm\1\0\0\0"
         assert values["contract.acab"][:4] == b"ACAB"
-        assert len(values["contract.descriptor"]) == 66
+        # A trailing u32 owner_key_offset follows the 66 fixed descriptor bytes.
+        assert len(values["contract.descriptor"]) == (70 if example.startswith("contract-a") else 66)
         artifacts[example] = {name: sha(data) for name, data in values.items()}
         maximum = fixture_memory_maximum(root, source and not deployment)
         admission[example] = wasm_facts(values["contract.wasm"], example == "contract-batch-patch", maximum)
@@ -356,8 +360,12 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
     (evidence / "artifacts.json").write_text(json.dumps(artifacts, indent=2))
     (evidence / "admission.json").write_text(json.dumps(admission, indent=2))
 
-    address = version.deploy("contract-a-v1")
-    call = version.call(address, "causal.a.version")
+    # The package owner deploys the account as its owner: an external call
+    # is admitted only under the owner key the account keeps in its data, and
+    # the code upgrade of contract-a-v1 also requires the package owner.
+    address = version.deploy("contract-a-v1", owner_id=owner)
+    assert read_accounts(version.state)[0][address]["data"][72:] == bytes.fromhex(owner)
+    call = version.call(address, "causal.a.version", identity="package-owner")
     assert bytes.fromhex(call["raw_state"])[16] == 1
     assert bytes.fromhex(call["raw_executor_output"])[:4] == b"ACMO"
     assert u32(bytes.fromhex(call["raw_executor_output"]), 4) == 0
@@ -366,7 +374,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
     # FUEL exhaustion remains a separate status-31 failure-flow assertion below.
     before_unpaid = version.state.read_bytes()
     unpaid = version.run("call", expected=2, address=address, method="causal.a.version",
-                         args_json="null", identity="user", extra_currencies="",
+                         args_json="null", identity="package-owner", extra_currencies="",
                          **version.timing(fee=0))
     assert unpaid["error"] == "call rejected canonical operation: local call charge failed: RouteRequiresFee", unpaid
     assert version.state.read_bytes() == before_unpaid, "unpaid external call must not publish effects"
@@ -378,7 +386,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
     rejected = version.run("upgrade", expected=2, address=address, selected_code_id=selected,
                 migration_payload_hex=b"avm-a-v2-migrate-state!!".hex(),
                 identity="user", **version.timing())
-    assert "did not switch" in rejected["error"]
+    assert "AccountKeyNotAllowed" in rejected["error"], rejected
     assert read_accounts(version.state)[0][address]["data"] == before
     assert read_accounts(version.state)[0][address]["selected_code_id"] == before_selection
     rejected = version.run("upgrade", expected=2, address=address, selected_code_id=selected,
@@ -392,7 +400,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
                 identity="package-owner", **version.timing())
     if current:
         assert read_accounts(version.state)[0][address]["selected_code_id"] == selected
-        assert bytes.fromhex(version.call(address, "causal.a.version")["raw_state"])[16] == 2
+        assert bytes.fromhex(version.call(address, "causal.a.version", identity="package-owner")["raw_state"])[16] == 2
     else:
         # The immutable historical example authorizes only its fixed fixture
         # owner. Its public CLI generates a different key; record that defect,
@@ -400,20 +408,20 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
         assert "did not switch" in upgrade["error"]
         assert read_accounts(version.state)[0][address]["data"] == before
         assert read_accounts(version.state)[0][address]["selected_code_id"] == before_selection
-        assert bytes.fromhex(version.call(address, "causal.a.version")["raw_state"])[16] == 1
+        assert bytes.fromhex(version.call(address, "causal.a.version", identity="package-owner")["raw_state"])[16] == 1
     version.replay()
 
     for destination_example, callback in [("contract-b", True), ("contract-batch-patch", False)]:
         journey = Journey(bundle, evidence, destination_example, source)
         journey.run("init", dapp_id="11" * 32)
-        sender = journey.deploy("contract-a-v1")
+        sender = journey.deploy("contract-a-v1", funding_extra="0:100,7:40")
         receiver = journey.deploy(destination_example, command="publish-version")
         ring_before = read_accounts(journey.state)[1]
         events_before = journey.run("events")["events"]
         method = "causal.b.receive" if callback else "causal.batch.patch"
         body = bytes.fromhex(receiver.replace(":", "")) + blake3(method.encode())[:8]
         body += blake3(b"causal.a.callback")[:8] if callback else bytes(8)
-        journey.call(sender, "causal.a.forward", "0x" + body.hex(), extra_currencies="0:100,7:40")
+        journey.call(sender, "causal.a.forward", "0x" + body.hex())
         accounts, ring = read_accounts(journey.state)
         state = accounts[receiver]["data"]
         if callback:
@@ -430,8 +438,10 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
             assert len(state) == 65540 and u32(state, 0) == 65536
             assert int.from_bytes(state[4:12], "little") == 1
             assert state[12:] == bytes(65528)
-            failed = journey.call(receiver, "causal.batch.patch")
-            assert u32(bytes.fromhex(failed["raw_executor_output"]), 4) == 1401
+            # The receiver declares no owner key, so it admits no external call.
+            failed = journey.run("call", expected=2, address=receiver, method="causal.batch.patch",
+                                 args_json="null", identity="user", extra_currencies="", **journey.timing())
+            assert "AccountKeyNotAllowed" in failed["error"], failed
             assert read_accounts(journey.state)[0][receiver]["data"] == state
         journey.replay()
 
@@ -458,12 +468,12 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
     ]:
         journey = Journey(bundle, evidence, label, source)
         journey.run("init", dapp_id="11" * 32)
-        sender = journey.deploy("contract-a-v1")
+        sender = journey.deploy("contract-a-v1", funding_extra="0:100,7:40")
         receiver = journey.deploy("contract-b-failure", command="publish-version")
         before_accounts, before_ring, before_wires = read_state(journey.state)
         before_events = journey.run("events")["events"]
         body = bytes.fromhex(receiver.replace(":", "")) + blake3(method.encode())[:8] + handler
-        called = journey.call(sender, "causal.a.forward", "0x" + body.hex(), extra_currencies="0:100,7:40")
+        called = journey.call(sender, "causal.a.forward", "0x" + body.hex())
         assert u32(bytes.fromhex(called["raw_executor_output"]), 4) == 0
         accounts, ring, wires = read_state(journey.state)
         assert len(wires) == len(before_wires) + 3
@@ -480,7 +490,8 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
         assert callback[276:] == bytes(4) + (37).to_bytes(16, "little") + (7).to_bytes(4, "little") + (11).to_bytes(16, "little")
         assert accounts[receiver]["data"] == before_accounts[receiver]["data"]
         assert accounts[receiver]["selected_code_id"] == before_accounts[receiver]["selected_code_id"]
-        assert accounts[sender]["data"] == (1).to_bytes(8, "little") + bytes(64)
+        # The sender's data ends with its owner key, the user's key.
+        assert accounts[sender]["data"] == (1).to_bytes(8, "little") + bytes(64) + bytes.fromhex(journey.identities["user"])
         assert ring == before_ring and journey.run("events")["events"] == before_events
         journey.replay()
 

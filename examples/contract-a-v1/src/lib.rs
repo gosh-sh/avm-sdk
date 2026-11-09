@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use avm_contract_sdk::set_owner_key;
 use avm_contract_sdk::AccountAddress;
 use avm_contract_sdk::CallbackIntent;
 use avm_contract_sdk::Caller;
@@ -12,8 +13,11 @@ use avm_contract_sdk::MessageOutput;
 use avm_contract_sdk::OutboundIntent;
 use avm_contract_sdk::StateUpdate;
 use avm_contract_sdk::CODE_UPGRADE_METHOD_ID;
+use avm_contract_sdk::OWNER_KEY_BYTES;
 
+// Account data: 72 contract bytes, then the owner key at `owner_key_offset`.
 const STATE_BYTES: usize = 72;
+const DATA_BYTES: usize = STATE_BYTES + OWNER_KEY_BYTES;
 const FORWARD_ARGS_BYTES: usize = 80;
 const VALUE_ECC0: u128 = 37;
 const EXTRA_CURRENCY_ID: u32 = 7;
@@ -58,8 +62,13 @@ const fn hex_digit(byte: u8) -> u8 {
 struct ContractA;
 
 impl Contract for ContractA {
-    fn init(_input: MessageInput<'_>) -> MessageOutput {
-        MessageOutput::success(StateUpdate::FullReplace(vec![0; STATE_BYTES]))
+    fn init(input: MessageInput<'_>) -> MessageOutput {
+        let mut data = vec![0; DATA_BYTES];
+        if let Ok(deploy) = input.deploy() {
+            // The key slot is inside the data built above.
+            let _ = set_owner_key(&mut data, STATE_BYTES as u32, deploy.owner_id());
+        }
+        MessageOutput::success(StateUpdate::FullReplace(data))
     }
 
     fn process_message(input: MessageInput<'_>) -> MessageOutput {
@@ -103,7 +112,7 @@ impl Contract for ContractA {
         let Some(previous_count) = input
             .state
             .get(..8)
-            .filter(|_| input.state.len() == STATE_BYTES)
+            .filter(|_| input.state.len() == DATA_BYTES)
             .and_then(|bytes| bytes.try_into().ok())
             .map(u64::from_le_bytes)
         else {
@@ -112,13 +121,13 @@ impl Contract for ContractA {
         let Some(next_count) = previous_count.checked_add(1) else {
             return MessageOutput::failure(1001);
         };
-        if input.state[8..].iter().any(|byte| *byte != 0) {
+        if input.state[8..STATE_BYTES].iter().any(|byte| *byte != 0) {
             return MessageOutput::failure(1001);
         }
 
         let destination =
             AccountAddress { dapp_id: destination_dapp_id, account_id: destination_account_id };
-        let mut next_state = vec![0; STATE_BYTES];
+        let mut next_state = cleared(input.state);
         next_state[..8].copy_from_slice(&next_count.to_le_bytes());
 
         let mut output = MessageOutput::success(StateUpdate::FullReplace(next_state));
@@ -146,7 +155,7 @@ fn process_code_upgrade(input: MessageInput<'_>) -> MessageOutput {
         return MessageOutput::failure(1004);
     };
     if package_owner != PACKAGE_OWNER_PUBKEY
-        || input.state.len() != STATE_BYTES
+        || input.state.len() != DATA_BYTES
         || input.message.body().len() != CODE_UPGRADE_HEADER_BYTES + MIGRATION_PAYLOAD.len()
         || input.message.body().get(..4) != Some(b"ACUG")
         || input.message.body().get(68..72)
@@ -191,7 +200,7 @@ fn process_version_probe(input: MessageInput<'_>) -> MessageOutput {
     let Caller::External(_) = input.caller else {
         return MessageOutput::failure(1003);
     };
-    if !input.message.body().is_empty() || input.state.len() != STATE_BYTES {
+    if !input.message.body().is_empty() || input.state.len() != DATA_BYTES {
         return MessageOutput::failure(1003);
     }
     let mut next_state = input.state.to_vec();
@@ -210,7 +219,7 @@ fn process_callback(input: MessageInput<'_>) -> MessageOutput {
     let Some(previous_forward_count) = input
         .state
         .get(..8)
-        .filter(|_| input.state.len() == STATE_BYTES)
+        .filter(|_| input.state.len() == DATA_BYTES)
         .and_then(|bytes| bytes.try_into().ok())
         .map(u64::from_le_bytes)
     else {
@@ -223,7 +232,7 @@ fn process_callback(input: MessageInput<'_>) -> MessageOutput {
     };
     if previous_forward_count != 1
         || previous_callback_count != 0
-        || input.state[16..].iter().any(|byte| *byte != 0)
+        || input.state[16..STATE_BYTES].iter().any(|byte| *byte != 0)
         || message.has_callback_request()
         || callback.status_code != 0
         || callback.cause_address != input.destination
@@ -233,7 +242,7 @@ fn process_callback(input: MessageInput<'_>) -> MessageOutput {
         return MessageOutput::failure(1002);
     }
 
-    let mut next_state = vec![0; STATE_BYTES];
+    let mut next_state = cleared(input.state);
     next_state[..8].copy_from_slice(&previous_forward_count.to_le_bytes());
     next_state[8..16].copy_from_slice(&1_u64.to_le_bytes());
     next_state[16..20].copy_from_slice(&callback.status_code.to_le_bytes());
@@ -241,6 +250,13 @@ fn process_callback(input: MessageInput<'_>) -> MessageOutput {
     next_state[24..40].copy_from_slice(&CALLBACK_BODY);
     next_state[40..72].copy_from_slice(&callback.cause_msg_hash);
     MessageOutput::success(StateUpdate::FullReplace(next_state))
+}
+
+/// Zeroed contract bytes followed by the owner key kept from `state`.
+fn cleared(state: &[u8]) -> Vec<u8> {
+    let mut next = state.to_vec();
+    next[..STATE_BYTES].fill(0);
+    next
 }
 
 avm_contract_sdk::export_message_contract!(ContractA);

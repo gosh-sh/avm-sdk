@@ -17,6 +17,7 @@
 //! cannot tell its own children from a child of another version of the same
 //! package deployed by someone else.
 
+use avm_contract_sdk::set_owner_key;
 use avm_contract_sdk::AccountAddress;
 use avm_contract_sdk::Caller;
 use avm_contract_sdk::Contract;
@@ -62,7 +63,11 @@ const SALT_BYTES: usize = 8;
 //   factory: [112..116] accepted reports u32 | [116..180] last accepted sender
 //            [180..244] last spawned child
 //   child:   [112..176] factory | [176..240] init caller | [240..248] salt
-const STATE_BYTES: usize = 256;
+//   [256..288] owner key (`owner_key_offset`), the deploy's owner_id. A child's
+//              owner_id is its factory's account id, which signs nothing, so a
+//              child takes no external call.
+const STATE_BYTES: usize = 288;
+const OWNER_KEY_OFFSET: u32 = 256;
 const TEMPLATE: core::ops::Range<usize> = 16..112;
 
 // ACDP deployment envelope, 288-byte header: magic, flags u16, reserved u16,
@@ -106,6 +111,8 @@ impl Contract for FactoryChildProvenance {
             }
             _ => return MessageOutput::failure(INVALID_INIT),
         }
+        // The key slot is inside the state built above.
+        let _ = set_owner_key(&mut state, OWNER_KEY_OFFSET, deploy.owner_id());
         MessageOutput::success(StateUpdate::FullReplace(state))
     }
 

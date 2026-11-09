@@ -52,7 +52,9 @@ def main():
     def timing():
         return ["--block-time", now, "--created-at", now, "--expire-at", now + 3600, "--fuel-fee-shells", 10000]
 
-    stand("init", "--dapp-id", "75" * 32)
+    # The deploy's owner_id defaults to the user identity, so the user's key is
+    # the owner key the constructor writes at owner_key_offset 0.
+    user_key = bytes.fromhex(stand("init", "--dapp-id", "75" * 32)["identities"]["user"])
     deploy = ["--wasm", artifact / "contract.wasm", "--acab", artifact / "contract.acab",
               "--descriptor", artifact / "contract.descriptor", "--salt-hex", "1750",
               "--init-json", '"0x010203"', *timing()]
@@ -75,20 +77,27 @@ def main():
         before = state.read_bytes()
         value = stand("inspect", "--account", address)
         assert state.read_bytes() == before, "inspection mutated persisted state"
-        return bytes.fromhex(value["raw_state"])
+        data = bytes.fromhex(value["raw_state"])
+        assert data[:32] == user_key, "owner key must stay at owner_key_offset 0"
+        return data[32:]
 
     assert inspect() == b"\x01\x02\x03", "constructor must decode init_data, not ACDP"
 
-    def call(method, value):
+    def call(method, value, identity="user", expected=0):
         nonlocal now
         now += 10
         receipt = stand("call", "--address", address, "--method", method,
-                        "--args-json", json.dumps(value), "--identity", "developer",
-                        "--extra-currencies", "", *timing())
+                        "--args-json", json.dumps(value), "--identity", identity,
+                        "--extra-currencies", "", *timing(), expected=expected)
+        if expected:
+            return receipt
         raw = bytes.fromhex(receipt["raw_executor_output"])
         assert raw[:4] == b"ACMO" and struct.unpack_from("<I", raw, 4)[0] == 0
         return receipt
 
+    before_foreign = state.read_bytes()
+    foreign = call("tools.add", {"a": 5, "b": 7}, identity="developer", expected=1)
+    assert "AccountKeyNotAllowed" in foreign["error"] and state.read_bytes() == before_foreign
     call("tools.add", {"a": 5, "b": 7})
     assert inspect() == struct.pack("<Q", 12), "generated internal dispatch did not run"
     before_topup = stand("inspect")
@@ -139,7 +148,7 @@ def main():
     call("tools.add", {"a": 8, "b": 9})
     assert inspect() == struct.pack("<Q", 17), "first package must remain executable"
     assert stand("replay")["status"] == "ok"
-    summary = {"status": "passed", "paths": ["constructor", "manifest_bindings", "abi_inspection_and_body_decode", "generated_external_internal_dispatch", "read_only_account_inspection", "quote_fund_deploy", "repeated_placeholder_and_executable_topups", "independent_package_in_populated_stand", "original_package_continuation", "replay"],
+    summary = {"status": "passed", "paths": ["constructor", "owner_key", "manifest_bindings", "abi_inspection_and_body_decode", "generated_external_internal_dispatch", "read_only_account_inspection", "quote_fund_deploy", "repeated_placeholder_and_executable_topups", "independent_package_in_populated_stand", "original_package_continuation", "replay"],
                "state_sha256": hashlib.sha256(state.read_bytes()).hexdigest(),
                "wasm_sha256": hashlib.sha256((artifact / "contract.wasm").read_bytes()).hexdigest(),
                "second_wasm_sha256": hashlib.sha256((second_artifact / "contract.wasm").read_bytes()).hexdigest()}
