@@ -1,9 +1,5 @@
 # Runtime limits, rent and deployment identity
 
-## Provisional bundled engine settings
-
-- `signals_based_traps` is a provisional development setting and may change before network acceptance.
-- `pooling_linear_memory_keep_resident` is a provisional development setting and may change before network acceptance.
 
 
 These are the **SDK 0.4.0 local stand** settings. They are development
@@ -144,3 +140,8 @@ increased mainnet FUEL cap is included in this release.
 Use the configuration hash, profile and source identity of the runtime you are
 running when comparing measurements. An SDK local stand is not a production
 network configuration.
+
+## Provisional bundled engine settings
+
+- `signals_based_traps` is a provisional development setting and may change before network acceptance.
+- `pooling_linear_memory_keep_resident` is a provisional development setting and may change before network acceptance.
