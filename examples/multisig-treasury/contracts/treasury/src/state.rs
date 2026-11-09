@@ -1,5 +1,7 @@
 //! Fixed-layout state, canonical decoding and the invariants every call relies on.
 
+use alloc::{vec, vec::Vec};
+
 use avm_contract_sdk::AccountAddress;
 
 use crate::{
@@ -17,8 +19,10 @@ pub const RECEIPT_SLOTS: usize = 8;
 pub const KIND_TRANSFER: u8 = 1;
 pub const KIND_ADD_OWNER: u8 = 2;
 pub const KIND_REMOVE_OWNER: u8 = 3;
-pub const KIND_SET_POLICY: u8 = 4;
-pub const KIND_UNFREEZE: u8 = 5;
+pub const KIND_SET_THRESHOLD: u8 = 4;
+pub const KIND_SET_DELAY: u8 = 5;
+pub const KIND_SET_POLICY: u8 = 6;
+pub const KIND_UNFREEZE: u8 = 7;
 
 /// Proposal lifecycle. Executed, cancelled and expired proposals leave the table.
 pub const STATUS_OPEN: u8 = 1;
@@ -29,10 +33,17 @@ pub const STATUS_EXECUTING: u8 = 3;
 pub const NO_PROPOSER: u8 = 0xff;
 
 const BALANCE_BYTES: usize = 32;
-const POLICY_BYTES: usize = 32;
+const POLICY_BYTES: usize = 64;
 const PROPOSAL_BYTES: usize = 112;
 const PENDING_BYTES: usize = 96;
 
+const OFF_DELAY: usize = 4;
+const OFF_GRACE: usize = 8;
+const OFF_TTL: usize = 12;
+const OFF_FUEL: usize = 16;
+const OFF_NEXT_ID: usize = 32;
+const OFF_RECEIPT_POS: usize = 40;
+const OFF_OPS: usize = 48;
 const OFF_OWNERS: usize = 64;
 const OFF_RECEIPTS: usize = OFF_OWNERS + MAX_OWNERS * 32;
 const OFF_BALANCES: usize = OFF_RECEIPTS + RECEIPT_SLOTS * 32;
@@ -47,46 +58,17 @@ fn array<const N: usize>(bytes: &[u8], offset: usize) -> Result<[u8; N]> {
 fn read_u32(bytes: &[u8], offset: usize) -> Result<u32> {
     array(bytes, offset).map(u32::from_le_bytes)
 }
+fn read_u64(bytes: &[u8], offset: usize) -> Result<u64> {
+    array(bytes, offset).map(u64::from_le_bytes)
+}
 fn read_u128(bytes: &[u8], offset: usize) -> Result<u128> {
     array(bytes, offset).map(u128::from_le_bytes)
 }
-/// Sequential reader for a buffer whose length was checked once up front.
-struct Rd<'a> {
-    bytes: &'a [u8],
-    at: usize,
+fn put(bytes: &mut [u8], offset: usize, value: &[u8]) {
+    bytes[offset..offset + value.len()].copy_from_slice(value);
 }
-impl Rd<'_> {
-    /// Little-endian integer of `len` bytes.
-    #[inline(never)]
-    fn num(&mut self, len: usize) -> u128 {
-        let mut value = 0;
-        for (index, byte) in self.bytes[self.at..self.at + len].iter().enumerate() {
-            value |= u128::from(*byte) << (8 * index);
-        }
-        self.at += len;
-        value
-    }
-    #[inline(never)]
-    fn fill(&mut self, out: &mut [u8]) {
-        out.copy_from_slice(&self.bytes[self.at..self.at + out.len()]);
-        self.at += out.len();
-    }
-}
-/// Sequential writer into a zero-filled buffer; skipped bytes stay zero.
-struct Wr {
-    bytes: Vec<u8>,
-    at: usize,
-}
-impl Wr {
-    #[inline(never)]
-    fn num(&mut self, value: u128, len: usize) {
-        self.put(&value.to_le_bytes()[..len]);
-    }
-    #[inline(never)]
-    fn put(&mut self, value: &[u8]) {
-        self.bytes[self.at..self.at + value.len()].copy_from_slice(value);
-        self.at += value.len();
-    }
+fn is_zero(bytes: &[u8], offset: usize, len: usize) -> bool {
+    bytes.get(offset..offset + len).is_some_and(|slice| slice.iter().all(|byte| *byte == 0))
 }
 pub fn nonzero(address: AccountAddress) -> bool {
     address.dapp_id != [0; 32] && address.account_id != [0; 32]
@@ -99,11 +81,16 @@ pub struct Balance {
     pub held: u128,
 }
 
-/// Per-currency spending rule: transfers up to `fast_limit` skip the timelock.
+/// Per-currency spending rules: transfers up to `fast_limit` skip the timelock,
+/// and no more than `window_limit` may leave per `window_secs` window.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Policy {
     pub currency: u32,
+    pub window_secs: u32,
     pub fast_limit: u128,
+    pub window_limit: u128,
+    pub window_start: u32,
+    pub spent: u128,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -290,86 +277,109 @@ impl State {
 
     // ------------------------------------------------------- encoding ---
 
-    /// Reads the fixed layout, then accepts the bytes only if re-encoding the
-    /// result reproduces them exactly: padding, unused slots and the counters
-    /// all have a single canonical form.
     pub fn decode(bytes: &[u8]) -> Result<Self> {
-        if bytes.len() != STATE_BYTES {
+        if bytes.len() != STATE_BYTES || !is_zero(bytes, 59, 5) {
             return Err(ERR_STATE);
         }
-        let mut r = Rd { bytes, at: 0 };
-        let threshold = r.num(1) as u8;
-        let frozen = r.num(1) == 1;
-        let balance_count = (r.num(1) as usize).min(MAX_BALANCES);
-        let policy_count = (r.num(1) as usize).min(MAX_POLICIES);
-        let (delay, grace, ttl) = (r.num(4) as u32, r.num(4) as u32, r.num(4) as u32);
-        let fuel_reserve = r.num(16);
-        let (next_id, receipt_pos, ops) = (r.num(8) as u64, r.num(8) as u64, r.num(8) as u64);
-        let proposal_count = (r.num(1) as usize).min(MAX_PROPOSALS);
-        let pending_count = (r.num(1) as usize).min(MAX_PENDING);
-        r.at = OFF_OWNERS;
+        let (frozen, balance_count, policy_count) = (bytes[1], bytes[2], bytes[3]);
+        let (proposal_count, pending_count) = (bytes[56], bytes[57]);
+        if frozen > 1 || bytes[58] != 0 {
+            return Err(ERR_STATE);
+        }
         let mut owners = [[0; 32]; MAX_OWNERS];
-        for owner in owners.iter_mut() {
-            r.fill(owner);
+        for (index, owner) in owners.iter_mut().enumerate() {
+            *owner = array(bytes, OFF_OWNERS + index * 32)?;
         }
         let mut receipts = [[0; 32]; RECEIPT_SLOTS];
-        for receipt in receipts.iter_mut() {
-            r.fill(receipt);
+        for (index, receipt) in receipts.iter_mut().enumerate() {
+            *receipt = array(bytes, OFF_RECEIPTS + index * 32)?;
         }
         let mut balances = Vec::new();
-        for _ in 0..balance_count {
-            let currency = r.num(4) as u32;
-            r.at += 12;
-            balances.push(Balance { currency, held: r.num(16) });
+        for index in 0..MAX_BALANCES {
+            let base = OFF_BALANCES + index * BALANCE_BYTES;
+            if index < usize::from(balance_count) {
+                if !is_zero(bytes, base + 4, 12) {
+                    return Err(ERR_STATE);
+                }
+                balances.push(Balance {
+                    currency: read_u32(bytes, base)?,
+                    held: read_u128(bytes, base + 16)?,
+                });
+            } else if !is_zero(bytes, base, BALANCE_BYTES) {
+                return Err(ERR_STATE);
+            }
         }
-        r.at = OFF_POLICIES;
         let mut policies = Vec::new();
-        for _ in 0..policy_count {
-            let currency = r.num(4) as u32;
-            r.at += 12;
-            policies.push(Policy { currency, fast_limit: r.num(16) });
+        for index in 0..MAX_POLICIES {
+            let base = OFF_POLICIES + index * POLICY_BYTES;
+            if index < usize::from(policy_count) {
+                if !is_zero(bytes, base + 44, 4) {
+                    return Err(ERR_STATE);
+                }
+                policies.push(Policy {
+                    currency: read_u32(bytes, base)?,
+                    window_secs: read_u32(bytes, base + 4)?,
+                    fast_limit: read_u128(bytes, base + 8)?,
+                    window_limit: read_u128(bytes, base + 24)?,
+                    window_start: read_u32(bytes, base + 40)?,
+                    spent: read_u128(bytes, base + 48)?,
+                });
+            } else if !is_zero(bytes, base, POLICY_BYTES) {
+                return Err(ERR_STATE);
+            }
         }
-        r.at = OFF_PROPOSALS;
         let mut proposals = Vec::new();
-        for _ in 0..proposal_count {
-            let mut proposal = Proposal {
-                id: r.num(8) as u64,
-                kind: r.num(1) as u8,
-                status: r.num(1) as u8,
-                proposer: r.num(1) as u8,
-                approvals: r.num(1) as u8,
-                created: r.num(4) as u32,
-                eta: r.num(4) as u32,
-                expires: r.num(4) as u32,
-                currency: r.num(4) as u32,
-                aux: r.num(4) as u32,
-                amount: r.num(16),
-                target: [0; 64],
-            };
-            r.fill(&mut proposal.target);
-            proposals.push(proposal);
+        for index in 0..MAX_PROPOSALS {
+            let base = OFF_PROPOSALS + index * PROPOSAL_BYTES;
+            if index < usize::from(proposal_count) {
+                proposals.push(Proposal {
+                    id: read_u64(bytes, base)?,
+                    kind: bytes[base + 8],
+                    status: bytes[base + 9],
+                    proposer: bytes[base + 10],
+                    approvals: bytes[base + 11],
+                    created: read_u32(bytes, base + 12)?,
+                    eta: read_u32(bytes, base + 16)?,
+                    expires: read_u32(bytes, base + 20)?,
+                    currency: read_u32(bytes, base + 24)?,
+                    aux: read_u32(bytes, base + 28)?,
+                    amount: read_u128(bytes, base + 32)?,
+                    target: array(bytes, base + 48)?,
+                });
+            } else if !is_zero(bytes, base, PROPOSAL_BYTES) {
+                return Err(ERR_STATE);
+            }
         }
-        r.at = OFF_PENDING;
         let mut pending = Vec::new();
-        for _ in 0..pending_count {
-            let mut recipient = AccountAddress { dapp_id: [0; 32], account_id: [0; 32] };
-            r.fill(&mut recipient.dapp_id);
-            r.fill(&mut recipient.account_id);
-            let id = r.num(8) as u64;
-            let currency = r.num(4) as u32;
-            r.at += 4;
-            pending.push(Pending { recipient, id, currency, amount: r.num(16) });
+        for index in 0..MAX_PENDING {
+            let base = OFF_PENDING + index * PENDING_BYTES;
+            if index < usize::from(pending_count) {
+                if !is_zero(bytes, base + 76, 4) {
+                    return Err(ERR_STATE);
+                }
+                pending.push(Pending {
+                    recipient: AccountAddress {
+                        dapp_id: array(bytes, base)?,
+                        account_id: array(bytes, base + 32)?,
+                    },
+                    id: read_u64(bytes, base + 64)?,
+                    currency: read_u32(bytes, base + 72)?,
+                    amount: read_u128(bytes, base + 80)?,
+                });
+            } else if !is_zero(bytes, base, PENDING_BYTES) {
+                return Err(ERR_STATE);
+            }
         }
         let state = Self {
-            threshold,
-            frozen,
-            delay,
-            grace,
-            ttl,
-            fuel_reserve,
-            next_id,
-            receipt_pos,
-            ops,
+            threshold: bytes[0],
+            frozen: frozen == 1,
+            delay: read_u32(bytes, OFF_DELAY)?,
+            grace: read_u32(bytes, OFF_GRACE)?,
+            ttl: read_u32(bytes, OFF_TTL)?,
+            fuel_reserve: read_u128(bytes, OFF_FUEL)?,
+            next_id: read_u64(bytes, OFF_NEXT_ID)?,
+            receipt_pos: read_u64(bytes, OFF_RECEIPT_POS)?,
+            ops: read_u64(bytes, OFF_OPS)?,
             receipts,
             owners,
             balances,
@@ -378,70 +388,68 @@ impl State {
             pending,
         };
         state.validate()?;
-        if state.encode() != bytes {
-            return Err(ERR_STATE);
-        }
         Ok(state)
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        let mut w = Wr { bytes: vec![0; STATE_BYTES], at: 0 };
-        w.num(u128::from(self.threshold), 1);
-        w.num(u128::from(self.frozen), 1);
-        w.num(self.balances.len() as u128, 1);
-        w.num(self.policies.len() as u128, 1);
-        w.num(u128::from(self.delay), 4);
-        w.num(u128::from(self.grace), 4);
-        w.num(u128::from(self.ttl), 4);
-        w.num(self.fuel_reserve, 16);
-        w.num(u128::from(self.next_id), 8);
-        w.num(u128::from(self.receipt_pos), 8);
-        w.num(u128::from(self.ops), 8);
-        w.num(self.proposals.len() as u128, 1);
-        w.num(self.pending.len() as u128, 1);
-        w.at = OFF_OWNERS;
-        for owner in &self.owners {
-            w.put(owner);
+        let mut bytes = vec![0; STATE_BYTES];
+        bytes[0] = self.threshold;
+        bytes[1] = u8::from(self.frozen);
+        bytes[2] = self.balances.len() as u8;
+        bytes[3] = self.policies.len() as u8;
+        put(&mut bytes, OFF_DELAY, &self.delay.to_le_bytes());
+        put(&mut bytes, OFF_GRACE, &self.grace.to_le_bytes());
+        put(&mut bytes, OFF_TTL, &self.ttl.to_le_bytes());
+        put(&mut bytes, OFF_FUEL, &self.fuel_reserve.to_le_bytes());
+        put(&mut bytes, OFF_NEXT_ID, &self.next_id.to_le_bytes());
+        put(&mut bytes, OFF_RECEIPT_POS, &self.receipt_pos.to_le_bytes());
+        put(&mut bytes, OFF_OPS, &self.ops.to_le_bytes());
+        bytes[56] = self.proposals.len() as u8;
+        bytes[57] = self.pending.len() as u8;
+        for (index, owner) in self.owners.iter().enumerate() {
+            put(&mut bytes, OFF_OWNERS + index * 32, owner);
         }
-        for receipt in &self.receipts {
-            w.put(receipt);
+        for (index, receipt) in self.receipts.iter().enumerate() {
+            put(&mut bytes, OFF_RECEIPTS + index * 32, receipt);
         }
-        for entry in self.balances.iter().take(MAX_BALANCES) {
-            w.num(u128::from(entry.currency), 4);
-            w.at += 12;
-            w.num(entry.held, 16);
+        for (index, entry) in self.balances.iter().enumerate().take(MAX_BALANCES) {
+            let base = OFF_BALANCES + index * BALANCE_BYTES;
+            put(&mut bytes, base, &entry.currency.to_le_bytes());
+            put(&mut bytes, base + 16, &entry.held.to_le_bytes());
         }
-        w.at = OFF_POLICIES;
-        for entry in self.policies.iter().take(MAX_POLICIES) {
-            w.num(u128::from(entry.currency), 4);
-            w.at += 12;
-            w.num(entry.fast_limit, 16);
+        for (index, entry) in self.policies.iter().enumerate().take(MAX_POLICIES) {
+            let base = OFF_POLICIES + index * POLICY_BYTES;
+            put(&mut bytes, base, &entry.currency.to_le_bytes());
+            put(&mut bytes, base + 4, &entry.window_secs.to_le_bytes());
+            put(&mut bytes, base + 8, &entry.fast_limit.to_le_bytes());
+            put(&mut bytes, base + 24, &entry.window_limit.to_le_bytes());
+            put(&mut bytes, base + 40, &entry.window_start.to_le_bytes());
+            put(&mut bytes, base + 48, &entry.spent.to_le_bytes());
         }
-        w.at = OFF_PROPOSALS;
-        for entry in self.proposals.iter().take(MAX_PROPOSALS) {
-            w.num(u128::from(entry.id), 8);
-            w.num(u128::from(entry.kind), 1);
-            w.num(u128::from(entry.status), 1);
-            w.num(u128::from(entry.proposer), 1);
-            w.num(u128::from(entry.approvals), 1);
-            w.num(u128::from(entry.created), 4);
-            w.num(u128::from(entry.eta), 4);
-            w.num(u128::from(entry.expires), 4);
-            w.num(u128::from(entry.currency), 4);
-            w.num(u128::from(entry.aux), 4);
-            w.num(entry.amount, 16);
-            w.put(&entry.target);
+        for (index, entry) in self.proposals.iter().enumerate().take(MAX_PROPOSALS) {
+            let base = OFF_PROPOSALS + index * PROPOSAL_BYTES;
+            put(&mut bytes, base, &entry.id.to_le_bytes());
+            bytes[base + 8] = entry.kind;
+            bytes[base + 9] = entry.status;
+            bytes[base + 10] = entry.proposer;
+            bytes[base + 11] = entry.approvals;
+            put(&mut bytes, base + 12, &entry.created.to_le_bytes());
+            put(&mut bytes, base + 16, &entry.eta.to_le_bytes());
+            put(&mut bytes, base + 20, &entry.expires.to_le_bytes());
+            put(&mut bytes, base + 24, &entry.currency.to_le_bytes());
+            put(&mut bytes, base + 28, &entry.aux.to_le_bytes());
+            put(&mut bytes, base + 32, &entry.amount.to_le_bytes());
+            put(&mut bytes, base + 48, &entry.target);
         }
-        w.at = OFF_PENDING;
-        for entry in self.pending.iter().take(MAX_PENDING) {
-            w.put(&entry.recipient.dapp_id);
-            w.put(&entry.recipient.account_id);
-            w.num(u128::from(entry.id), 8);
-            w.num(u128::from(entry.currency), 4);
-            w.at += 4;
-            w.num(entry.amount, 16);
+        for (index, entry) in self.pending.iter().enumerate().take(MAX_PENDING) {
+            let base = OFF_PENDING + index * PENDING_BYTES;
+            put(&mut bytes, base, &entry.recipient.dapp_id);
+            put(&mut bytes, base + 32, &entry.recipient.account_id);
+            put(&mut bytes, base + 64, &entry.id.to_le_bytes());
+            put(&mut bytes, base + 72, &entry.currency.to_le_bytes());
+            put(&mut bytes, base + 80, &entry.amount.to_le_bytes());
         }
-        w.bytes
+        bytes
     }
 
     // ------------------------------------------------------- invariants ---
@@ -478,7 +486,10 @@ impl State {
         }
         for (index, entry) in self.policies.iter().enumerate() {
             if entry.currency == SHELL_CURRENCY_ID
-                || entry.fast_limit == 0
+                || entry.window_secs == 0
+                || entry.window_limit == 0
+                || entry.fast_limit > entry.window_limit
+                || entry.spent > entry.window_limit
                 || self.policies[..index].iter().any(|other| other.currency == entry.currency)
             {
                 return Err(ERR_STATE);

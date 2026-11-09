@@ -8,11 +8,13 @@ Run after `avm-contract-build build` produced both artifact triples:
 The three stand identities are the owners of a 2-of-3 treasury. The journey
 deploys the treasury and a payee, binds them, deposits C7, C9 and SHELL, then
 walks a transfer through propose, approve, timelock and execute until the
-payee's callback settles it. It also covers a payee that rejects (the payout
-bounces and the proposal returns to the queue), the fast lane under a
-`SET_POLICY` proposal, adding and removing an owner, cancelling, freezing and
-unfreezing. After every step the decoded treasury state is compared with what
-the script computed on its own, and the stand journal is replayed at the end.
+payee's callback settles it. It also covers revoking an approval, a payee that
+rejects (the payout bounces and the proposal returns to the queue), changing
+the delay and the threshold, a `SET_POLICY` fast lane with a window limit (one
+transfer refused at the limit, a bounce that gives the allowance back, a new
+window), adding and removing an owner, cancelling, freezing and unfreezing.
+After every step the decoded treasury state is compared with what the script
+computed on its own, and the stand journal is replayed at the end.
 """
 import argparse
 import json
@@ -26,18 +28,20 @@ DAPP = "11" * 32
 BASE_TIME = 1_800_000_000
 SHELL, C7, C9 = 2, 7, 9
 FUEL_RESERVE = 10_000
+SHELL_DEPOSIT = 1_000_000  # FUEL for the many payouts of the journey
 DELAY, GRACE, TTL = 60, 3_600, 86_400
-STATE_BYTES = 3_136
+STATE_BYTES = 3_264
 
-KIND_TRANSFER, KIND_ADD_OWNER, KIND_REMOVE_OWNER, KIND_SET_POLICY, KIND_UNFREEZE = 1, 2, 3, 4, 5
+(KIND_TRANSFER, KIND_ADD_OWNER, KIND_REMOVE_OWNER, KIND_SET_THRESHOLD, KIND_SET_DELAY,
+ KIND_SET_POLICY, KIND_UNFREEZE) = 1, 2, 3, 4, 5, 6, 7
 STATUS_OPEN, STATUS_QUEUED, STATUS_EXECUTING = 1, 2, 3
 
-ERR_FROZEN, ERR_TIMELOCK = 4003, 4007
+ERR_FROZEN, ERR_NOT_FOUND, ERR_TIMELOCK, ERR_LIMIT = 4003, 4005, 4007, 4008
 
-EVENTS = ["msig.created", "msig.deposited", "msig.proposed", "msig.approved", "msig.queued",
-          "msig.cancelled", "msig.frozen", "msig.unfrozen", "msig.owner_added",
-          "msig.owner_removed", "msig.policy_set", "msig.transfer_pending",
-          "msig.transfer_settled", "msig.transfer_failed"]
+EVENTS = ["msig.created", "msig.deposited", "msig.proposed", "msig.approved", "msig.revoked",
+          "msig.queued", "msig.cancelled", "msig.frozen", "msig.unfrozen", "msig.owner_added",
+          "msig.owner_removed", "msig.threshold_changed", "msig.delay_changed", "msig.policy_set",
+          "msig.transfer_pending", "msig.transfer_settled", "msig.transfer_failed"]
 
 
 def le(value, size):
@@ -104,8 +108,8 @@ class Stand:
     def call(self, address, method, body=b"", identity="user", extra="", expected=0):
         stamps = self.timestamps()
         args = json.dumps(body) if isinstance(body, int) else json.dumps("0x" + body.hex()) if body else "null"
-        options = dict(address=address, method=method, args_json=args,
-                       identity=identity, extra_currencies=extra)
+        options = dict(address=address, method=method, args_json=args, identity=identity,
+                       extra_currencies=extra)
         # Smallest FUEL reserve (1 SHELL = 1_000_000 FUEL, capped at 10_000_000) that lets the call
         # finish, found on a copy of the state so the journey itself is unaffected.
         for shells in (1, 2, 3, 5, 10):
@@ -151,23 +155,28 @@ def propose_body(kind, currency=0, aux=0, amount=0, target=b""):
 
 
 def treasury_view(raw):
-    """Decodes the fixed 3136-byte treasury state image."""
+    """Decodes the fixed 3264-byte treasury state image."""
     assert len(raw) == STATE_BYTES, len(raw)
     zero = bytes(32)
     owners = [raw[64 + 32 * i:96 + 32 * i] for i in range(8)]
+    policies = {}
+    for index in range(raw[3]):
+        base = 832 + 64 * index
+        policies[u32(raw, base)] = dict(secs=u32(raw, base + 4), fast=u128(raw, base + 8),
+                                        limit=u128(raw, base + 24), start=u32(raw, base + 40),
+                                        spent=u128(raw, base + 48))
     proposals = []
     for index in range(raw[56]):
-        base = 960 + 112 * index
+        base = 1088 + 112 * index
         proposals.append(dict(id=u64(raw, base), kind=raw[base + 8], status=raw[base + 9],
                               proposer=raw[base + 10], approvals=raw[base + 11], created=u32(raw, base + 12),
                               eta=u32(raw, base + 16), expires=u32(raw, base + 20),
                               currency=u32(raw, base + 24), aux=u32(raw, base + 28),
                               amount=u128(raw, base + 32)))
-    return dict(threshold=raw[0], frozen=raw[1], ops=u64(raw, 48), next_id=u64(raw, 32),
-                owners=[o.hex() if o != zero else None for o in owners],
+    return dict(threshold=raw[0], frozen=raw[1], delay=u32(raw, 4), ops=u64(raw, 48),
+                next_id=u64(raw, 32), owners=[o.hex() if o != zero else None for o in owners],
                 balances={u32(raw, 576 + 32 * i): u128(raw, 592 + 32 * i) for i in range(raw[2])},
-                policies={u32(raw, 832 + 32 * i): u128(raw, 848 + 32 * i) for i in range(raw[3])},
-                proposals=proposals, pending=raw[57])
+                policies=policies, proposals=proposals, pending=raw[57])
 
 
 def payee_view(raw):
@@ -200,122 +209,208 @@ def run(sdk, output):
 
             payee = stand.deploy("payee", "treasury-payee")
             treasury = stand.deploy("treasury", "multisig-treasury", init_data([alice, bob, carol]))
-            view = treasury_view(stand.account_state(treasury))
-            assert view["owners"][:3] == [alice, bob, carol] and view["threshold"] == 2, view
-            assert view["balances"] == {} and view["proposals"] == [] and view["ops"] == 1, view
-
-            # Bind the payee to the treasury, then fund the treasury: C7, C9 and SHELL for FUEL.
-            stand.call(payee, "treasury.payee.bind", address_bytes(treasury), identity="developer")
-            result = stand.call(treasury, "treasury.deposit", extra=f"{SHELL}:100000,{C7}:1000000,{C9}:500000",
-                                identity="user")
-            assert event_names(result).count("msig.deposited") == 3, event_names(result)
-            view = treasury_view(stand.account_state(treasury))
-            assert view["balances"] == {SHELL: 100_000, C7: 1_000_000, C9: 500_000}, view
-
             recipient = address_bytes(payee)
+            # Execution fees and storage rent are charged to the contract's own SHELL, and this
+            # journey runs for a long time, so top both accounts up beyond the deploy funding.
+            for address in (treasury, payee):
+                funding = stand.command("fund-user", address=address, shells=1_000_000_000)
+                assert funding["status"] == "ok", funding
+
+            def view():
+                return treasury_view(stand.account_state(treasury))
+
+            def proposal(ident):
+                found = [p for p in view()["proposals"] if p["id"] == ident]
+                return found[0] if found else None
 
             def propose(who_name, kind, **fields):
-                before = treasury_view(stand.account_state(treasury))["next_id"]
+                before = view()["next_id"]
                 result = stand.call(treasury, "treasury.propose", propose_body(kind, **fields),
                                     identity=who[who_name])
-                after = treasury_view(stand.account_state(treasury))
-                assert after["next_id"] == before + 1, after
+                assert view()["next_id"] == before + 1
                 return before, result
 
             def act(who_name, method, ident, expected=0):
                 return stand.call(treasury, method, ident, identity=who[who_name], expected=expected)
 
-            def proposal(ident):
-                found = [p for p in treasury_view(stand.account_state(treasury))["proposals"] if p["id"] == ident]
-                return found[0] if found else None
+            expected_c7 = [1_000_000]  # what the treasury should still hold of C7
+            delivered = [0]            # payouts the payee should have accepted
 
-            def settle_transfer(currency, amount):
-                """propose (alice), approve (bob), wait out the delay, execute (carol)."""
+            def transfer(amount, currency=C7, approvers=("bob",)):
+                """Proposed by alice and approved by `approvers`; returns the proposal id."""
                 ident, _ = propose("alice", KIND_TRANSFER, currency=currency, amount=amount, target=recipient)
                 assert proposal(ident)["status"] == STATUS_OPEN and proposal(ident)["approvals"] == 0b001
-                result = act("bob", "treasury.approve", ident)
-                assert "msig.queued" in event_names(result), event_names(result)
-                queued = proposal(ident)
-                assert queued["status"] == STATUS_QUEUED and queued["eta"] == stand.time + DELAY, queued
-                act("carol", "treasury.execute", ident, expected=ERR_TIMELOCK)
-                stand.advance(DELAY)
+                for name in approvers:
+                    act(name, "treasury.approve", ident)
                 return ident
 
+            def wait_for(ident):
+                """Execute is refused before the proposal's eta; then time passes."""
+                queued = proposal(ident)
+                assert queued["status"] == STATUS_QUEUED, queued
+                if queued["eta"] > stand.time + 1:
+                    act("carol", "treasury.execute", ident, expected=ERR_TIMELOCK)
+                    stand.advance(queued["eta"] - stand.time)
+
+            def pay(ident, amount, currency=C7):
+                """Waits out the timelock, executes, and checks the callback settled the payout."""
+                wait_for(ident)
+                result = act("carol", "treasury.execute", ident)
+                assert "msig.transfer_pending" in event_names(result), event_names(result)
+                state = view()
+                assert state["pending"] == 0 and proposal(ident) is None, "the callback settles in the same step"
+                if currency == C7:
+                    expected_c7[0] -= amount
+                    assert state["balances"][C7] == expected_c7[0], state
+                delivered[0] += 1
+                got = payee_view(stand.account_state(payee))
+                assert got["count"] == delivered[0] and got["last"] == receipt(currency, ident, amount), got
+
+            def govern(kind, approvers=("bob",), **fields):
+                """A governance proposal: it always waits out the delay, then carol executes it."""
+                ident, _ = propose("alice", kind, **fields)
+                for name in approvers:
+                    act(name, "treasury.approve", ident)
+                wait_for(ident)
+                return ident, act("carol", "treasury.execute", ident)
+
+            state = view()
+            assert state["owners"][:3] == [alice, bob, carol] and state["threshold"] == 2, state
+            assert state["delay"] == DELAY and state["balances"] == {} and state["proposals"] == [], state
+
+            # Bind the payee to the treasury, then fund the treasury: C7, C9 and SHELL for FUEL.
+            stand.call(payee, "treasury.payee.bind", address_bytes(treasury), identity="developer")
+            result = stand.call(treasury, "treasury.deposit", extra=f"{SHELL}:{SHELL_DEPOSIT},{C7}:1000000,{C9}:500000",
+                                identity="user")
+            assert event_names(result).count("msig.deposited") == 3, event_names(result)
+            assert view()["balances"] == {SHELL: SHELL_DEPOSIT, C7: 1_000_000, C9: 500_000}
+
             # A transfer: the payout is in flight until the payee's callback settles it.
-            ident = settle_transfer(C7, 1_000)
-            result = act("carol", "treasury.execute", ident)
-            assert "msig.transfer_pending" in event_names(result), event_names(result)
-            view = treasury_view(stand.account_state(treasury))
-            assert view["pending"] == 0 and proposal(ident) is None, "the callback must settle in the same step"
-            assert view["balances"][C7] == 999_000, view
-            got = payee_view(stand.account_state(payee))
-            assert got["count"] == 1 and got["last"] == receipt(C7, ident, 1_000), got
+            ident = transfer(1_000)
+            queued = proposal(ident)
+            assert queued["status"] == STATUS_QUEUED and queued["eta"] == stand.time + DELAY, queued
+            pay(ident, 1_000)
+
+            # Revoking an approval reopens a queued proposal; approving again requeues it.
+            ident = transfer(300)
+            first_eta = proposal(ident)["eta"]
+            result = act("bob", "treasury.revoke", ident)
+            assert "msig.revoked" in event_names(result), event_names(result)
+            reopened = proposal(ident)
+            assert (reopened["status"], reopened["approvals"], reopened["eta"]) == (STATUS_OPEN, 0b001, 0), reopened
+            act("bob", "treasury.revoke", ident, expected=ERR_NOT_FOUND)  # nothing left to revoke
+            stand.advance(100)
+            act("carol", "treasury.approve", ident)
+            assert proposal(ident)["status"] == STATUS_QUEUED and proposal(ident)["eta"] > first_eta, "the clock restarts"
+            result = act("alice", "treasury.cancel", ident)
+            assert "msig.cancelled" in event_names(result), event_names(result)
+            assert proposal(ident) is None
 
             # A rejecting payee bounces the payout: funds return and the proposal is queued again.
             stand.call(payee, "treasury.payee.reject", b"\x01", identity="developer")
-            ident = settle_transfer(C7, 500)
+            ident = transfer(500)
+            wait_for(ident)
             act("carol", "treasury.execute", ident)
-            view = treasury_view(stand.account_state(treasury))
-            queued = proposal(ident)
-            assert view["pending"] == 0 and view["balances"][C7] == 999_000, view
-            assert queued and queued["status"] == STATUS_QUEUED, queued
-            assert payee_view(stand.account_state(payee))["count"] == 1
+            state = view()
+            assert state["pending"] == 0 and state["balances"][C7] == expected_c7[0], state
+            assert proposal(ident)["status"] == STATUS_QUEUED
+            assert payee_view(stand.account_state(payee))["count"] == delivered[0]
             assert "msig.transfer_failed" in stand.events_seen, stand.events_seen
-
             # The same proposal pays out once the payee accepts again.
             stand.call(payee, "treasury.payee.reject", b"\x00", identity="developer")
             act("carol", "treasury.execute", ident)
-            view = treasury_view(stand.account_state(treasury))
-            assert proposal(ident) is None and view["balances"][C7] == 998_500, view
-            got = payee_view(stand.account_state(payee))
-            assert got["count"] == 2 and got["last"] == receipt(C7, ident, 500), got
+            expected_c7[0] -= 500
+            delivered[0] += 1
+            assert proposal(ident) is None and view()["balances"][C7] == expected_c7[0]
 
-            # SET_POLICY gives C7 a fast lane for payouts up to 5_000; governance waits as always.
-            policy, _ = propose("alice", KIND_SET_POLICY, currency=C7, aux=1, amount=5_000)
-            act("bob", "treasury.approve", policy)
-            stand.advance(DELAY)
-            result = act("carol", "treasury.execute", policy)
+            # The delay is itself governed, and later proposals use the new value.
+            _, result = govern(KIND_SET_DELAY, aux=120)
+            assert "msig.delay_changed" in event_names(result), event_names(result)
+            assert view()["delay"] == 120
+            ident = transfer(100)
+            assert proposal(ident)["eta"] == stand.time + 120, "the new delay applies"
+            pay(ident, 100)
+            govern(KIND_SET_DELAY, aux=DELAY)
+            assert view()["delay"] == DELAY
+
+            # Raising the threshold demotes a queued proposal that no longer has enough approvals.
+            waiting = transfer(200)
+            assert proposal(waiting)["status"] == STATUS_QUEUED
+            _, result = govern(KIND_SET_THRESHOLD, aux=3)
+            assert "msig.threshold_changed" in event_names(result), event_names(result)
+            assert view()["threshold"] == 3
+            demoted = proposal(waiting)
+            assert (demoted["status"], demoted["eta"], bin(demoted["approvals"]).count("1")) == (STATUS_OPEN, 0, 2), demoted
+            act("carol", "treasury.approve", waiting)
+            assert proposal(waiting)["status"] == STATUS_QUEUED
+            pay(waiting, 200)
+            # Lowering it needs the new threshold, and promotes what already has enough.
+            govern(KIND_SET_THRESHOLD, approvers=("bob", "carol"), aux=2)
+            assert view()["threshold"] == 2
+
+            # SET_POLICY: C7 gets a fast lane up to 5_000 and at most 20_000 per 600-second window.
+            _, result = govern(KIND_SET_POLICY, currency=C7, aux=600, amount=5_000, target=le(20_000, 16))
             assert "msig.policy_set" in event_names(result), event_names(result)
-            assert treasury_view(stand.account_state(treasury))["policies"] == {C7: 5_000}
+            policy = view()["policies"][C7]
+            assert (policy["fast"], policy["limit"], policy["secs"], policy["spent"]) == (5_000, 20_000, 600, 0), policy
 
-            small, _ = propose("alice", KIND_TRANSFER, currency=C7, amount=4_000, target=recipient)
-            act("bob", "treasury.approve", small)
+            small = transfer(4_000)
             assert proposal(small)["eta"] == stand.time, "inside the fast lane there is no delay"
-            act("carol", "treasury.execute", small)  # no waiting
-            view = treasury_view(stand.account_state(treasury))
-            assert view["balances"][C7] == 994_500 and payee_view(stand.account_state(payee))["count"] == 3, view
+            pay(small, 4_000)
+            policy = view()["policies"][C7]
+            assert policy["spent"] == 4_000 and policy["start"] == stand.time, policy
+            window_start = policy["start"]
 
-            large, _ = propose("alice", KIND_TRANSFER, currency=C7, amount=5_001, target=recipient)
-            act("bob", "treasury.approve", large)
-            assert proposal(large)["eta"] == stand.time + DELAY, "above the fast limit the delay applies"
-            act("carol", "treasury.execute", large, expected=ERR_TIMELOCK)
-            result = act("alice", "treasury.cancel", large)
-            assert "msig.cancelled" in event_names(result), event_names(result)
-            assert proposal(large) is None
+            pay(transfer(5_001), 5_001)  # above the fast limit the delay applies
+            pay(transfer(9_000), 9_000)
+            assert view()["policies"][C7]["spent"] == 18_001
+
+            # Past the window limit the execution is refused and the proposal stays queued.
+            over = transfer(2_000)
+            wait_for(over)
+            act("carol", "treasury.execute", over, expected=ERR_LIMIT)
+            assert proposal(over)["status"] == STATUS_QUEUED and view()["policies"][C7]["spent"] == 18_001
+
+            # A bounced payout gives its allowance back.
+            stand.call(payee, "treasury.payee.reject", b"\x01", identity="developer")
+            bounced = transfer(1_000)
+            wait_for(bounced)
+            act("carol", "treasury.execute", bounced)
+            assert view()["policies"][C7]["spent"] == 18_001, "the bounce restores the allowance"
+            assert proposal(bounced)["status"] == STATUS_QUEUED
+            stand.call(payee, "treasury.payee.reject", b"\x00", identity="developer")
+
+            # Once the window is over a new one opens, and both queued payouts go through.
+            assert stand.time - window_start < 600
+            stand.advance(600 - (stand.time - window_start))
+            act("carol", "treasury.execute", over)
+            expected_c7[0] -= 2_000
+            delivered[0] += 1
+            policy = view()["policies"][C7]
+            assert (policy["spent"], policy["start"]) == (2_000, stand.time), policy
+            act("carol", "treasury.execute", bounced)
+            expected_c7[0] -= 1_000
+            delivered[0] += 1
+            assert view()["policies"][C7]["spent"] == 3_000
+            assert view()["balances"][C7] == expected_c7[0]
+            assert payee_view(stand.account_state(payee))["count"] == delivered[0]
 
             # Owners change only through proposals: add a fourth key, then remove it again.
-            add, _ = propose("alice", KIND_ADD_OWNER, target=outsider_key)
-            act("bob", "treasury.approve", add)
-            stand.advance(DELAY)
-            result = act("carol", "treasury.execute", add)
+            _, result = govern(KIND_ADD_OWNER, target=outsider_key)
             assert "msig.owner_added" in event_names(result), event_names(result)
-            view = treasury_view(stand.account_state(treasury))
-            assert view["owners"][3] == outsider_key.hex(), view
-            remove, _ = propose("alice", KIND_REMOVE_OWNER, target=outsider_key)
-            act("bob", "treasury.approve", remove)
-            stand.advance(DELAY)
-            result = act("carol", "treasury.execute", remove)
+            assert view()["owners"][3] == outsider_key.hex()
+            _, result = govern(KIND_REMOVE_OWNER, target=outsider_key)
             assert "msig.owner_removed" in event_names(result), event_names(result)
-            assert treasury_view(stand.account_state(treasury))["owners"][3] is None
+            assert view()["owners"][3] is None
 
             # One owner freezes everything; only a threshold-approved unfreeze lifts it.
-            waiting, _ = propose("alice", KIND_TRANSFER, currency=C9, amount=7, target=recipient)
-            act("bob", "treasury.approve", waiting)
-            stand.advance(DELAY)
+            waiting = transfer(7, currency=C9)
+            wait_for(waiting)
             result = stand.call(treasury, "treasury.freeze", identity="package-owner")
             assert "msig.frozen" in event_names(result), event_names(result)
-            assert treasury_view(stand.account_state(treasury))["frozen"] == 1
-            stand.call(treasury, "treasury.propose", propose_body(KIND_TRANSFER, currency=C7, amount=1, target=recipient),
+            assert view()["frozen"] == 1
+            stand.call(treasury, "treasury.propose",
+                       propose_body(KIND_TRANSFER, currency=C7, amount=1, target=recipient),
                        identity="developer", expected=ERR_FROZEN)
             act("carol", "treasury.execute", waiting, expected=ERR_FROZEN)
             unfreeze, _ = propose("bob", KIND_UNFREEZE)
@@ -323,10 +418,10 @@ def run(sdk, output):
             assert proposal(unfreeze)["eta"] == stand.time, "unfreezing has no delay"
             result = act("carol", "treasury.execute", unfreeze)
             assert "msig.unfrozen" in event_names(result), event_names(result)
-            assert treasury_view(stand.account_state(treasury))["frozen"] == 0
+            assert view()["frozen"] == 0
             act("carol", "treasury.execute", waiting)
-            view = treasury_view(stand.account_state(treasury))
-            assert view["balances"][C9] == 499_993 and view["pending"] == 0, view
+            final = view()
+            assert final["balances"][C9] == 499_993 and final["pending"] == 0, final
 
             missing = set(EVENTS) - stand.events_seen - {"msig.created"}
             assert not missing, missing
@@ -338,7 +433,7 @@ def run(sdk, output):
             assert inspect["queue"]["message_count"] == 0, inspect["queue"]
             for key in ["account_state_root", "registry_root", "cumulative_fee_shells", "accepted_input_count"]:
                 assert replay[key] == inspect[key], (key, replay[key], inspect[key])
-            summary = {"status": "PASS", "treasury": treasury, "payee": payee, "final": view,
+            summary = {"status": "PASS", "treasury": treasury, "payee": payee, "final": final,
                        "fuel_reserve_needed_shells": stand.fuel, "events_seen": sorted(stand.events_seen),
                        "events": events, "inspect": inspect, "replay": replay}
             output.write_text(json.dumps(summary, indent=2, default=str) + "\n")

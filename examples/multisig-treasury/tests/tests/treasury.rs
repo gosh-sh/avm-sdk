@@ -6,10 +6,11 @@ use std::collections::BTreeSet;
 
 use avm_multisig_treasury::{
     ids, payout_receipt, State, ERR_ARGS, ERR_AUTH, ERR_BALANCE, ERR_CALLBACK, ERR_CAPACITY,
-    ERR_DUPLICATE, ERR_EXPIRED, ERR_FROZEN, ERR_INSOLVENT, ERR_NOT_FOUND, ERR_NOT_READY,
+    ERR_DUPLICATE, ERR_EXPIRED, ERR_FROZEN, ERR_INSOLVENT, ERR_LIMIT, ERR_NOT_FOUND, ERR_NOT_READY,
     ERR_PENDING, ERR_STATE, ERR_THRESHOLD, ERR_TIMELOCK, ERR_VALUE, KIND_ADD_OWNER,
-    KIND_REMOVE_OWNER, KIND_SET_POLICY, KIND_TRANSFER, KIND_UNFREEZE, MAX_DELAY, MAX_PROPOSALS,
-    NO_PROPOSER, SHELL_CURRENCY_ID, STATE_BYTES, STATUS_EXECUTING, STATUS_OPEN, STATUS_QUEUED,
+    KIND_REMOVE_OWNER, KIND_SET_DELAY, KIND_SET_POLICY, KIND_SET_THRESHOLD, KIND_TRANSFER,
+    KIND_UNFREEZE, MAX_DELAY, MAX_PROPOSALS, NO_PROPOSER, SHELL_CURRENCY_ID, STATE_BYTES,
+    STATUS_EXECUTING, STATUS_OPEN, STATUS_QUEUED,
 };
 use common::*;
 
@@ -24,10 +25,24 @@ fn proposal(sim: &Sim, id: u64) -> avm_multisig_treasury::Proposal {
     state.proposals[state.proposal_index(id).expect("proposal exists")]
 }
 
+fn policy_target(window_limit: u128) -> [u8; 64] {
+    let mut target = [0; 64];
+    target[..16].copy_from_slice(&window_limit.to_le_bytes());
+    target
+}
+
 /// Passes a proposal that sets a spending policy.
-fn set_policy(sim: &mut Sim, currency: u32, fast: u128) {
-    let id = sim.propose_ok(OWNER_A, KIND_SET_POLICY, currency, 1, fast, [0; 64]);
+fn set_policy(sim: &mut Sim, currency: u32, fast: u128, limit: u128, secs: u32) {
+    let id = sim.propose_ok(OWNER_A, KIND_SET_POLICY, currency, secs, fast, policy_target(limit));
     accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+}
+
+/// Runs a transfer to completion: approvals, timelock, execute, delivery.
+fn pay(sim: &mut Sim, to: avm_contract_sdk::AccountAddress, currency: u32, amount: u128) {
+    let id = sim.transfer(OWNER_A, to, currency, amount);
+    accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+    let body = sim.outbox.last().unwrap().body.clone();
+    accepted(&sim.settle(to, Settle::Delivered(body)));
 }
 
 // ------------------------------------------------------- manifest vs code ---
@@ -36,7 +51,7 @@ fn set_policy(sim: &mut Sim, currency: u32, fast: u128) {
 fn the_manifest_matches_the_code() {
     let manifest = include_str!("../../contracts/treasury/avm-contract.toml");
     assert!(manifest.contains(&format!("len = {STATE_BYTES}")), "state length");
-    for code in (4000..=4017u32).filter(|code| *code != 4008) {
+    for code in 4000..=4017u32 {
         assert!(manifest.contains(&format!("status_code = {code}")), "error {code}");
     }
     for (name, _) in ids::EVENTS {
@@ -140,7 +155,7 @@ fn only_owners_may_act_and_governance_calls_carry_no_value() {
     let to = target_of(recipient(0));
     failure(&sim.propose(OUTSIDER, KIND_TRANSFER, C7, 0, 10, to), ERR_AUTH);
     let id = sim.transfer(OWNER_A, recipient(0), C7, 10);
-    for method in [ids::APPROVE, ids::CANCEL, ids::EXECUTE] {
+    for method in [ids::APPROVE, ids::REVOKE, ids::CANCEL, ids::EXECUTE] {
         failure(&sim.act(OUTSIDER, method, id), ERR_AUTH);
     }
     failure(&sim.freeze(OUTSIDER), ERR_AUTH);
@@ -174,15 +189,24 @@ fn every_proposal_kind_validates_its_payload() {
     failure(&sim.propose(OWNER_A, KIND_ADD_OWNER, C7, 0, 0, key_target(OWNER_D)), ERR_ARGS);
     failure(&sim.propose(OWNER_A, KIND_ADD_OWNER, 0, 0, 0, key_target(OWNER_B)), ERR_DUPLICATE);
     failure(&sim.propose(OWNER_A, KIND_REMOVE_OWNER, 0, 0, 0, key_target(OWNER_D)), ERR_NOT_FOUND);
+    // Threshold and delay.
+    failure(&sim.propose(OWNER_A, KIND_SET_THRESHOLD, 0, 0, 0, none), ERR_THRESHOLD);
+    failure(&sim.propose(OWNER_A, KIND_SET_THRESHOLD, 0, 4, 0, none), ERR_THRESHOLD);
+    failure(&sim.propose(OWNER_A, KIND_SET_THRESHOLD, 0, 2, 1, none), ERR_ARGS);
+    failure(&sim.propose(OWNER_A, KIND_SET_DELAY, 0, MAX_DELAY + 1, 0, none), ERR_ARGS);
+    failure(&sim.propose(OWNER_A, KIND_SET_DELAY, 0, 5, 0, to), ERR_ARGS);
     // Policies.
-    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, SHELL_CURRENCY_ID, 1, 5, none), ERR_ARGS);
-    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, C7, 1, 0, none), ERR_ARGS); // zero limit
-    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, C7, 2, 5, none), ERR_ARGS); // aux is 0 or 1
-    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, C7, 0, 0, none), ERR_NOT_FOUND);
-    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, C7, 0, 1, none), ERR_ARGS);
-    let mut dirty = [0; 64];
+    failure(
+        &sim.propose(OWNER_A, KIND_SET_POLICY, SHELL_CURRENCY_ID, 60, 1, policy_target(5)),
+        ERR_ARGS,
+    );
+    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, C7, 60, 1, policy_target(0)), ERR_ARGS);
+    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, C7, 60, 9, policy_target(5)), ERR_ARGS);
+    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, C7, 0, 0, policy_target(0)), ERR_NOT_FOUND);
+    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, C7, 0, 1, policy_target(0)), ERR_ARGS);
+    let mut dirty = policy_target(5);
     dirty[40] = 1;
-    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, C7, 1, 5, dirty), ERR_ARGS);
+    failure(&sim.propose(OWNER_A, KIND_SET_POLICY, C7, 60, 1, dirty), ERR_ARGS);
     // Unfreeze only makes sense while frozen.
     failure(&sim.propose(OWNER_A, KIND_UNFREEZE, 0, 0, 0, none), ERR_STATE);
     failure(&sim.propose(OWNER_A, 0, 0, 0, 0, none), ERR_ARGS);
@@ -245,6 +269,30 @@ fn extra_approvals_on_a_queued_proposal_are_kept_and_expire_with_it() {
     accepted(&sim.approve(OWNER_B, id));
     accepted(&sim.approve(OWNER_C, id));
     assert_eq!(proposal(&sim, id).approvals.count_ones(), 3);
+    // Revoking one approval keeps it queued while two remain.
+    accepted(&sim.revoke(OWNER_C, id));
+    assert_eq!(proposal(&sim, id).status, STATUS_QUEUED);
+    accepted(&sim.revoke(OWNER_B, id));
+    assert_eq!(proposal(&sim, id).status, STATUS_OPEN);
+    assert_eq!(proposal(&sim, id).eta, 0);
+}
+
+#[test]
+fn revoking_reopens_a_queued_proposal_and_requeueing_restarts_the_clock() {
+    let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
+    let id = sim.transfer(OWNER_A, recipient(0), C7, 5);
+    accepted(&sim.approve(OWNER_B, id));
+    let first_eta = proposal(&sim, id).eta;
+    accepted(&sim.revoke(OWNER_B, id));
+    let open = proposal(&sim, id);
+    assert_eq!((open.status, open.approvals, open.eta), (STATUS_OPEN, 0b001, 0));
+    assert_eq!(open.expires, open.created + TTL);
+    failure(&sim.revoke(OWNER_B, id), ERR_NOT_FOUND);
+    failure(&sim.revoke(OWNER_C, id), ERR_NOT_FOUND);
+    sim.advance(1_000);
+    accepted(&sim.approve(OWNER_C, id));
+    assert!(proposal(&sim, id).eta > first_eta, "the timelock restarts");
+    assert_eq!(sim.events, ["msig.approved", "msig.queued"]);
 }
 
 #[test]
@@ -425,10 +473,11 @@ fn one_payout_per_recipient_and_a_bounded_number_in_flight() {
 }
 
 #[test]
-fn an_executing_proposal_cannot_be_cancelled_or_approved_again() {
+fn an_executing_proposal_cannot_be_revoked_cancelled_or_approved_again() {
     let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
     let id = sim.transfer(OWNER_A, recipient(0), C7, 10);
     accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+    failure(&sim.revoke(OWNER_A, id), ERR_NOT_READY);
     failure(&sim.cancel(OWNER_A, id), ERR_NOT_READY);
     failure(&sim.approve(OWNER_C, id), ERR_NOT_READY);
     failure(&sim.execute(OWNER_A, id), ERR_NOT_READY);
@@ -439,7 +488,7 @@ fn an_executing_proposal_cannot_be_cancelled_or_approved_again() {
 #[test]
 fn the_fast_lane_skips_the_delay_for_small_transfers_only() {
     let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
-    set_policy(&mut sim, C7, 5_000);
+    set_policy(&mut sim, C7, 5_000, 100_000, 86_400);
     // Inside the fast lane: queued with eta = now, executable immediately.
     let small = sim.transfer(OWNER_A, recipient(0), C7, 5_000);
     accepted(&sim.approve(OWNER_B, small));
@@ -454,25 +503,76 @@ fn the_fast_lane_skips_the_delay_for_small_transfers_only() {
     assert_eq!(proposal(&sim, other).eta, sim.time + DELAY);
     failure(&sim.execute(OWNER_C, large), ERR_TIMELOCK);
     // Governance never gets a fast lane, whatever the policies say.
-    let owner = sim.propose_ok(OWNER_A, KIND_ADD_OWNER, 0, 0, 0, key_target(OWNER_D));
-    accepted(&sim.approve(OWNER_B, owner));
-    assert_eq!(proposal(&sim, owner).eta, sim.time + DELAY);
+    let delay = sim.propose_ok(OWNER_A, KIND_SET_DELAY, 0, 60, 0, [0; 64]);
+    accepted(&sim.approve(OWNER_B, delay));
+    assert_eq!(proposal(&sim, delay).eta, sim.time + DELAY);
+}
+
+#[test]
+fn the_window_limit_caps_outflow_and_rolls_over() {
+    let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
+    set_policy(&mut sim, C7, 0, 20_000, 86_400);
+    for index in 0..4u8 {
+        pay(&mut sim, recipient(index), C7, 5_000);
+    }
+    assert_eq!(sim.state().policy(C7).unwrap().spent, 20_000);
+    let extra = sim.transfer(OWNER_A, recipient(5), C7, 1);
+    failure(&sim.pass(extra, &[OWNER_A, OWNER_B]), ERR_LIMIT);
+    assert_eq!(
+        proposal(&sim, extra).status,
+        STATUS_QUEUED,
+        "a refused execution keeps the proposal"
+    );
+    // A new window starts once the old one is over (and the proposal is still valid).
+    sim.advance(86_400);
+    accepted(&sim.execute(OWNER_A, extra));
+    let policy = *sim.state().policy(C7).unwrap();
+    assert_eq!((policy.spent, policy.window_start), (1, sim.time));
+}
+
+#[test]
+fn a_bounced_transfer_gives_its_allowance_back() {
+    let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
+    set_policy(&mut sim, C7, 0, 10_000, 86_400);
+    let to = recipient(0);
+    let id = sim.transfer(OWNER_A, to, C7, 10_000);
+    accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+    assert_eq!(sim.state().policy(C7).unwrap().spent, 10_000);
+    accepted(&sim.settle(to, Settle::Bounced(vec![(C7, 10_000)])));
+    assert_eq!(sim.state().policy(C7).unwrap().spent, 0);
+    accepted(&sim.execute(OWNER_A, id));
+    assert_eq!(sim.state().policy(C7).unwrap().spent, 10_000);
+}
+
+#[test]
+fn a_bounce_after_the_window_rolled_over_does_not_touch_the_new_window() {
+    let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
+    set_policy(&mut sim, C7, 0, 10_000, 3_600);
+    let id = sim.transfer(OWNER_A, recipient(0), C7, 10_000);
+    accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+    sim.advance(3_600);
+    pay(&mut sim, recipient(1), C7, 4_000); // opens the next window
+    let spent = sim.state().policy(C7).unwrap().spent;
+    assert_eq!(spent, 4_000);
+    accepted(&sim.settle(recipient(0), Settle::Bounced(vec![(C7, 10_000)])));
+    assert_eq!(sim.state().policy(C7).unwrap().spent, spent);
 }
 
 #[test]
 fn policies_can_be_replaced_removed_and_are_bounded() {
     let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
-    set_policy(&mut sim, C7, 10);
-    set_policy(&mut sim, C7, 20);
-    assert_eq!(sim.state().policy(C7).unwrap().fast_limit, 20);
+    set_policy(&mut sim, C7, 10, 100, 60);
+    set_policy(&mut sim, C7, 20, 200, 120);
+    let policy = *sim.state().policy(C7).unwrap();
+    assert_eq!((policy.fast_limit, policy.window_limit, policy.window_secs), (20, 200, 120));
     assert_eq!(sim.state().policies.len(), 1);
-    let remove = sim.propose_ok(OWNER_A, KIND_SET_POLICY, C7, 0, 0, [0; 64]);
+    let remove = sim.propose_ok(OWNER_A, KIND_SET_POLICY, C7, 0, 0, policy_target(0));
     accepted(&sim.pass(remove, &[OWNER_A, OWNER_B]));
     assert!(sim.state().policies.is_empty());
     for currency in 20..24u32 {
-        set_policy(&mut sim, currency, 1);
+        set_policy(&mut sim, currency, 1, 2, 3);
     }
-    let fifth = sim.propose_ok(OWNER_A, KIND_SET_POLICY, 24, 1, 1, [0; 64]);
+    let fifth = sim.propose_ok(OWNER_A, KIND_SET_POLICY, 24, 3, 1, policy_target(2));
     failure(&sim.pass(fifth, &[OWNER_A, OWNER_B]), ERR_CAPACITY);
     assert_eq!(sim.state().policies.len(), 4, "a refused execution changes nothing");
 }
@@ -483,12 +583,12 @@ fn policies_can_be_replaced_removed_and_are_bounded() {
 fn owners_are_added_through_a_proposal_and_can_then_act() {
     let mut sim = Sim::new();
     let id = sim.propose_ok(OWNER_B, KIND_ADD_OWNER, 0, 0, 0, key_target(OWNER_D));
-    failure(&sim.propose(OWNER_D, KIND_TRANSFER, C7, 0, 1, target_of(recipient(0))), ERR_AUTH);
+    failure(&sim.propose(OWNER_D, KIND_SET_DELAY, 0, 5, 0, [0; 64]), ERR_AUTH);
     accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
     assert_eq!(sim.events, ["msig.owner_added"]);
     let state = sim.state();
     assert_eq!((state.owner_count(), state.owners[3]), (4, OWNER_D));
-    accepted(&sim.propose(OWNER_D, KIND_TRANSFER, C7, 0, 1, target_of(recipient(0))));
+    accepted(&sim.propose(OWNER_D, KIND_SET_DELAY, 0, 5, 0, [0; 64]));
     // Adding the same owner again is refused, at proposal time and at execution time.
     failure(&sim.propose(OWNER_A, KIND_ADD_OWNER, 0, 0, 0, key_target(OWNER_D)), ERR_DUPLICATE);
 }
@@ -509,7 +609,7 @@ fn removing_an_owner_strips_their_approvals_and_reopens_what_depended_on_them() 
     let mut sim = Sim::new();
     // `dependent` is queued by A and C; `orphan` was proposed by C.
     let dependent = sim.transfer(OWNER_A, recipient(0), C7, 5);
-    let orphan = sim.transfer(OWNER_C, recipient(1), C7, 7);
+    let orphan = sim.propose_ok(OWNER_C, KIND_SET_DELAY, 0, 10, 0, [0; 64]);
     let removal = sim.propose_ok(OWNER_A, KIND_REMOVE_OWNER, 0, 0, 0, key_target(OWNER_C));
     accepted(&sim.approve(OWNER_C, dependent));
     assert_eq!(proposal(&sim, dependent).status, STATUS_QUEUED);
@@ -537,13 +637,13 @@ fn removing_an_owner_strips_their_approvals_and_reopens_what_depended_on_them() 
 fn owner_removal_cannot_go_below_the_threshold() {
     let mut sim = Sim::with(2, &[OWNER_A, OWNER_B]);
     failure(&sim.propose(OWNER_A, KIND_REMOVE_OWNER, 0, 0, 0, key_target(OWNER_B)), ERR_THRESHOLD);
-    // Re-checked at execution: remove B first, then the queued removal of C must fail.
+    // Re-checked at execution: raise the threshold, then the queued removal must fail.
     let mut sim = Sim::new();
     let removal = sim.propose_ok(OWNER_A, KIND_REMOVE_OWNER, 0, 0, 0, key_target(OWNER_C));
     accepted(&sim.approve(OWNER_B, removal));
-    let other = sim.propose_ok(OWNER_A, KIND_REMOVE_OWNER, 0, 0, 0, key_target(OWNER_B));
-    accepted(&sim.pass(other, &[OWNER_A, OWNER_C]));
-    failure(&sim.execute(OWNER_A, removal), ERR_NOT_READY); // B's approval is gone
+    let raise = sim.propose_ok(OWNER_A, KIND_SET_THRESHOLD, 0, 3, 0, [0; 64]);
+    accepted(&sim.pass(raise, &[OWNER_A, OWNER_B]));
+    failure(&sim.execute(OWNER_A, removal), ERR_NOT_READY); // demoted by the new threshold
     accepted(&sim.approve(OWNER_C, removal));
     sim.advance(DELAY);
     failure(&sim.execute(OWNER_A, removal), ERR_THRESHOLD);
@@ -564,6 +664,41 @@ fn the_owner_set_is_capped_at_eight() {
     assert_eq!(proposal(&full, id).approvals, 0xff);
 }
 
+#[test]
+fn changing_the_threshold_demotes_and_promotes_pending_proposals() {
+    let mut sim = Sim::new();
+    let id = sim.transfer(OWNER_A, recipient(0), C7, 5);
+    accepted(&sim.approve(OWNER_B, id));
+    assert_eq!(proposal(&sim, id).status, STATUS_QUEUED);
+    let raise = sim.propose_ok(OWNER_A, KIND_SET_THRESHOLD, 0, 3, 0, [0; 64]);
+    accepted(&sim.pass(raise, &[OWNER_A, OWNER_B]));
+    assert_eq!(sim.events, ["msig.threshold_changed"]);
+    assert_eq!(proposal(&sim, id).status, STATUS_OPEN, "two approvals no longer suffice");
+    accepted(&sim.approve(OWNER_C, id));
+    assert_eq!(proposal(&sim, id).status, STATUS_QUEUED);
+    // Lowering it again promotes an open proposal that already has enough approvals.
+    let open = sim.transfer(OWNER_A, recipient(1), C7, 5);
+    accepted(&sim.approve(OWNER_B, open));
+    let lower = sim.propose_ok(OWNER_A, KIND_SET_THRESHOLD, 0, 1, 0, [0; 64]);
+    accepted(&sim.approve(OWNER_B, lower));
+    accepted(&sim.approve(OWNER_C, lower));
+    sim.advance(DELAY);
+    accepted(&sim.execute(OWNER_A, lower));
+    assert_eq!(proposal(&sim, open).status, STATUS_QUEUED);
+    assert_eq!(sim.state().threshold, 1);
+}
+
+#[test]
+fn the_delay_can_be_changed_and_applies_to_later_proposals() {
+    let mut sim = Sim::new();
+    let id = sim.propose_ok(OWNER_A, KIND_SET_DELAY, 0, 60, 0, [0; 64]);
+    accepted(&sim.pass(id, &[OWNER_A, OWNER_B]));
+    assert_eq!(sim.events, ["msig.delay_changed"]);
+    let next = sim.propose_ok(OWNER_A, KIND_SET_DELAY, 0, MAX_DELAY, 0, [0; 64]);
+    accepted(&sim.approve(OWNER_B, next));
+    assert_eq!(proposal(&sim, next).eta, sim.time + 60);
+}
+
 // ------------------------------------------------------------------ freeze ---
 
 #[test]
@@ -576,12 +711,13 @@ fn a_single_owner_can_freeze_but_only_the_owners_together_can_unfreeze() {
     assert_eq!(sim.events, ["msig.frozen"]);
     failure(&sim.freeze(OWNER_A), ERR_STATE);
     failure(&sim.propose(OWNER_A, KIND_TRANSFER, C7, 0, 1, target_of(recipient(2))), ERR_FROZEN);
-    failure(&sim.propose(OWNER_A, KIND_ADD_OWNER, 0, 0, 0, key_target(OWNER_D)), ERR_FROZEN);
+    failure(&sim.propose(OWNER_A, KIND_SET_DELAY, 0, 1, 0, [0; 64]), ERR_FROZEN);
     failure(&sim.approve(OWNER_B, waiting), ERR_FROZEN);
     sim.advance(DELAY);
     failure(&sim.execute(OWNER_A, live), ERR_FROZEN);
     // Housekeeping and funding still work.
     accepted(&sim.deposit(OUTSIDER, &[(C7, 1)]));
+    accepted(&sim.revoke(OWNER_A, waiting));
     accepted(&sim.cancel(OWNER_A, waiting));
     // Unfreezing is a proposal like any other, with no delay.
     let unfreeze = sim.propose_ok(OWNER_B, KIND_UNFREEZE, 0, 0, 0, [0; 64]);
@@ -651,7 +787,7 @@ fn the_decoder_rejects_every_non_canonical_state() {
     assert_eq!(State::decode(&bytes).err(), Some(ERR_STATE));
     // Dirty bytes in unused slots are refused in every table.
     let owners_end = 64 + 8 * 32;
-    for offset in [owners_end + 8 * 32 + 7 * 32, 576 + 7 * 32 + 3, 832 + 3 * 32, 2752 + 3 * 96 + 5]
+    for offset in [owners_end + 8 * 32 + 7 * 32, 576 + 7 * 32 + 3, 832 + 3 * 64, 2880 + 3 * 96 + 5]
     {
         assert_eq!(mutate(offset, 1), Some(ERR_STATE), "offset {offset}");
     }
@@ -665,7 +801,7 @@ fn proposals_cannot_be_forged_into_the_state() {
     let mut sim = Sim::funded(2, &[OWNER_A, OWNER_B, OWNER_C]);
     let id = sim.transfer(OWNER_A, recipient(0), C7, 5);
     accepted(&sim.approve(OWNER_B, id));
-    let base = 960; // first proposal slot
+    let base = 1088; // first proposal slot
     let good = sim.state.clone();
     let check = |offset: usize, value: u8| {
         let mut bytes = good.clone();
@@ -697,7 +833,7 @@ fn every_declared_event_is_emitted_with_valid_fields() {
     }
     accepted(&sim.deposit(OWNER_A, &[(SHELL_CURRENCY_ID, 100_000), (C7, 50_000)]));
     note!();
-    set_policy(&mut sim, C7, 100);
+    set_policy(&mut sim, C7, 100, 10_000, 3_600);
     note!();
     let add = sim.propose_ok(OWNER_A, KIND_ADD_OWNER, 0, 0, 0, key_target(OWNER_D));
     accepted(&sim.pass(add, &[OWNER_A, OWNER_B]));
@@ -705,12 +841,21 @@ fn every_declared_event_is_emitted_with_valid_fields() {
     let remove = sim.propose_ok(OWNER_A, KIND_REMOVE_OWNER, 0, 0, 0, key_target(OWNER_D));
     accepted(&sim.pass(remove, &[OWNER_A, OWNER_B]));
     note!();
+    let threshold = sim.propose_ok(OWNER_A, KIND_SET_THRESHOLD, 0, 2, 0, [0; 64]);
+    accepted(&sim.pass(threshold, &[OWNER_A, OWNER_B]));
+    note!();
+    let delay = sim.propose_ok(OWNER_A, KIND_SET_DELAY, 0, 30, 0, [0; 64]);
+    accepted(&sim.pass(delay, &[OWNER_A, OWNER_B]));
+    note!();
     let to = recipient(0);
     let id = sim.transfer(OWNER_A, to, C7, 10);
     note!();
     accepted(&sim.approve(OWNER_B, id));
     note!();
-    sim.advance(DELAY);
+    accepted(&sim.revoke(OWNER_B, id));
+    note!();
+    accepted(&sim.approve(OWNER_B, id));
+    sim.advance(60);
     accepted(&sim.execute(OWNER_A, id));
     note!();
     accepted(&sim.settle(to, Settle::Bounced(vec![(C7, 10)])));
