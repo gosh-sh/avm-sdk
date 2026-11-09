@@ -14,6 +14,7 @@ extern crate std;
 
 mod input;
 mod output;
+mod owner_key;
 mod runtime;
 
 pub use input::{
@@ -27,6 +28,7 @@ pub use output::{
     CodeUpgradeIntent, EncodeError, EventField, EventIntent, EventKind, EventValue, MessageOutput,
     OutboundIntent, StatePatch, StateUpdate,
 };
+pub use owner_key::{owner_key, set_owner_key, OWNER_KEY_BYTES};
 #[doc(hidden)]
 pub use runtime::{dispatch_batch, dispatch_init, dispatch_message, GuestArena};
 
