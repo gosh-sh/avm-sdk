@@ -93,13 +93,15 @@ precedence can expose an earlier failure before a later size check.
 
 `max_body_size = 65536` bounds every message body except that of a deploy that
 carries code. A code deploy, an external deploy with a non-zero `code_len`, may
-have a body of up to `max_code_deploy_body_size = 2228224` bytes: its fixed
+have a body of up to `max_code_deploy_body_size = 3145728` bytes: its fixed
 288-byte envelope, metadata, init data and the embedded WASM module, which
-`max_code_size = 2097152`, the WASM admission cap, bounds. The `init` input of
-a deploy contains the complete deploy message and keeps the 1048576-byte input
-cap above, so a deploy that carries more than about 1 MiB of code fails at
-`init`. Only an external deploy can carry code, and its code bytes are paid by
-the size-based [publication fee](fuel-and-fees.md#code-publication-fee).
+`max_code_size = 3145440`, the WASM admission cap, bounds. The `init` input of
+a code deploy contains the complete deploy message and has its own cap,
+`max_code_deploy_input_bytes = 3276800`; every other input keeps the
+1048576-byte input cap above. Only an external deploy can carry code, and its
+code bytes are paid by the size-based
+[publication fee](fuel-and-fees.md#code-publication-fee). On the network such a
+deploy completes in [two phases](contract-deploy.md#publish-new-code-the-two-phase-deploy).
 Reusing an already published selection avoids embedding its code again; such a
 deploy keeps the 65536-byte body limit and the init-data limits. Code admission
 also rejects a `br_table` instruction with more than 65520 targets.

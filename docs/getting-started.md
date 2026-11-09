@@ -83,6 +83,11 @@ Artifacts:
 - `contract.acab`: canonical ABI bytes;
 - `contract.descriptor`: canonical code descriptor.
 
+Contract A keeps its owner key after its 72 contract bytes
+(`owner_key_offset = 72`) and writes the deploy's `owner_id` there in `init`;
+only that key signs its external calls. See
+[owner key and external calls](owner-key-and-external-calls.md).
+
 Contract A accepts `AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY` only as 64 lowercase hex
 digits at compile time. This public key becomes part of the WASM and determines
 who may request its upgrade. Omitting it retains the fixed source-test owner,
@@ -94,7 +99,8 @@ already deployed contract.
 
 Use explicit logical timestamps. The stand does not read wall-clock time. A
 deployment address is derived from the package, owner, salt, and initialization
-data. The first unfunded attempt is intentionally side-effect free and returns
+data. The commands below deploy contract A with the package owner as its owner,
+so that the same key signs its calls and its upgrade. The first unfunded attempt is intentionally side-effect free and returns
 that exact address as a structured precondition.
 
 ```bash
@@ -109,6 +115,7 @@ avm-local-stand deploy \
   --descriptor "$ARTIFACTS/contract.descriptor" \
   --salt-hex 646576656c6f706572 \
   --init-json null \
+  --owner-id "$AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY" \
   --block-time 1800000000 \
   --created-at 1800000000 \
   --expire-at 1800003600 \
@@ -134,6 +141,7 @@ avm-local-stand deploy \
   --descriptor "$ARTIFACTS/contract.descriptor" \
   --salt-hex 646576656c6f706572 \
   --init-json null \
+  --owner-id "$AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY" \
   --block-time 1800000000 \
   --created-at 1800000000 \
   --expire-at 1800003600 \
@@ -152,7 +160,7 @@ avm-local-stand call \
   --address "$CONTRACT_ADDRESS" \
   --method causal.a.version \
   --args-json null \
-  --identity user \
+  --identity package-owner \
   --extra-currencies '' \
   --block-time 1800000010 \
   --created-at 1800000009 \
@@ -165,7 +173,8 @@ avm-local-stand inspect \
 ```
 
 Method names and JSON arguments must match the selected contract ABI. See each
-example's `avm-contract.toml`.
+example's `avm-contract.toml`. A call under another identity is rejected with
+`AccountKeyNotAllowed` and changes nothing.
 
 The `--fuel-fee-shells` value is a reserve of ordinary SHELL for chargeable
 execution, not a separate currency or account balance. Same-DApp messages can

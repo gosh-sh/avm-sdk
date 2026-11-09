@@ -121,7 +121,7 @@ disposable state because actual VM outcomes and state changes are preserved.
 
 ## Bundled examples
 
-All 17 contracts retain their own measured project file. Run
+All 18 contracts retain their own measured project file. Run
 `scripts/tests/measure_example_memory.py --collect-only` with its required tool
 and output arguments, then select resources with `measure_contract_resources.py`.
 Run the full collector again with `--collect-only --deployment` to check the

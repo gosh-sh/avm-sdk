@@ -46,6 +46,8 @@ See its manifest for measured ELF dependencies and the
 ## Documentation
 
 - [Getting Started](docs/getting-started.md)
+- [Owner Key And External Calls](docs/owner-key-and-external-calls.md)
+- [Contract Deploy](docs/contract-deploy.md)
 - [FUEL And SHELL](docs/fuel-and-fees.md)
 - [Runtime Limits, Rent And Addresses](docs/runtime-limits.md)
 - [Contract Memory Maximum And Local Checks](docs/contract-memory.md)

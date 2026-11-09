@@ -61,12 +61,17 @@ avm-local-stand <command> --state <path> --wasmtime-profile <path> [options]
 Commands and command-specific options:
 
 - `init`: `--dapp-id`.
-- `fund-user`: `--address`, `--shells`.
+- `fund-user`: `--address`, `--shells`, optional `--extra-currencies`
+  (`id:amount` entries separated by commas, in strictly ascending id order,
+  without SHELL, currency 2, which `--shells` credits).
 - `deploy`: either `--wasm` + `--acab` + `--descriptor`, or
   `--package-id` + `--selected-code-id`; plus `--salt-hex`, `--init-json`,
-  optional `--owner-id`, and the timestamp/fee options.
+  optional `--owner-id` (64 hex digits, default the `user` identity's key),
+  and the timestamp/fee options.
 - `call`: `--address`, `--method`, `--args-json`, `--identity`,
-  `--extra-currencies`, and the timestamp/fee options.
+  `--extra-currencies`, and the timestamp/fee options. The identity must hold
+  the destination's [owner key](owner-key-and-external-calls.md), and
+  `--extra-currencies` must be empty: an external call carries no value.
 - `publish-version`: `--wasm`, `--acab`, `--descriptor`, optional
   `--package-id`, `--salt-hex`, `--init-json`, optional `--owner-id`, and the
   timestamp/fee options.
