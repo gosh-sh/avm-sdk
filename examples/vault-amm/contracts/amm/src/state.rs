@@ -232,7 +232,14 @@ impl State {
     /// plus [`Self::in_flight`]. A settled payout leaves it; a bounced one
     /// returns to `held`.
     pub fn liability(&self, side: usize) -> Result<u128> {
-        self.held(side)?.checked_add(self.in_flight(side)?).ok_or(ERR_OVERFLOW)
+        // Same sum as `held + in_flight`, written as one pass to save guest bytes.
+        let mut total = self.held(side)?;
+        for entry in &self.pending {
+            if entry.currency == self.config.currency[side] {
+                total = total.checked_add(entry.amount).ok_or(ERR_OVERFLOW)?;
+            }
+        }
+        Ok(total)
     }
 
     pub fn receipt_seen(&self, hash: &[u8; 32]) -> bool {

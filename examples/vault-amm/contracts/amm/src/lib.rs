@@ -516,8 +516,8 @@ fn withdraw(
     account.balance[side] = account.balance[side].checked_sub(amount).ok_or(ERR_BALANCE)?;
     let id = state.withdraw_seq;
     state.withdraw_seq = id.checked_add(1).ok_or(ERR_OVERFLOW)?;
+    // The holder is now referenced by the pending entry, so no account needs compacting.
     state.pending.push(Pending { recipient, holder: actor, currency, amount, id });
-    state.compact();
     bump(&mut state);
     let event = Ev::new("amm.withdraw_pending")
         .topic(actor)
