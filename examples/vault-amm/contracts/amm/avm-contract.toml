@@ -362,7 +362,7 @@ name = "amount"
 [[abi.errors]]
 status_code = 3000
 name = "invalid_args"
-message = "invalid args"
+message = "bad args"
 
 [[abi.errors]]
 status_code = 3001
@@ -372,69 +372,69 @@ message = "unauthorized"
 [[abi.errors]]
 status_code = 3002
 name = "invalid_state"
-message = "invalid state"
+message = "bad state"
 
 [[abi.errors]]
 status_code = 3003
 name = "paused"
-message = "pool is paused"
+message = "paused"
 
 [[abi.errors]]
 status_code = 3004
 name = "invalid_value"
-message = "unexpected transferred value or currency"
+message = "bad value"
 
 [[abi.errors]]
 status_code = 3005
 name = "deadline"
-message = "deadline passed"
+message = "deadline"
 
 [[abi.errors]]
 status_code = 3006
 name = "slippage"
-message = "slippage bound violated"
+message = "slippage"
 
 [[abi.errors]]
 status_code = 3007
 name = "insufficient_balance"
-message = "insufficient ledger balance"
+message = "low balance"
 
 [[abi.errors]]
 status_code = 3008
 name = "no_liquidity"
-message = "pool has no usable liquidity"
+message = "no liquidity"
 
 [[abi.errors]]
 status_code = 3009
 name = "transfer_pending"
-message = "recipient already has a pending withdrawal"
+message = "payout pending"
 
 [[abi.errors]]
 status_code = 3010
 name = "invalid_callback"
-message = "invalid, stale or mismatched callback"
+message = "bad callback"
 
 [[abi.errors]]
 status_code = 3011
 name = "capacity"
-message = "account or pending slots exhausted"
+message = "capacity"
 
 [[abi.errors]]
 status_code = 3012
 name = "insolvent"
-message = "vault balance or SHELL reserve insufficient"
+message = "insolvent"
 
 [[abi.errors]]
 status_code = 3013
 name = "overflow"
-message = "arithmetic overflow"
+message = "overflow"
 
 [[abi.errors]]
 status_code = 3014
 name = "invariant"
-message = "constant-product invariant violated"
+message = "invariant"
 
 [[abi.errors]]
 status_code = 3015
 name = "zero_output"
-message = "result rounds to zero"
+message = "zero output"
