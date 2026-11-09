@@ -1,5 +1,11 @@
 # AVM SDK 0.3.0
 
+## Provisional bundled engine settings
+
+- `signals_based_traps` is a provisional development setting and may change before network acceptance.
+- `pooling_linear_memory_keep_resident` is a provisional development setting and may change before network acceptance.
+
+
 ## Changed
 
 - **Currencies:** explicit ECC balances/transfers; removed ambiguous main-currency fields; enabled currency ID `0`.
