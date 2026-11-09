@@ -106,12 +106,12 @@ class Stand:
         return address
 
     def call(self, address, method, body=b"", identity="user", extra="", expected=0):
-        stamps = self.timestamps()
+        stamps = self.timestamps(fee=1)
         args = json.dumps(body) if isinstance(body, int) else json.dumps("0x" + body.hex()) if body else "null"
         options = dict(address=address, method=method, args_json=args, identity=identity,
                        extra_currencies=extra)
         # Smallest FUEL reserve (1 SHELL = 1_000_000 FUEL, capped at 10_000_000) that lets the call
-        # finish, found on a copy of the state so the journey itself is unaffected.
+        # return the expected status on a copy of state. The main call also uses 1 SHELL.
         for shells in (1, 2, 3, 5, 10):
             probe = self.state.with_suffix(".probe")
             shutil.copyfile(self.state, probe)
@@ -127,6 +127,7 @@ class Stand:
                     break
         else:
             self.fuel.append((method, None))
+        assert self.fuel[-1][1] == 1, {"method": method, "fuel_bound": self.fuel[-1][1]}
         result = self.command("call", **options, **stamps)
         assert result["status"] == "ok", result
         raw = bytes.fromhex(result["raw_executor_output"])
