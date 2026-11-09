@@ -75,12 +75,12 @@ pub fn div_rem(numerator: U256, divisor: u128) -> Option<(U256, u128)> {
     if divisor == 0 {
         return None;
     }
-    if numerator.hi == 0 {
-        return Some((U256::from_u128(numerator.lo / divisor), numerator.lo % divisor));
-    }
     let mut quotient = U256::ZERO;
     let mut remainder: u128 = 0;
-    for index in (0..256).rev() {
+    // Shift-subtract division. It avoids the 128-bit division builtins, which
+    // would add about 1.2 KB to the guest; a high half of zero skips 128 steps.
+    let bits = if numerator.hi == 0 { 128 } else { 256 };
+    for index in (0..bits).rev() {
         let carry = remainder >> 127;
         remainder = (remainder << 1) | u128::from(numerator.bit(index));
         // With the carry set the true remainder is 2^128 + remainder, which
