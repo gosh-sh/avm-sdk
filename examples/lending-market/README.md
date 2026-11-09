@@ -137,3 +137,14 @@ The stand journey now requires every call probe to return the expected status at
 1 SHELL and executes the main calls with the same 1 SHELL reserve. Its state,
 payout and replay assertions therefore also run at that reserve. A probe requiring
 more FUEL fails the journey. Exact FUEL consumption remains unmeasured.
+
+The local-stand journey does not exercise `repay`, `remove_collateral`,
+`set_params` (including pausing), `collect_reserves`, or the `lend.params` event.
+These are covered by native tests only. Native tests use the std code path;
+the stand journey exercises the wasm32 guest runtime only for the paths it executes.
+
+The 1-SHELL reserve bound applies to the listed direct journey calls, including
+calls expected to return a contract error. Deployment uses a separate reserve.
+Outbound payouts are configured with a separate 10,000-SHELL fuel reserve;
+successful settlement does not establish a 1-SHELL bound for each downstream
+payout or callback message. Exact FUEL consumption remains unmeasured.
