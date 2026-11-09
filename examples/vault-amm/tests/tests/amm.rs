@@ -695,7 +695,8 @@ fn the_receipt_ring_wraps_without_losing_consistency() {
 #[test]
 fn only_callbacks_may_arrive_from_other_accounts() {
     let mut sim = alice_with_funds();
-    for method in [ids::DEPOSIT, ids::WITHDRAW, ids::SWAP_EXACT_IN, ids::COLLECT_FEES, ids::CALLBACK]
+    for method in
+        [ids::DEPOSIT, ids::WITHDRAW, ids::SWAP_EXACT_IN, ids::COLLECT_FEES, ids::CALLBACK]
     {
         failure(&internal_call(&sim, addr(5), method, &[]), ERR_AUTH);
     }
