@@ -19,8 +19,8 @@ const OFF_FLAGS: usize = 64;
 const OFF_RESERVES: usize = 72;
 const OFF_FEES: usize = 104;
 const OFF_LP_TOTAL: usize = 136;
-const OFF_LAST_TS: usize = 152;
-const OFF_CUMULATIVE: usize = 160;
+/// 40 bytes that held the TWAP accumulators in the first draft; they must be zero.
+const OFF_RESERVED: usize = 152;
 const OFF_OPS: usize = 192;
 const OFF_SEQ: usize = 200;
 const OFF_RECEIPT_POS: usize = 208;
@@ -129,9 +129,6 @@ pub struct State {
     pub fees: [u128; 2],
     /// Total LP shares, including the permanently locked minimum.
     pub lp_total: u128,
-    pub last_ts: u32,
-    /// Time-weighted price accumulators (UQ64.64 per second, wrapping).
-    pub cumulative: [u128; 2],
     pub ops: u64,
     pub withdraw_seq: u64,
     pub receipt_pos: u64,
@@ -148,8 +145,6 @@ impl State {
             reserve: [0; 2],
             fees: [0; 2],
             lp_total: 0,
-            last_ts: 0,
-            cumulative: [0; 2],
             ops: 0,
             withdraw_seq: 0,
             receipt_pos: 0,
@@ -259,7 +254,7 @@ impl State {
         if flags > 1 || bytes[OFF_FLAGS + 1..OFF_RESERVES] != [0; 7] {
             return Err(ERR_STATE);
         }
-        if bytes[OFF_LAST_TS + 4..OFF_CUMULATIVE] != [0; 4] {
+        if bytes[OFF_RESERVED..OFF_OPS] != [0; 40] {
             return Err(ERR_STATE);
         }
         let mut receipts = [[0; 32]; RECEIPT_SLOTS];
@@ -331,8 +326,6 @@ impl State {
             reserve: [read_u128(bytes, OFF_RESERVES)?, read_u128(bytes, OFF_RESERVES + 16)?],
             fees: [read_u128(bytes, OFF_FEES)?, read_u128(bytes, OFF_FEES + 16)?],
             lp_total: read_u128(bytes, OFF_LP_TOTAL)?,
-            last_ts: read_u32(bytes, OFF_LAST_TS)?,
-            cumulative: [read_u128(bytes, OFF_CUMULATIVE)?, read_u128(bytes, OFF_CUMULATIVE + 16)?],
             ops: read_u64(bytes, OFF_OPS)?,
             withdraw_seq: read_u64(bytes, OFF_SEQ)?,
             receipt_pos: read_u64(bytes, OFF_RECEIPT_POS)?,
@@ -351,10 +344,8 @@ impl State {
         for side in 0..2 {
             put(&mut bytes, OFF_RESERVES + side * 16, &self.reserve[side].to_le_bytes());
             put(&mut bytes, OFF_FEES + side * 16, &self.fees[side].to_le_bytes());
-            put(&mut bytes, OFF_CUMULATIVE + side * 16, &self.cumulative[side].to_le_bytes());
         }
         put(&mut bytes, OFF_LP_TOTAL, &self.lp_total.to_le_bytes());
-        put(&mut bytes, OFF_LAST_TS, &self.last_ts.to_le_bytes());
         put(&mut bytes, OFF_OPS, &self.ops.to_le_bytes());
         put(&mut bytes, OFF_SEQ, &self.withdraw_seq.to_le_bytes());
         put(&mut bytes, OFF_RECEIPT_POS, &self.receipt_pos.to_le_bytes());
@@ -397,11 +388,7 @@ impl State {
             if self.lp_total < MINIMUM_LIQUIDITY || self.reserve.contains(&0) {
                 return Err(ERR_STATE);
             }
-        } else if self.reserve != [0; 2]
-            || self.fees != [0; 2]
-            || self.cumulative != [0; 2]
-            || self.last_ts != 0
-        {
+        } else if self.reserve != [0; 2] || self.fees != [0; 2] {
             return Err(ERR_STATE);
         }
         let mut shares = self.locked_liquidity();
