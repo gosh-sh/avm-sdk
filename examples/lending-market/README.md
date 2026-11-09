@@ -132,3 +132,8 @@ Unaudited example code, not for real funds. Interest grows the index linearly
 between calls and compounds at each call, the price is a trusted admin feed, and
 there is a single collateral/debt pair. Liquidations are partial by design (50% close
 factor); a position can be liquidated again in the next call while it stays unhealthy.
+
+The stand journey now requires every call probe to return the expected status at
+1 SHELL and executes the main calls with the same 1 SHELL reserve. Its state,
+payout and replay assertions therefore also run at that reserve. A probe requiring
+more FUEL fails the journey. Exact FUEL consumption remains unmeasured.

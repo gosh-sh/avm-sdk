@@ -110,12 +110,12 @@ class Stand:
         return address
 
     def call(self, address, method, body=b"", identity="user", extra="", expected=0):
-        stamps = self.timestamps()
+        stamps = self.timestamps(fee=1)
         args = json.dumps(body) if isinstance(body, int) else json.dumps("0x" + body.hex()) if body else "null"
         options = dict(address=address, method=method, args_json=args, identity=identity,
                        extra_currencies=extra)
         # Probe the expected call status on copies of the state. Each SHELL buys
-        # 1_000_000 FUEL. The main journey checks settlement separately.
+        # 1_000_000 FUEL. The main call also uses 1 SHELL and checks settlement.
         for shells in (1, 2, 3, 5, 10):
             probe = self.state.with_suffix(".probe")
             shutil.copyfile(self.state, probe)
@@ -131,6 +131,7 @@ class Stand:
                     break
         else:
             self.fuel.append((method, None))
+        assert self.fuel[-1][1] == 1, {"method": method, "fuel_bound": self.fuel[-1][1]}
         result = self.command("call", **options, **stamps)
         assert result["status"] == "ok", result
         raw = bytes.fromhex(result["raw_executor_output"])
