@@ -96,6 +96,18 @@ unambiguous over intervals whose true cumulative delta does not wrap `2^128`;
 extreme ratios may exceed that domain even within one second.
 Worked example in the tests: pool 1_000_000 / 1_000_000, fee 30 bps, 10_000 in → 9_871 out.
 
+## SDK version compatibility
+
+The artifact sizes and passing local-stand/native-test evidence below belong to
+SDK 0.3.0 (`avm-dev-2662a32e7c91-sdk-93e34e16e449`) with Rust 1.93.0.
+SDK 0.4.0 uses Core-WASM V2 and a newer guest toolchain; this branch has **not**
+been rebuilt or exercised against SDK 0.4.0. Do not infer ABI, deploy-size,
+FUEL, callback or migration compatibility from the earlier validation.
+Before claiming 0.4.0 support, use a matching 0.4.0 SDK/compiler bundle,
+rebuild both contracts, compare generated ABI IDs, recalculate deploy-body sizes,
+run `scripts/check.sh` and `scripts/e2e.py` on a fresh matching local stand,
+and record the release identifiers and results. No Mainnet qualification is claimed.
+
 ## Verify
 
 ```sh
