@@ -234,6 +234,23 @@ impl State {
     pub fn held(&self, currency: u32) -> u128 {
         self.balances.iter().find(|b| b.currency == currency).map_or(0, |b| b.held)
     }
+    /// Reserve SHELL and every distinct currency that a pending payout may return.
+    /// A held currency and several pending payouts in that currency share one slot.
+    fn balance_slots(&self, additional: Option<u32>) -> usize {
+        let mut currencies = [0; MAX_BALANCES + MAX_PENDING + 2];
+        let mut count = 0;
+        for currency in core::iter::once(SHELL_CURRENCY_ID)
+            .chain(self.balances.iter().map(|entry| entry.currency))
+            .chain(self.pending.iter().map(|entry| entry.currency))
+            .chain(additional)
+        {
+            if !currencies[..count].contains(&currency) {
+                currencies[count] = currency;
+                count += 1;
+            }
+        }
+        count
+    }
     pub fn credit(&mut self, currency: u32, amount: u128) -> Result<()> {
         if amount == 0 {
             return Ok(());
@@ -242,7 +259,7 @@ impl State {
             entry.held = entry.held.checked_add(amount).ok_or(ERR_OVERFLOW)?;
             return Ok(());
         }
-        if self.balances.len() >= MAX_BALANCES {
+        if self.balance_slots(Some(currency)) > MAX_BALANCES {
             return Err(ERR_CAPACITY);
         }
         self.balances.push(Balance { currency, held: amount });
@@ -283,7 +300,13 @@ impl State {
         }
         let (frozen, balance_count, policy_count) = (bytes[1], bytes[2], bytes[3]);
         let (proposal_count, pending_count) = (bytes[56], bytes[57]);
-        if frozen > 1 || bytes[58] != 0 {
+        if frozen > 1
+            || bytes[58] != 0
+            || usize::from(balance_count) > MAX_BALANCES
+            || usize::from(policy_count) > MAX_POLICIES
+            || usize::from(proposal_count) > MAX_PROPOSALS
+            || usize::from(pending_count) > MAX_PENDING
+        {
             return Err(ERR_STATE);
         }
         let mut owners = [[0; 32]; MAX_OWNERS];
@@ -470,6 +493,9 @@ impl State {
             || self.proposals.len() > MAX_PROPOSALS
             || self.pending.len() > MAX_PENDING
         {
+            return Err(ERR_STATE);
+        }
+        if self.balance_slots(None) > MAX_BALANCES {
             return Err(ERR_STATE);
         }
         for (index, key) in self.owners.iter().enumerate() {

@@ -8,8 +8,8 @@
 //! changes except through a *proposal* that collects at least `threshold`
 //! approvals and then waits out a delay:
 //!
-//! * transfers pay a recipient through an acknowledged payout (the funds leave
-//!   only after the receiver's callback confirms or bounces them),
+//! * transfers send funds at execution and remain pending until a valid
+//!   callback confirms delivery or returns the principal,
 //! * per-currency policies let small transfers skip the delay (fast lane) and
 //!   cap what may leave per time window,
 //! * owners, the threshold, the delay and the policies are all changed by

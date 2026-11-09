@@ -8,7 +8,7 @@ contract, no dependencies beyond the SDK, no arithmetic beyond additions.
 |---|---|
 | `contracts/treasury` | the treasury (`avm-multisig-treasury`) and `rt.rs`, the guest runtime shared with the payee |
 | `contracts/payee` | fixture that receives a payout, echoes the receipt, or rejects it (exercises the bounce path) |
-| `tests` | 37 behaviour tests, 5 treasury↔payee integration tests, randomized invariant tests |
+| `tests` | 42 behaviour tests, 5 treasury↔payee integration tests, randomized invariant tests |
 | `scripts` | `gen_abi.py` (manifests + `ids.rs` from one description), `check.sh`, `e2e.py` (journey on `avm-local-stand`) |
 
 ## How it works
@@ -36,7 +36,8 @@ before it executes (the owner set, threshold and balances may have changed).
 
 **Freeze.** Any single owner can freeze the treasury. While frozen nothing can be
 proposed, approved or executed except an `UNFREEZE`; deposits, revokes, cancels and
-payout callbacks keep working, so a freeze can never trap value in flight.
+payout callbacks remain permitted. Settlement still requires a valid callback and
+available accounting capacity; there is no recovery method for missing or invalid callbacks.
 
 **Payouts.** A transfer debits the ledger first and sends the funds with a callback
 request. `TRS1 | currency u32 | proposal id u64 | amount u128` is the receipt the
@@ -44,9 +45,17 @@ payee must echo. A bounce returns the funds, restores the spending allowance and
 proposal back in the queue; one payout per recipient may be in flight (at most 4
 overall), so the callback's source address identifies the payout.
 
-**Safety net.** Every call re-validates the whole canonical state and checks that
-the contract physically holds at least what it believes it owns
-(`ERR_INSOLVENT` otherwise). A rejected call returns no effects.
+**Safety net.** Every call decodes and validates the structural state invariants.
+Ordinary calls additionally check physical balances against ledger holdings
+(`ERR_INSOLVENT` otherwise); callbacks skip that solvency check. A rejected call
+returns no effects. This is not a guarantee of complete insolvency detection.
+
+**Balance capacity.** Eight slots cover the distinct currencies held or pending,
+including one permanently reserved for SHELL: at most seven non-SHELL currencies.
+An emptied balance does not free its reservation while a payout can return that
+currency. New deposits cannot consume refund or SHELL reservations. The wire layout
+is unchanged, but previously persisted states exceeding this reservation limit are
+rejected; no existing-account migration or recovery is provided.
 
 ## Wire layouts (little endian)
 
@@ -85,12 +94,12 @@ Built with `avm-contract-build` (Rust 1.93.0):
 
 | | WASM | ACAB | descriptor |
 |---|---|---|---|
-| treasury | 56,198 B | 2,427 B | 66 B |
+| treasury | 56,658 B | 2,427 B | 66 B |
 | payee | 27,867 B | 355 B | 66 B |
 
 A treasury deploy body is WASM + ACAB + descriptor + init data + the envelope. With
 a 3-owner init (126 B) and a 289-byte envelope (the docs state 288) that is
-**59,106 B**, 6,430 B under `max_body_size = 65536`.
+**59,566 B**, 5,970 B under `max_body_size = 65536`.
 
 The same contracts built as ordinary `std` crates were much larger (treasury WASM
 66,234 B, a 69,165 B body, too big to deploy; the stand rejects a 66,701 B body with
@@ -113,8 +122,9 @@ a single `allow` on the `rt` module. The SDK itself is already `no_std` and its
 macro does not install an allocator, so there is no conflict.
 
 The heap holds a copy of the whole init input, which contains the deploy body, so
-it is sized by `max_body_size`, not by the steady state: the journey passes with a
-64 KiB heap (deploy body 59 KB) and fails at 32 KiB. At the largest allowed body,
+it is sized by `max_body_size`, not by the steady state: the original pre-fix journey passed with a
+64 KiB heap (deploy body 59 KB) and failed at 32 KiB. Those heap-size variants
+were not rerun for the capacity fix; its journey uses the configured 128 KiB heap. At the largest allowed body,
 65,536 B, the peak is estimated below 80 KB, which was not measured.
 
 Tried and not kept (measured on an earlier, reduced build of the treasury): `opt-level`
@@ -126,8 +136,9 @@ SDK). Nightly `build-std` and `panic_immediate_abort` were not used.
 
 ## Verified on `avm-local-stand`
 
-`scripts/e2e.py` passes against the stand. After every step it decodes the
-treasury state and compares it with what the script computed on its own.
+`scripts/e2e.py` asserts selected decoded fields and expected outcomes at
+checkpoints on the stand. It does not compare the complete state after every step
+against an independent model.
 
 - deploy a 2-of-3 treasury (the three stand identities) and a payee; bind them;
 - deposit C7, C9 and SHELL;
@@ -147,7 +158,8 @@ treasury state and compares it with what the script computed on its own.
   ends a new one opens and the refused transfer goes through;
 - add an owner, then remove it; freeze (propose and execute refused with `4003`),
   unfreeze without delay;
-- all 17 events appear on the stand, and the stand journal replays to the same roots.
+- all 17 event names are found in emitted bytes, and the stand journal replays to
+  the same roots. The journey does not decode and validate every event field.
 
 **FUEL.** All 88 calls of the journey fit in the smallest reserve the stand accepts,
 1 SHELL (1,000,000 FUEL); a reserve of 0 is refused (`RouteRequiresFee`). The stand
