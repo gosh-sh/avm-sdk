@@ -1,0 +1,10 @@
+[package]
+name = "avm-vault-tests"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+avm-contract-sdk = { path = "../../../crates/avm-contract-sdk" }
+avm-vault-amm = { path = "../contracts/amm", default-features = false }
+avm-vault-receiver = { path = "../contracts/receiver" }
