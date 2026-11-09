@@ -296,6 +296,60 @@ fn bad_debt_is_absorbed_by_reserves_first_then_by_suppliers() {
 }
 
 #[test]
+fn write_off_returns_unliquidatable_collateral_to_the_borrower() {
+    let mut sim = Sim::new();
+    accepted(&sim.set_price(2 * PRICE));
+    accepted(&sim.deposit(ALICE, &[(DEBT, 10)]));
+    accepted(&sim.amount(ALICE, ids::SUPPLY, 10));
+    accepted(&sim.deposit(BOB, &[(COL, 1)]));
+    accepted(&sim.amount(BOB, ids::ADD_COLLATERAL, 1));
+    accepted(&sim.amount(BOB, ids::BORROW, 1));
+    failure(&sim.call(OUTSIDER, ids::WRITE_OFF, &BOB, &[]), ERR_HEALTHY);
+
+    for percent in [160, 128, 103, 83, 67, 54, 50] {
+        accepted(&sim.set_price(PRICE / 100 * percent));
+    }
+    failure(&sim.liquidate(ALICE, BOB, 1), ERR_ZERO);
+    sim.advance(default_config().max_age + 1);
+    failure(&sim.call(OUTSIDER, ids::WRITE_OFF, &BOB, &[]), ERR_STALE);
+    accepted(&sim.set_price(PRICE / 2));
+    accepted(&sim.call(OUTSIDER, ids::WRITE_OFF, &BOB, &[]));
+    assert_eq!(sim.debt(BOB), 0);
+    assert_eq!(sim.account(BOB).collateral, 0);
+    assert_eq!(sim.account(BOB).balance[0], 1);
+    assert_eq!(sim.state().supply_value().unwrap(), 9);
+    sim.assert_accounting();
+}
+
+#[test]
+fn write_off_charges_reserves_the_change_in_aggregate_debt() {
+    let mut sim = live();
+    accepted(&sim.deposit(CAROL, &[(DEBT, 1)]));
+    let mut state = sim.state();
+    state.index = ONE + ONE / 2;
+    state.reserves = 2;
+    let bob = state.account_index(BOB).unwrap();
+    let carol = state.account_index(CAROL).unwrap();
+    state.accounts[bob].balance[0] = state.accounts[bob].collateral;
+    state.accounts[bob].collateral = 0;
+    state.accounts[bob].scaled = 1;
+    state.accounts[carol].scaled = 1;
+    state.total_collateral = 0;
+    state.total_scaled = 2;
+    assert_eq!(state.total_debt().unwrap(), 3);
+    assert_eq!(state.debt_of(1).unwrap(), 2);
+    let value_before = state.supply_value().unwrap();
+    sim.state = state.encode();
+
+    accepted(&sim.call(OUTSIDER, ids::WRITE_OFF, &BOB, &[]));
+    let after = sim.state();
+    assert_eq!(after.total_debt().unwrap(), 2);
+    assert_eq!(after.reserves, 1);
+    assert_eq!(after.supply_value().unwrap(), value_before);
+    sim.assert_accounting();
+}
+
+#[test]
 fn write_off_needs_a_dead_position() {
     let mut sim = live();
     failure(&sim.call(ALICE, ids::WRITE_OFF, &BOB, &[]), ERR_HEALTHY); // no debt

@@ -9,7 +9,7 @@ payouts**. One contract, no dependencies beyond the SDK.
 |---|---|
 | `contracts/lending` | the market (`avm-lending-market`): `state.rs` (canonical state), `math.rs` (256-bit `mul_div`, rate curve), `rt.rs` (`no_std` guest runtime) |
 | `contracts/payee` | fixture that receives a payout, echoes the receipt, or rejects it (exercises the bounce path) |
-| `tests` | 31 behaviour tests, 8 market↔payee integration tests, 1 randomized invariant test (40 seeds × 1,500 steps + crash scenarios) |
+| `tests` | 33 behaviour tests, 8 market↔payee integration tests, 1 randomized invariant test (40 seeds × 1,500 steps + crash scenarios) |
 | `scripts` | `gen_abi.py` (manifests + `ids.rs` from one description), `check.sh`, `e2e.py` (a loan's life on `avm-local-stand`) |
 | `docs/SPEC.md` | the accounting rules and rounding directions |
 
@@ -33,26 +33,32 @@ ever pushed to a user; money leaves only through `withdraw`.
   liquidated by anyone: the liquidator repays at most **50%** of the debt (rounded up)
   and takes collateral worth the repayment plus `bonus`. If the collateral cannot
   cover the bonus the liquidator takes all of it and pays only what it is worth.
-- **Bad debt.** When all collateral is gone but debt remains, anyone can call
-  `write_off`: the protocol reserves absorb the loss first, then suppliers share
-  the remainder through the share price.
+- **Bad debt.** Anyone can call `write_off` when debt remains and collateral is gone.
+  An unhealthy position also qualifies at a fresh price if its entire collateral
+  would yield zero liquidation repayment. In that case the collateral returns to
+  the borrower’s idle balance. Reserves absorb the decrease in aggregate debt
+  first, then suppliers share the remaining loss.
 - **Price.** The admin feeds the price (borrowed units per collateral unit, scaled
   by 1e18). Each update may move it by at most `max_move` relative to the last one,
   and `borrow`, `remove_collateral` (with debt) and `liquidate` refuse a price older
-  than `max_age`. The oracle is the one trusted input of this example.
+  than `max_age`. The admin controls the feed and can update it repeatedly. The move cap applies
+  to each update separately.
 - **Admin.** `set_price`, `set_params` (rate curve, LTV, bonus, reserve factor, price
-  guards and the pause switch, all within hard bounds that keep liquidation sound),
+  guards and the pause switch, within configured bounds),
   `collect_reserves`. Pausing stops new supply, collateral and borrowing only;
   repayment, redemption, collateral exit, liquidation and withdrawal stay open.
 - **Withdrawals.** `withdraw` debits the ledger first and sends the funds with a
   callback request. The receipt `LND1 | currency u32 | id u64 | amount u128` is echoed
   by an accepting receiver. A bounce returns the exact principal into the ledger. One
   payout per recipient may be in flight (at most 8), so the callback source identifies it.
+  Settlement trusts the native callback status and checks a bounded history of cause
+  hashes. The echo is a payee fixture assertion.
 
 **Safety net.** Every call re-validates the whole canonical state (totals equal the
 sums over accounts, index ≥ 1, no empty or duplicate accounts, pending payouts
-consistent) and checks that the contract physically holds at least what the ledger
-says (`ERR_INSOLVENT` otherwise). A rejected call returns no effects.
+consistent) and ordinary calls check that the contract physically holds at least what the ledger
+says (`ERR_INSOLVENT` otherwise). Deposits use the post-credit balance for the
+second check. A rejected call returns no effects.
 
 ## Wire layouts (little endian)
 
@@ -93,7 +99,9 @@ python3 scripts/e2e.py --sdk ~/.local/share/avm-sdk/current
 supply, collateral, borrowing, thirty days of interest, a price falling in steps of
 at most 20%, liquidation in rounds, a write-off, redemption and withdrawals
 (delivered, bounced by a payee that rejects, delivered again). It carries its own
-model of the accounting and compares the decoded state with it after every step.
+model of the accounting and compares decoded accounting fields and accounts at
+checkpoints. FUEL probes compare the call status on copies of the stand state.
+The main journey checks settlement separately. The peak heap is unmeasured.
 
 The randomized test checks after every accepted call that the ledger equals the
 physical balance **exactly** for both currencies, that everything ever deposited is
@@ -107,8 +115,10 @@ a rejected call changes nothing.
 The contract was designed for the 65,536-byte deploy-body limit from the start: it
 is `no_std` on `wasm32` (the allocator and panic handler in `rt.rs`, the same as in
 the other examples), has no sort or formatting code, a handful of short events, and
-one fixed-size state. The numbers for a build with `avm-contract-build` are recorded
-in the pull request description.
+one fixed-size state. With SDK 0.4.0 and Rust 1.99.1, the lending build produces
+58,576 B of WASM, 1,861 B of ACAB and a 66 B descriptor. With 80 B of init data
+and the SDK's 288 B deploy envelope, the calculated deploy body is 60,871 B,
+leaving 4,665 B under the limit.
 
 ## Scope and limits
 

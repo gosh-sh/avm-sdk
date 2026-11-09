@@ -223,10 +223,8 @@ fn mul_div(a: u128, b: u128, c: u128) -> Result<u128> {
     mul_div_floor(a, b, c).ok_or(ERR_OVERFLOW)
 }
 
-/// The market must physically hold everything it believes it owes. The check
-/// holds whether `input.extra` is the balance before or after this message's own
-/// transfer, so it never depends on that detail. Native callbacks validate their
-/// returned principal separately.
+/// The physical balance must cover the ledger. The second check in `deposit`
+/// uses the post-credit balance. Native callbacks validate returned principal separately.
 fn check_solvency(state: &State, balance: CurrencyAmounts<'_>) -> Result<()> {
     for side in 0..2 {
         if amount_of(balance, state.config.currency[side]) < state.held(side)? {
@@ -352,7 +350,7 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
         ids::BORROW => borrow(&mut state, actor, amount_arg(body)?, now)?,
         ids::REPAY => repay(&mut state, actor, amount_arg(body)?)?,
         ids::LIQUIDATE => liquidate(&mut state, actor, body, now)?,
-        ids::WRITE_OFF => write_off(&mut state, actor, body)?,
+        ids::WRITE_OFF => write_off(&mut state, actor, body, now)?,
         ids::WITHDRAW => return withdraw(state, actor, body, &input),
         ids::SET_PRICE => set_price(&mut state, actor, amount_arg(body)?, now)?,
         ids::SET_PARAMS => set_params(&mut state, actor, body)?,
@@ -539,21 +537,36 @@ fn liquidate(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> Resul
     Ok(action(ACT_LIQUIDATE, actor, borrower, repaid, seized))
 }
 
-/// Forgives the debt of a borrower whose collateral is gone. Anyone may call it:
-/// the reserves pay first, the suppliers share what is left.
-fn write_off(state: &mut State, actor: [u8; 32], body: &[u8]) -> Result<Ev> {
+/// Clears bad debt when there is no collateral left or the collateral cannot
+/// fund even one unit of liquidation repayment. Dust returns to the borrower.
+fn write_off(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> Result<Ev> {
     expect_len(body, 32)?;
     let borrower: [u8; 32] = array(body, 0)?;
     let target = state.account_index(borrower).ok_or(ERR_ARGS)?;
     let account = state.accounts[target];
-    if account.scaled == 0 || account.collateral != 0 {
+    if account.scaled == 0 {
         return Err(ERR_HEALTHY);
     }
-    let loss = state.debt_of(account.scaled)?;
-    let absorbed = loss.min(state.reserves);
-    state.reserves -= absorbed;
+    if account.collateral != 0 {
+        let price = fresh_price(state, now)?;
+        let value = mul_div(account.collateral, price, ONE)?;
+        let bonus = BPS + u128::from(state.config.bonus);
+        if state.debt_of(account.scaled)? <= limit(account.collateral, price, state.config.liq)?
+            || mul_div(value, BPS, bonus)? != 0
+        {
+            return Err(ERR_HEALTHY);
+        }
+        state.accounts[target].balance[0] =
+            account.balance[0].checked_add(account.collateral).ok_or(ERR_OVERFLOW)?;
+        state.accounts[target].collateral = 0;
+        state.total_collateral -= account.collateral;
+    }
+    let before = state.total_debt()?;
     state.total_scaled -= account.scaled;
     state.accounts[target].scaled = 0;
+    let loss = before - state.total_debt()?;
+    let absorbed = loss.min(state.reserves);
+    state.reserves -= absorbed;
     Ok(action(ACT_WRITE_OFF, actor, borrower, loss, absorbed))
 }
 
