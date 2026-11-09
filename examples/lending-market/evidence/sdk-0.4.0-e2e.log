@@ -1,0 +1,32 @@
+lending-market journey PASS: /tmp/lending-market-e2e040.json
+debt after 30 days: 120316 (borrowed 120000); liquidations: 4; write-off loss 14624, absorbed by reserves 31
+FUEL probe (smallest tried reserve with expected status in SHELL, 1 SHELL = 1,000,000 FUEL; cap 10):
+       <= 1 M  lend.topup
+       <= 1 M  lend.payee.bind
+       <= 1 M  lend.set_price
+       <= 1 M  lend.set_price
+       <= 1 M  lend.deposit
+       <= 1 M  lend.deposit
+       <= 1 M  lend.deposit
+       <= 1 M  lend.supply
+       <= 1 M  lend.add_collateral
+       <= 1 M  lend.borrow
+       <= 1 M  lend.borrow
+       <= 1 M  lend.set_price
+       <= 1 M  lend.set_price
+       <= 1 M  lend.set_price
+       <= 1 M  lend.liquidate
+       <= 1 M  lend.set_price
+       <= 1 M  lend.liquidate
+       <= 1 M  lend.set_price
+       <= 1 M  lend.liquidate
+       <= 1 M  lend.set_price
+       <= 1 M  lend.liquidate
+       <= 1 M  lend.liquidate
+       <= 1 M  lend.write_off
+       <= 1 M  lend.redeem
+       <= 1 M  lend.withdraw
+       <= 1 M  lend.payee.reject
+       <= 1 M  lend.withdraw
+       <= 1 M  lend.payee.reject
+       <= 1 M  lend.withdraw

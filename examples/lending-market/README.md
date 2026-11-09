@@ -9,7 +9,7 @@ payouts**. One contract, no dependencies beyond the SDK.
 |---|---|
 | `contracts/lending` | the market (`avm-lending-market`): `state.rs` (canonical state), `math.rs` (256-bit `mul_div`, rate curve), `rt.rs` (`no_std` guest runtime) |
 | `contracts/payee` | fixture that receives a payout, echoes the receipt, or rejects it (exercises the bounce path) |
-| `tests` | 31 behaviour tests, 5 math unit tests, 8 market↔payee integration tests, 1 randomized invariant test (40 seeds × 1,500 steps + crash scenarios) |
+| `tests` | 33 behaviour tests, 5 math unit tests, 8 market↔payee integration tests, 1 randomized invariant test (40 seeds × 1,500 steps + crash scenarios) |
 | `scripts` | `gen_abi.py` (manifests + `ids.rs` from one description), `check.sh`, `e2e.py` (a loan's life on `avm-local-stand`) |
 | `docs/SPEC.md` | the accounting rules and rounding directions |
 
@@ -116,12 +116,15 @@ The contract was designed for the 65,536-byte deploy-body limit from the start: 
 is `no_std` on `wasm32` (the allocator and panic handler in `rt.rs`, the same as in
 the other examples), has no sort or formatting code, a handful of short events, and
 one fixed-size state. With SDK 0.4.0 and Rust 1.99.1, the lending build produces
-57,935 B of WASM, 1,861 B of ACAB and a 66 B descriptor. With 80 B of init data
+58,576 B of WASM, 1,861 B of ACAB and a 66 B descriptor. With 80 B of init data
 and a conservatively counted 289 B deploy envelope, the calculated deploy body is
-**60,231 B**, leaving **5,305 B** under the 65,536 B limit. The upstream
-`docs/runtime-limits.md` describes a 288 B envelope; the one-byte difference is
-not independently measured here, so this example retains 289 B for conservative
-size accounting. Rebuild and remeasure when changing the SDK, toolchain or source.
+**60,872 B**, leaving **4,664 B** under the 65,536 B limit. Using the upstream
+`docs/runtime-limits.md` envelope of 288 B gives **60,871 B** and 4,665 B headroom.
+The one-byte envelope difference is not independently measured here.
+The previously documented 60,231 B used 57,935 B of WASM and was not reproduced
+at the current source revision; it is not the authoritative current-build size.
+See [VALIDATION-0.4.0.md](VALIDATION-0.4.0.md) and the accompanying artifact hashes
+and executed logs. Rebuild and remeasure when changing SDK, toolchain or source.
 
 ## Scope and limits
 
