@@ -7,6 +7,9 @@ class ProbeStand(Stand):
     def command(self,operation,**options):
         if operation=='fund-user': options['shells']=10**12
         return super().command(operation,**options)
+# Deployed without --owner-id, the ledger keeps the User key, the stand's default
+# owner_id, at its owner_key_offset; only User externals reach it.
+OWNER='user'
 def account(s,address):return next(a for a in s.command('inspect')['accounts'] if a['address']==address)
 def check_replay(s):
     i=s.command('inspect');r=s.command('replay');assert r['status']=='ok',r
@@ -27,7 +30,7 @@ def run(sdk,out):
      sub=folder/str(elapsed);sub.mkdir();b=ProbeStand(sdk,sub);shutil.copyfile(s.state,b.state)
      b.time=s.time+elapsed-1;b.selections=s.selections.copy()
      before=int(b.command('inspect')['cumulative_fee_shells'])
-     call=b.call(address,'hub.audit.status');after=b.command('inspect')
+     call=b.call(address,'hub.audit.status',identity=OWNER);after=b.command('inspect')
      aa=next(a for a in after['accounts'] if a['address']==address)
      assert aa['storage_due_payment']=='0' and aa['storage_unpaid_tx_count']==0
      assert aa['storage_last_paid']==s.time+elapsed
@@ -43,7 +46,7 @@ def run(sdk,out):
    # Existing legacy code must authorize its own upgrade. Test, don't assume.
    folder=work/'upgrade';folder.mkdir();s=ProbeStand(sdk,folder);s.command('init',dapp_id=DAPP)
    address=s.deploy('legacy-audit','legacy-upgrade',bytes([3]))
-   old_selection=s.selections['legacy-audit'];old=s.call(address,'hub.audit.status')['raw_state']
+   old_selection=s.selections['legacy-audit'];old=s.call(address,'hub.audit.status',identity=OWNER)['raw_state']
    artifacts=COMPACT/'target/avm'
    publish_options=dict(wasm=str(artifacts/'contract.wasm'),acab=str(artifacts/'contract.acab'),descriptor=str(artifacts/'contract.descriptor'),package_id=old_selection['package_id'],salt_hex='1234',init_json=json.dumps('0x03'),**s.timestamps())
    pub=s.command('publish-version',**publish_options)
@@ -57,7 +60,7 @@ def run(sdk,out):
    attempts=[]
    for identity in ['developer','package-owner','user']:
     up=s.command('upgrade',address=address,selected_code_id=target,migration_payload_hex='',identity=identity,**s.timestamps())
-    after=s.call(address,'hub.audit.status')['raw_state'];assert after==old
+    after=s.call(address,'hub.audit.status',identity=OWNER)['raw_state'];assert after==old
     assert account(s,address)['canonical_byte_length']==65599
     # Require explicit rejection, not merely an unchanged state assertion.
     raw=bytes.fromhex(up.get('raw_executor_output',''))
