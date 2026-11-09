@@ -1,5 +1,6 @@
 [descriptor]
 execution_mode = "account_batch"
+owner_key_offset = 8
 state_schema_id = "4437e300dadcfbe77b4cb5a88f59be6773293eabb61fc4d34f17d74c0deac557"
 
 [descriptor.batch]

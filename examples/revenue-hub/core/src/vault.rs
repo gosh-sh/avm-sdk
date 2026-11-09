@@ -1,8 +1,10 @@
 use crate::*;
 
-pub const CONFIG_BYTES: usize = 1792;
-pub const STATE_BYTES: usize = 3560;
-pub const MEMBER_STATE_BASE: usize = 1896;
+pub const CONFIG_BYTES: usize = 2400;
+pub const STATE_BYTES: usize = 4168;
+pub const MEMBERS_BASE: usize = 224;
+pub const MEMBER_BYTES: usize = 136;
+pub const MEMBER_STATE_BASE: usize = 2504;
 pub const MEMBER_STATE_BYTES: usize = 104;
 pub const PAUSE: u8 = 1;
 pub const RESUME: u8 = 2;
@@ -10,19 +12,19 @@ pub const SET_FUEL: u8 = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Member {
-    pub key: [u8; 32],
+    pub wallet: AccountAddress,
     pub destination: AccountAddress,
     pub weight: u16,
 }
 impl Default for Member {
     fn default() -> Self {
-        Self { key: [0; 32], destination: zero_address(), weight: 0 }
+        Self { wallet: zero_address(), destination: zero_address(), weight: 0 }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
-    pub signers: [[u8; 32]; 3],
+    pub signers: [AccountAddress; 3],
     pub delay: u32,
     pub vote_window: u32,
     pub initial_fuel: u128,
@@ -31,31 +33,31 @@ pub struct Config {
 }
 impl Config {
     pub fn decode(b: &[u8]) -> HubResult<Self> {
-        if b.len() != CONFIG_BYTES || b[121..128] != [0; 7] {
+        if b.len() != CONFIG_BYTES || b[217..MEMBERS_BASE] != [0; 7] {
             return Err(E_ARGS);
         }
-        let mut signers = [[0; 32]; 3];
+        let mut signers = [zero_address(); 3];
         for (i, k) in signers.iter_mut().enumerate() {
-            *k = array(b, i * 32)?;
+            *k = address_at(b, i * 64)?;
         }
         let mut members = [Member::default(); MAX_MEMBERS];
         for (i, m) in members.iter_mut().enumerate() {
-            let o = 128 + i * 104;
-            if b[o + 98..o + 104] != [0; 6] {
+            let o = MEMBERS_BASE + i * MEMBER_BYTES;
+            if b[o + 130..o + MEMBER_BYTES] != [0; 6] {
                 return Err(E_ARGS);
             }
             *m = Member {
-                key: array(b, o)?,
-                destination: address_at(b, o + 32)?,
-                weight: u16::from_le_bytes(array(b, o + 96)?),
+                wallet: address_at(b, o)?,
+                destination: address_at(b, o + 64)?,
+                weight: u16::from_le_bytes(array(b, o + 128)?),
             };
         }
         let c = Self {
             signers,
-            delay: u32_at(b, 96)?,
-            vote_window: u32_at(b, 100)?,
-            initial_fuel: u128_at(b, 104)?,
-            count: b[120],
+            delay: u32_at(b, 192)?,
+            vote_window: u32_at(b, 196)?,
+            initial_fuel: u128_at(b, 200)?,
+            count: b[216],
             members,
         };
         c.validate()?;
@@ -72,19 +74,19 @@ impl Config {
                 .signers
                 .iter()
                 .enumerate()
-                .any(|(i, k)| *k == [0; 32] || self.signers[..i].contains(k))
+                .any(|(i, k)| !nonzero_address(*k) || self.signers[..i].contains(k))
         {
             return Err(E_ARGS);
         }
         let mut total = 0u32;
         for (i, m) in self.members.iter().enumerate() {
             if i < n {
-                if m.key == [0; 32]
+                if !nonzero_address(m.wallet)
                     || !nonzero_address(m.destination)
                     || m.weight == 0
                     || self.members[..i]
                         .iter()
-                        .any(|p| p.key == m.key || p.destination == m.destination)
+                        .any(|p| p.wallet == m.wallet || p.destination == m.destination)
                 {
                     return Err(E_ARGS);
                 }
@@ -101,22 +103,23 @@ impl Config {
     pub fn encode(&self) -> Vec<u8> {
         let mut b = vec![0; CONFIG_BYTES];
         for (i, k) in self.signers.iter().enumerate() {
-            b[i * 32..i * 32 + 32].copy_from_slice(k);
+            put_address(&mut b, i * 64, *k);
         }
-        b[96..100].copy_from_slice(&self.delay.to_le_bytes());
-        b[100..104].copy_from_slice(&self.vote_window.to_le_bytes());
-        b[104..120].copy_from_slice(&self.initial_fuel.to_le_bytes());
-        b[120] = self.count;
+        b[192..196].copy_from_slice(&self.delay.to_le_bytes());
+        b[196..200].copy_from_slice(&self.vote_window.to_le_bytes());
+        b[200..216].copy_from_slice(&self.initial_fuel.to_le_bytes());
+        b[216] = self.count;
         for (i, m) in self.members.iter().enumerate() {
-            let o = 128 + i * 104;
-            b[o..o + 32].copy_from_slice(&m.key);
-            put_address(&mut b, o + 32, m.destination);
-            b[o + 96..o + 98].copy_from_slice(&m.weight.to_le_bytes());
+            let o = MEMBERS_BASE + i * MEMBER_BYTES;
+            put_address(&mut b, o, m.wallet);
+            put_address(&mut b, o + 64, m.destination);
+            b[o + 128..o + 130].copy_from_slice(&m.weight.to_le_bytes());
         }
         b
     }
-    pub fn signer(&self, key: [u8; 32]) -> HubResult<usize> {
-        self.signers.iter().position(|k| *k == key).ok_or(E_AUTH)
+    /// Index of the governance wallet that sent this call.
+    pub fn signer(&self, caller: Caller) -> HubResult<usize> {
+        self.signers.iter().position(|k| caller == Caller::Internal(*k)).ok_or(E_AUTH)
     }
 }
 
@@ -196,10 +199,10 @@ impl State {
     }
     pub fn decode(b: &[u8]) -> HubResult<Self> {
         if b.len() != STATE_BYTES
-            || b[1841..1848] != [0; 7]
-            || b[1840] > 1
-            || b[1858..1864] != [0; 6]
-            || b[1892..1896] != [0; 4]
+            || b[2449..2456] != [0; 7]
+            || b[2448] > 1
+            || b[2466..2472] != [0; 6]
+            || b[2500..2504] != [0; 4]
         {
             return Err(E_STATE);
         }
@@ -220,19 +223,19 @@ impl State {
         }
         let s = Self {
             config,
-            received: u128_at(b, 1792)?,
-            paid: u128_at(b, 1808)?,
-            claim_nonce: u64_at(b, 1824)?,
-            proposal_nonce: u64_at(b, 1832)?,
-            paused: b[1840] == 1,
+            received: u128_at(b, 2400)?,
+            paid: u128_at(b, 2416)?,
+            claim_nonce: u64_at(b, 2432)?,
+            proposal_nonce: u64_at(b, 2440)?,
+            paused: b[2448] == 1,
             proposal: Proposal {
-                nonce: u64_at(b, 1848)?,
-                action: b[1856],
-                votes: b[1857],
-                value: u128_at(b, 1864)?,
-                created: u32_at(b, 1880)?,
-                ready: u32_at(b, 1884)?,
-                expires: u32_at(b, 1888)?,
+                nonce: u64_at(b, 2456)?,
+                action: b[2464],
+                votes: b[2465],
+                value: u128_at(b, 2472)?,
+                created: u32_at(b, 2488)?,
+                ready: u32_at(b, 2492)?,
+                expires: u32_at(b, 2496)?,
             },
             members,
             fuel_limit,
@@ -299,19 +302,19 @@ impl State {
         let mut c = self.config.clone();
         c.initial_fuel = self.fuel_limit;
         b[..CONFIG_BYTES].copy_from_slice(&c.encode());
-        b[1792..1808].copy_from_slice(&self.received.to_le_bytes());
-        b[1808..1824].copy_from_slice(&self.paid.to_le_bytes());
-        b[1824..1832].copy_from_slice(&self.claim_nonce.to_le_bytes());
-        b[1832..1840].copy_from_slice(&self.proposal_nonce.to_le_bytes());
-        b[1840] = u8::from(self.paused);
+        b[2400..2416].copy_from_slice(&self.received.to_le_bytes());
+        b[2416..2432].copy_from_slice(&self.paid.to_le_bytes());
+        b[2432..2440].copy_from_slice(&self.claim_nonce.to_le_bytes());
+        b[2440..2448].copy_from_slice(&self.proposal_nonce.to_le_bytes());
+        b[2448] = u8::from(self.paused);
         let p = self.proposal;
-        b[1848..1856].copy_from_slice(&p.nonce.to_le_bytes());
-        b[1856] = p.action;
-        b[1857] = p.votes;
-        b[1864..1880].copy_from_slice(&p.value.to_le_bytes());
-        b[1880..1884].copy_from_slice(&p.created.to_le_bytes());
-        b[1884..1888].copy_from_slice(&p.ready.to_le_bytes());
-        b[1888..1892].copy_from_slice(&p.expires.to_le_bytes());
+        b[2456..2464].copy_from_slice(&p.nonce.to_le_bytes());
+        b[2464] = p.action;
+        b[2465] = p.votes;
+        b[2472..2488].copy_from_slice(&p.value.to_le_bytes());
+        b[2488..2492].copy_from_slice(&p.created.to_le_bytes());
+        b[2492..2496].copy_from_slice(&p.ready.to_le_bytes());
+        b[2496..2500].copy_from_slice(&p.expires.to_le_bytes());
         for (i, m) in self.members.iter().enumerate() {
             let o = MEMBER_STATE_BASE + i * MEMBER_STATE_BYTES;
             for (off, n) in [(0, m.claimable), (16, m.paid), (32, m.pending)] {

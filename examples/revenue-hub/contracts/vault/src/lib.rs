@@ -17,11 +17,9 @@ impl Contract for RevenueVault {
 }
 
 fn initialize(input: MessageInput<'_>) -> HubResult<MessageOutput> {
+    // Deploy is permissionless: the configuration, governance wallets included,
+    // is part of init_data and so of the account address.
     let config = Config::decode(input.deploy().map_err(|_| E_ARGS)?.init_data())?;
-    let Caller::External(actor) = input.caller else {
-        return Err(E_AUTH);
-    };
-    config.signer(actor)?;
     if !input.state.is_empty()
         || config.members[..usize::from(config.count)].iter().any(|m| {
             m.destination == input.destination || m.destination.dapp_id != input.destination.dapp_id
@@ -38,11 +36,14 @@ fn process(input: MessageInput<'_>) -> HubResult<MessageOutput> {
     if input.message.is_callback() {
         return callback(input, s);
     }
-    let Caller::External(actor) = input.caller else {
-        return Err(E_AUTH);
-    };
+    // Members and governance act from their wallets; value arrives only on
+    // internal messages. Deposits, top-ups, status and execution accept any caller.
     let method = input.message.method_id();
     let body = input.message.body();
+    // A contract reaches the callback handler only by a native callback.
+    if method == ids::CALLBACK && matches!(input.caller, Caller::Internal(_)) {
+        return Err(E_AUTH);
+    }
     if method == ids::TOPUP {
         no_body(body)?;
         if input.message.extra().is_empty()
@@ -84,7 +85,7 @@ fn process(input: MessageInput<'_>) -> HubResult<MessageOutput> {
             }
             let i = usize::from(body[0]);
             let member = s.config.members[i];
-            if actor != member.key {
+            if input.caller != Caller::Internal(member.wallet) {
                 return Err(E_AUTH);
             }
             if s.paused {
@@ -124,7 +125,7 @@ fn process(input: MessageInput<'_>) -> HubResult<MessageOutput> {
             Ok(out)
         }
         ids::PROPOSE => {
-            let signer = s.config.signer(actor)?;
+            let signer = s.config.signer(input.caller)?;
             let (nonce, action, value) = Proposal::decode_body(body)?;
             if s.proposal.nonce != 0 && input.context.block_time < s.proposal.expires {
                 return Err(E_GOVERNANCE);
@@ -141,7 +142,7 @@ fn process(input: MessageInput<'_>) -> HubResult<MessageOutput> {
             finish(s, "hub.proposed", 255, value)
         }
         ids::VOTE => {
-            let signer = s.config.signer(actor)?;
+            let signer = s.config.signer(input.caller)?;
             Proposal::decode_body(body)?;
             if s.proposal.nonce == 0 || body != s.proposal.body() {
                 return Err(E_GOVERNANCE);

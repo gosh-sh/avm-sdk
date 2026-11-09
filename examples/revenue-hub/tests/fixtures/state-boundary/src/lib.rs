@@ -14,12 +14,14 @@ impl Contract for Boundary {
         };
         let len = u32::from_le_bytes(bytes) as usize;
         if input.required_state_output_mode != StateOutputMode::FullReplace
-            || !(5..=70_000).contains(&len)
+            || !(40..=70_000).contains(&len)
         {
             return MessageOutput::failure(3900);
         }
         let mut state = vec![0; len];
         state[..4].copy_from_slice(&((len - 4) as u32).to_le_bytes());
+        // The owner key, at owner_key_offset 8, is the deploy owner_id.
+        state[8..40].copy_from_slice(&deploy.owner_id());
         MessageOutput::success(StateUpdate::FullReplace(state))
     }
     fn process_message(input: MessageInput<'_>) -> MessageOutput {

@@ -10,17 +10,23 @@ does not assign an asset to ECC0, reserve that id in AVM, convert an older
 currency format, or provide a live token adapter. Execution funds are SHELL
 (ECC id `2`), accounted for separately.
 
-The owner funds the exact aggregate principal once before the earliest start.
-Beneficiaries sign claims to immutable payout destinations. Cancellation
+Every participant acts through its own keyed wallet (the SDK `wallet`
+example): it signs an external to its wallet, which sends the internal call and
+any value to the vesting account. The owner funds the exact aggregate principal
+once before the earliest start from its wallet, and cancels or refunds by
+externals signed with the owner key the account keeps at `owner_key_offset` 0.
+Beneficiaries claim from their configured wallets to immutable payout
+destinations. Cancellation
 freezes earned rights and permits only the unearned part to reach the fixed
 refund destination. Each lane allows one pending payment; only an authentic
 callback settles or restores its entitlement. Missing callbacks keep that lane
 pending. Native callbacks may carry unused FUEL refunds as SHELL; those refunds
 cannot replace or enlarge the principal entitlement.
 
-The local journey funds grants of 1,000, 600 and 300 test units, exercises
-unauthorized and premature claims, rejects and retries a payout and a refund,
-then checks receiver totals `[[400,600],[400,200],[300,0]]`. It requires final
+The local journey deploys one wallet per stand identity, funds grants of
+1,000, 600 and 300 test units, exercises claims from a foreign wallet, externals
+under a foreign key or with value, and premature claims, rejects and retries a
+payout and a refund, then checks receiver totals `[[400,600],[400,200],[300,0]]`. It requires final
 claimed=1,100, refunded=800, held=0, pending=0, an empty queue and exact journal
 replay of roots, accepted inputs and fees. This is a local correctness fixture,
 not a network, production performance or security audit result.

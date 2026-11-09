@@ -12,20 +12,33 @@ pub const STRANGER: [u8; 32] = [0x71; 32];
 pub fn address(id: u8) -> AccountAddress {
     AccountAddress { dapp_id: [0x11; 32], account_id: [id; 32] }
 }
+/// The keyed wallet of `key`: members and governance act from their wallets.
+pub fn wallet(key: [u8; 32]) -> AccountAddress {
+    AccountAddress { dapp_id: [0x11; 32], account_id: key }
+}
 pub fn config() -> Config {
     let mut members = [Member::default(); MAX_MEMBERS];
     for i in 0..3 {
         members[i] = Member {
-            key: MEMBER_KEYS[i],
+            wallet: wallet(MEMBER_KEYS[i]),
             destination: address(2 + i as u8),
             weight: [5000, 3000, 2000][i],
         };
     }
-    Config { signers: SIGNERS, delay: 10, vote_window: 100, initial_fuel: 10000, count: 3, members }
+    Config {
+        signers: SIGNERS.map(wallet),
+        delay: 10,
+        vote_window: 100,
+        initial_fuel: 10000,
+        count: 3,
+        members,
+    }
 }
 pub fn envelope(data: &[u8]) -> Vec<u8> {
     let mut b = vec![0; 288];
     b[..4].copy_from_slice(b"ACDP");
+    // The deploy owner_id: the owner key of the receiver and audit fixtures.
+    b[136..168].copy_from_slice(&SIGNERS[0]);
     b[268..272].copy_from_slice(&(data.len() as u32).to_le_bytes());
     b.extend_from_slice(data);
     b
@@ -219,7 +232,7 @@ impl Vault {
         self.lt += 10;
         self.time += 1;
         let s = Spec {
-            actor,
+            source: Some(wallet(actor)),
             method,
             body,
             value,

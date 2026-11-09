@@ -94,7 +94,7 @@ fn inactive_rows_and_reserved_bytes_are_canonical() {
     c.streams[7] = c.streams[0];
     assert!(Config::decode(&c.encode()).is_err());
     let mut b = config().encode();
-    for off in [49, 56 + 193] {
+    for off in [113, HEADER_BYTES + 225] {
         b[off] = 1;
         assert!(Config::decode(&b).is_err());
         b[off] = 0
@@ -102,11 +102,12 @@ fn inactive_rows_and_reserved_bytes_are_canonical() {
 }
 #[test]
 fn invalid_identity_and_address_are_rejected() {
-    for field in 0..4 {
+    for field in 0..5 {
         let mut c = config();
         match field {
             0 => c.owner = [0; 32],
-            1 => c.streams[0].key = [0; 32],
+            1 => c.streams[0].wallet = zero_address(),
+            3 => c.owner_wallet = zero_address(),
             2 => c.streams[0].payout = zero_address(),
             _ => c.streams[0].refund = zero_address(),
         };
@@ -126,7 +127,7 @@ fn all_payment_sources_must_be_distinct() {
 #[test]
 fn same_beneficiary_can_receive_two_separate_grants() {
     let mut c = config();
-    c.streams[1].key = c.streams[0].key;
+    c.streams[1].wallet = c.streams[0].wallet;
     assert!(Config::decode(&c.encode()).is_ok())
 }
 #[test]
@@ -175,6 +176,36 @@ fn init_failure(mut s: Spec, code: u32) {
 #[test]
 fn init_requires_configured_owner() {
     init_failure(Spec { actor: STRANGER, ..Spec::default() }, E_AUTH)
+}
+#[test]
+fn init_requires_deploy_owner_id_to_be_the_owner_key() {
+    let body = envelope_for(STRANGER, &config().encode());
+    init_failure(Spec { body, ..Spec::default() }, E_AUTH)
+}
+#[test]
+fn owner_acts_by_owner_key_external_or_from_owner_wallet() {
+    let mut v = Book::funded();
+    assert_eq!(v.call(OWNER, ids::CANCEL, vec![0], 0, 150).status_code, 0);
+    assert_eq!(v.call_from(None, ids::REFUND, vec![0], 0, 150).status_code, 0);
+    for source in [Some(wallet(STRANGER)), Some(wallet(BENEFICIARIES[1]))] {
+        fails(v.call_from(source, ids::CANCEL, vec![1], 0, 150), E_AUTH)
+    }
+}
+#[test]
+fn beneficiary_claims_only_from_its_wallet() {
+    let mut v = Book::funded();
+    let mut s = v.spec(BENEFICIARIES[0], ids::CLAIM, vec![0], 0, 150);
+    s.source = None;
+    for actor in [BENEFICIARIES[0], OWNER] {
+        fails(invoke::<Vesting>(&v.state, &Spec { actor, ..s.clone() }), E_AUTH)
+    }
+    // The same account id in another DApp is a different wallet.
+    s.source = Some(avm_contract_sdk::AccountAddress {
+        dapp_id: [0x22; 32],
+        account_id: BENEFICIARIES[0],
+    });
+    fails(invoke::<Vesting>(&v.state, &s), E_AUTH);
+    assert_outbound_principal(v.claim(0, 150), 500)
 }
 #[test]
 fn init_refuses_attached_principal_and_extras() {
@@ -506,7 +537,8 @@ fn zero_hash_and_wrong_cause_address_are_rejected() {
 fn ordinary_or_external_calls_cannot_impersonate_callback() {
     let mut v = Book::funded();
     v.claim(0, 150);
-    fails(v.call(OWNER, ids::CALLBACK, vec![0], 0, 150), E_ARGS);
+    fails(v.call_from(None, ids::CALLBACK, vec![0], 0, 150), E_ARGS);
+    fails(v.call(OWNER, ids::CALLBACK, vec![0], 0, 150), E_AUTH);
     let mut s = v.receipt(0, 0, true);
     s.callback = None;
     fails(invoke::<Vesting>(&v.state, &s), E_AUTH)
@@ -530,7 +562,13 @@ fn only_shell_is_accepted_as_operating_topup() {
         (vec![], 0, E_VALUE),
         (vec![(2, 1)], 1, E_VALUE),
     ] {
-        let s = Spec { actor: STRANGER, method: ids::TOPUP, extra, value, ..Spec::default() };
+        let s = Spec {
+            source: Some(wallet(STRANGER)),
+            method: ids::TOPUP,
+            extra,
+            value,
+            ..Spec::default()
+        };
         let out = invoke::<Vesting>(&v.state, &s);
         assert_eq!(out.status_code, code);
         if code == 0 {
@@ -562,9 +600,15 @@ fn nonce_exhaustion_is_fail_closed() {
 #[test]
 fn accounting_and_reserved_corruption_is_rejected() {
     let v = Book::funded();
-    for o in
-        [1657, 1673, 1672 + 24, 1672 + 56, 1672 + 56 + 16, 1672 + 56 + 40, STATE_BASE + 7 * 200]
-    {
+    for o in [
+        CONFIG_BYTES + 1,
+        STATE_BASE + 1,
+        STATE_BASE + 24,
+        STATE_BASE + 56,
+        STATE_BASE + 56 + 16,
+        STATE_BASE + 56 + 40,
+        STATE_BASE + 7 * PROGRESS_BYTES,
+    ] {
         let mut b = v.state.clone();
         b[o] ^= 1;
         assert!(State::decode(&b).is_err(), "{o}")
@@ -577,7 +621,7 @@ fn all_sixteen_lanes_at_u128_max_settle_in_reverse() {
     let q = u128::MAX / 8;
     for i in 0..8 {
         c.streams[i] = Stream {
-            key: BENEFICIARIES[0],
+            wallet: wallet(BENEFICIARIES[0]),
             payout: address(2 + i as u8 * 2),
             refund: address(3 + i as u8 * 2),
             total: q + if i == 7 { 7 } else { 0 },
@@ -633,6 +677,18 @@ fn receipt_spec(kind: u8, index: u8, nonce: u64, amount: u128) -> Spec {
         request: true,
         ..Spec::default()
     }
+}
+#[test]
+fn receiver_owner_key_is_the_deploy_owner_id() {
+    let b = receiver(0, 0);
+    assert_eq!(&b[..32], &OWNER);
+    let s = Spec {
+        destination: address(2),
+        deploy: true,
+        body: envelope_for([0; 32], &[0, 0]),
+        ..Spec::default()
+    };
+    fails(<Receiver as avm_contract_sdk::Contract>::init(input(&frame(&[], &s))), E_RECEIVER_AUTH)
 }
 #[test]
 fn receiver_is_bound_by_owner_once() {

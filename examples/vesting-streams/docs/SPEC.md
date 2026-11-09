@@ -14,9 +14,18 @@ The implementation computes quotient and remainder first, avoiding a potentially
 overflowing product. Remainder and elapsed are both below `2^32`, so their product
 fits `u128`. Observed time never decreases across successful contract messages.
 
-The configured owner must authenticate initialization and exact one-time funding
-before the earliest start. Beneficiary public keys authenticate their own claims.
-Owner cancellation is available only for revocable, unfinished, uncancelled
+Every participant acts through its own keyed wallet contract: the participant
+signs an external to its wallet and the wallet sends the internal call, with any
+value, to the vesting account. An external call is admitted only under the owner
+key the destination keeps in its data, and no external carries value. The vesting
+account keeps the owner public key at `owner_key_offset` 0; `init` requires the
+deploy `owner_id` and the external deploy signer to be that key. The owner acts
+either by a no-value external signed with that key or from the configured owner
+wallet; funding carries value and so arrives from the owner wallet. The owner must
+authenticate initialization and exact one-time funding before the earliest start.
+A beneficiary claims only from its configured wallet address. Status and SHELL
+top-up accept any caller. A contract reaches the callback handler only by a native
+callback. Owner cancellation is available only for revocable, unfinished, uncancelled
 streams. It freezes earned at the cancellation time and leaves pending payments
 valid. Refund entitlement is total minus the frozen earned amount. There is no
 owner sweep, beneficiary replacement, or destination-update method.
@@ -63,22 +72,24 @@ All integers are little-endian; addresses are 32-byte DApp id plus 32-byte accou
 Padding and inactive rows must remain zero. State version is identified by descriptor
 schema id and exact byte length. No migration or upgrade handler is implemented.
 
-Configuration: 1,656 bytes. Owner at 0 (32 bytes), fuel at 32 (16 bytes), count at
-48 (one byte), padding through 55. Eight 200-byte rows start at 56:
+Configuration: 1,976 bytes. Owner public key at 0 (32 bytes, the
+`owner_key_offset` 0 slot), owner wallet address at 32 (64 bytes), fuel at 96
+(16 bytes), count at 112 (one byte), padding through 119. Eight 232-byte rows
+start at 120:
 
 | Row offset | Length | Meaning |
 | --- | ---: | --- |
-| 0 | 32 | Beneficiary public key |
-| 32 | 64 | Payout address |
-| 96 | 64 | Refund address |
-| 160 | 16 | Total principal |
-| 176 / 180 / 184 / 188 | 4 each | Start / cliff / end / step |
-| 192 | 1 | Revocable flag |
-| 193 | 7 | Zero padding |
+| 0 | 64 | Beneficiary wallet address |
+| 64 | 64 | Payout address |
+| 128 | 64 | Refund address |
+| 192 | 16 | Total principal |
+| 208 / 212 / 216 / 220 | 4 each | Start / cliff / end / step |
+| 224 | 1 | Revocable flag |
+| 225 | 7 | Zero padding |
 
-State: 3,272 bytes. Configuration at 0, funded flag at 1,656, zero padding to
-1,659, observed time at 1,660 (4 bytes), global nonce at 1,664 (8 bytes).
-Eight 200-byte progress rows start at 1,672:
+State: 3,592 bytes. Configuration at 0, funded flag at 1,976, zero padding to
+1,979, observed time at 1,980 (4 bytes), global nonce at 1,984 (8 bytes).
+Eight 200-byte progress rows start at 1,992:
 
 | Row offset | Length | Meaning |
 | --- | ---: | --- |
@@ -96,7 +107,9 @@ An idle lane has zero pending, active nonce, and dispatch boundary.
 Receiver fixture state is 368 bytes: owner (32), bound source (64), reject flag,
 lane, index, five padding bytes, eight 32-byte records, and eight reserved bytes.
 Each record is last nonce (8), received principal (16), successful receipt count (8).
-Only the configured index may receive. Binding is owner-only and once. Receivers
+Only the configured index may receive. The receiver keeps its owner key, the
+deploy `owner_id`, at `owner_key_offset` 0; binding, rejection and status are that
+owner's externals. Binding is owner-only and once. Receivers
 require authenticated internal payment with native callback request, exact
 principal, increasing nonce, and matching lane/index; successful payments echo
 the receipt. They retain principal and provide no withdrawal operation.

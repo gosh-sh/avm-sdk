@@ -11,11 +11,15 @@ pub const STRANGER: [u8; 32] = [0x71; 32];
 pub fn address(id: u8) -> AccountAddress {
     AccountAddress { dapp_id: [0x11; 32], account_id: [id; 32] }
 }
+/// The keyed wallet of `key`: every value-bearing or beneficiary call arrives from it.
+pub fn wallet(key: [u8; 32]) -> AccountAddress {
+    AccountAddress { dapp_id: [0x11; 32], account_id: key }
+}
 pub fn config() -> Config {
     let mut streams = [Stream::default(); MAX_STREAMS];
     for i in 0..3 {
         streams[i] = Stream {
-            key: BENEFICIARIES[i],
+            wallet: wallet(BENEFICIARIES[i]),
             payout: address(2 + i as u8 * 2),
             refund: address(3 + i as u8 * 2),
             total: [1000, 700, 300][i],
@@ -26,11 +30,15 @@ pub fn config() -> Config {
             revocable: i != 2,
         };
     }
-    Config { owner: OWNER, fuel: 10000, count: 3, streams }
+    Config { owner: OWNER, owner_wallet: wallet(OWNER), fuel: 10000, count: 3, streams }
 }
 pub fn envelope(data: &[u8]) -> Vec<u8> {
+    envelope_for(OWNER, data)
+}
+pub fn envelope_for(owner_id: [u8; 32], data: &[u8]) -> Vec<u8> {
     let mut b = vec![0; 288];
     b[..4].copy_from_slice(b"ACDP");
+    b[136..168].copy_from_slice(&owner_id);
     b[268..272].copy_from_slice(&(data.len() as u32).to_le_bytes());
     b.extend_from_slice(data);
     b
@@ -213,8 +221,12 @@ pub struct Book {
 }
 impl Book {
     pub fn with_config(c: Config) -> Self {
-        let s =
-            Spec { actor: c.owner, deploy: true, body: envelope(&c.encode()), ..Spec::default() };
+        let s = Spec {
+            actor: c.owner,
+            deploy: true,
+            body: envelope_for(c.owner, &c.encode()),
+            ..Spec::default()
+        };
         Self { state: initialize::<Vesting>(&s), time: 10, lt: 10 }
     }
     pub fn new() -> Self {
@@ -234,6 +246,7 @@ impl Book {
             self.snapshot().validate().unwrap()
         }
     }
+    /// An internal call from the wallet of `actor`.
     pub fn spec(
         &mut self,
         actor: [u8; 32],
@@ -242,10 +255,21 @@ impl Book {
         value: u128,
         time: u32,
     ) -> Spec {
+        self.spec_from(Some(wallet(actor)), method, body, value, time)
+    }
+    /// A call from `source`, or an owner-key external when `source` is `None`.
+    pub fn spec_from(
+        &mut self,
+        source: Option<AccountAddress>,
+        method: u64,
+        body: Vec<u8>,
+        value: u128,
+        time: u32,
+    ) -> Spec {
         self.lt += 10;
         self.time = time;
         Spec {
-            actor,
+            source,
             method,
             body,
             value,
@@ -263,7 +287,17 @@ impl Book {
         value: u128,
         time: u32,
     ) -> MessageOutput {
-        let s = self.spec(actor, method, body, value, time);
+        self.call_from(Some(wallet(actor)), method, body, value, time)
+    }
+    pub fn call_from(
+        &mut self,
+        source: Option<AccountAddress>,
+        method: u64,
+        body: Vec<u8>,
+        value: u128,
+        time: u32,
+    ) -> MessageOutput {
+        let s = self.spec_from(source, method, body, value, time);
         let out = invoke::<Vesting>(&self.state, &s);
         self.accept(&out);
         out
@@ -273,14 +307,15 @@ impl Book {
         assert_eq!(self.call(OWNER, ids::FUND, vec![], total, 11).status_code, 0)
     }
     pub fn claim(&mut self, i: usize, time: u32) -> MessageOutput {
-        let actor = self.snapshot().config.streams[i].key;
-        self.call(actor, ids::CLAIM, vec![i as u8], 0, time)
+        let source = self.snapshot().config.streams[i].wallet;
+        self.call_from(Some(source), ids::CLAIM, vec![i as u8], 0, time)
     }
+    /// The owner cancels and refunds by externals signed with its owner key.
     pub fn cancel(&mut self, i: usize, time: u32) -> MessageOutput {
-        self.call(OWNER, ids::CANCEL, vec![i as u8], 0, time)
+        self.call_from(None, ids::CANCEL, vec![i as u8], 0, time)
     }
     pub fn refund(&mut self, i: usize, time: u32) -> MessageOutput {
-        self.call(OWNER, ids::REFUND, vec![i as u8], 0, time)
+        self.call_from(None, ids::REFUND, vec![i as u8], 0, time)
     }
     pub fn receipt(&mut self, i: usize, kind: usize, success: bool) -> Spec {
         let s = self.snapshot();

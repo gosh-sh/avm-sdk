@@ -1,14 +1,16 @@
 use crate::*;
 use avm_contract_sdk::AccountAddress;
 
-pub const CONFIG_BYTES: usize = 1656;
-pub const STATE_BYTES: usize = 3272;
-pub const ROW_BYTES: usize = 200;
-pub const STATE_BASE: usize = 1672;
+pub const CONFIG_BYTES: usize = 1976;
+pub const STATE_BYTES: usize = 3592;
+pub const HEADER_BYTES: usize = 120;
+pub const ROW_BYTES: usize = 232;
+pub const PROGRESS_BYTES: usize = 200;
+pub const STATE_BASE: usize = 1992;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stream {
-    pub key: [u8; 32],
+    pub wallet: AccountAddress,
     pub payout: AccountAddress,
     pub refund: AccountAddress,
     pub total: u128,
@@ -21,7 +23,7 @@ pub struct Stream {
 impl Default for Stream {
     fn default() -> Self {
         Self {
-            key: [0; 32],
+            wallet: zero_address(),
             payout: zero_address(),
             refund: zero_address(),
             total: 0,
@@ -41,6 +43,7 @@ impl Stream {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
     pub owner: [u8; 32],
+    pub owner_wallet: AccountAddress,
     pub fuel: u128,
     pub count: u8,
     pub streams: [Stream; MAX_STREAMS],
@@ -48,6 +51,7 @@ pub struct Config {
 impl Config {
     pub fn validate(&self) -> ResultCode<()> {
         if self.owner == [0; 32]
+            || !nonzero_address(self.owner_wallet)
             || self.fuel == 0
             || self.count == 0
             || usize::from(self.count) > MAX_STREAMS
@@ -56,7 +60,7 @@ impl Config {
         }
         let n = usize::from(self.count);
         for (i, s) in self.streams[..n].iter().enumerate() {
-            if s.key == [0; 32]
+            if !nonzero_address(s.wallet)
                 || !nonzero_address(s.payout)
                 || !nonzero_address(s.refund)
                 || s.payout == s.refund
@@ -87,46 +91,48 @@ impl Config {
     pub fn encode(&self) -> Vec<u8> {
         let mut b = vec![0; CONFIG_BYTES];
         b[..32].copy_from_slice(&self.owner);
-        b[32..48].copy_from_slice(&self.fuel.to_le_bytes());
-        b[48] = self.count;
+        put_address(&mut b, 32, self.owner_wallet);
+        b[96..112].copy_from_slice(&self.fuel.to_le_bytes());
+        b[112] = self.count;
         for (i, s) in self.streams.iter().enumerate() {
-            let o = 56 + i * ROW_BYTES;
-            b[o..o + 32].copy_from_slice(&s.key);
-            put_address(&mut b, o + 32, s.payout);
-            put_address(&mut b, o + 96, s.refund);
-            b[o + 160..o + 176].copy_from_slice(&s.total.to_le_bytes());
-            for (off, v) in [(176, s.start), (180, s.cliff), (184, s.end), (188, s.step)] {
+            let o = HEADER_BYTES + i * ROW_BYTES;
+            put_address(&mut b, o, s.wallet);
+            put_address(&mut b, o + 64, s.payout);
+            put_address(&mut b, o + 128, s.refund);
+            b[o + 192..o + 208].copy_from_slice(&s.total.to_le_bytes());
+            for (off, v) in [(208, s.start), (212, s.cliff), (216, s.end), (220, s.step)] {
                 b[o + off..o + off + 4].copy_from_slice(&v.to_le_bytes())
             }
-            b[o + 192] = u8::from(s.revocable);
+            b[o + 224] = u8::from(s.revocable);
         }
         b
     }
     pub fn decode(b: &[u8]) -> ResultCode<Self> {
-        if b.len() != CONFIG_BYTES || b[49..56] != [0; 7] {
+        if b.len() != CONFIG_BYTES || b[113..HEADER_BYTES] != [0; 7] {
             return Err(E_ARGS);
         }
         let mut c = Self {
             owner: array(b, 0)?,
-            fuel: u128_at(b, 32)?,
-            count: b[48],
+            owner_wallet: address_at(b, 32)?,
+            fuel: u128_at(b, 96)?,
+            count: b[112],
             streams: [Stream::default(); MAX_STREAMS],
         };
         for (i, s) in c.streams.iter_mut().enumerate() {
-            let o = 56 + i * ROW_BYTES;
-            if b[o + 192] > 1 || b[o + 193..o + 200] != [0; 7] {
+            let o = HEADER_BYTES + i * ROW_BYTES;
+            if b[o + 224] > 1 || b[o + 225..o + ROW_BYTES] != [0; 7] {
                 return Err(E_ARGS);
             }
             *s = Stream {
-                key: array(b, o)?,
-                payout: address_at(b, o + 32)?,
-                refund: address_at(b, o + 96)?,
-                total: u128_at(b, o + 160)?,
-                start: u32_at(b, o + 176)?,
-                cliff: u32_at(b, o + 180)?,
-                end: u32_at(b, o + 184)?,
-                step: u32_at(b, o + 188)?,
-                revocable: b[o + 192] == 1,
+                wallet: address_at(b, o)?,
+                payout: address_at(b, o + 64)?,
+                refund: address_at(b, o + 128)?,
+                total: u128_at(b, o + 192)?,
+                start: u32_at(b, o + 208)?,
+                cliff: u32_at(b, o + 212)?,
+                end: u32_at(b, o + 216)?,
+                step: u32_at(b, o + 220)?,
+                revocable: b[o + 224] == 1,
             };
         }
         c.validate()?;
@@ -275,10 +281,10 @@ impl State {
         let mut b = self.config.encode();
         b.resize(STATE_BYTES, 0);
         b[CONFIG_BYTES] = u8::from(self.funded);
-        b[1660..1664].copy_from_slice(&self.last_time.to_le_bytes());
-        b[1664..1672].copy_from_slice(&self.nonce.to_le_bytes());
+        b[CONFIG_BYTES + 4..CONFIG_BYTES + 8].copy_from_slice(&self.last_time.to_le_bytes());
+        b[CONFIG_BYTES + 8..STATE_BASE].copy_from_slice(&self.nonce.to_le_bytes());
         for (i, p) in self.progress.iter().enumerate() {
-            let o = STATE_BASE + i * ROW_BYTES;
+            let o = STATE_BASE + i * PROGRESS_BYTES;
             b[o] = u8::from(p.cancelled);
             b[o + 4..o + 8].copy_from_slice(&p.cutoff.to_le_bytes());
             for (off, v) in [(8, p.cap), (24, p.claimed), (40, p.refunded)] {
@@ -296,15 +302,20 @@ impl State {
         b
     }
     pub fn decode(b: &[u8]) -> ResultCode<Self> {
-        if b.len() != STATE_BYTES || b[1656] > 1 || b[1657..1660] != [0; 3] {
+        if b.len() != STATE_BYTES
+            || b[CONFIG_BYTES] > 1
+            || b[CONFIG_BYTES + 1..CONFIG_BYTES + 4] != [0; 3]
+        {
             return Err(E_STATE);
         }
-        let mut s =
-            Self::new(Config::decode(&b[..CONFIG_BYTES]).map_err(|_| E_STATE)?, u32_at(b, 1660)?);
-        s.funded = b[1656] == 1;
-        s.nonce = u64_at(b, 1664)?;
+        let mut s = Self::new(
+            Config::decode(&b[..CONFIG_BYTES]).map_err(|_| E_STATE)?,
+            u32_at(b, CONFIG_BYTES + 4)?,
+        );
+        s.funded = b[CONFIG_BYTES] == 1;
+        s.nonce = u64_at(b, CONFIG_BYTES + 8)?;
         for (i, p) in s.progress.iter_mut().enumerate() {
-            let o = STATE_BASE + i * ROW_BYTES;
+            let o = STATE_BASE + i * PROGRESS_BYTES;
             if b[o] > 1 || b[o + 1..o + 4] != [0; 3] {
                 return Err(E_STATE);
             }

@@ -23,7 +23,10 @@ fn zero_value(input: &MessageInput<'_>) -> ResultCode<()> {
 }
 fn initialize(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
     let config = Config::decode(deploy_data(input)?)?;
-    if input.caller != Caller::External(config.owner) {
+    // The owner key sits at owner_key_offset 0 and must be the deploy owner_id,
+    // which the account address commits to.
+    let owner_id = input.deploy().map_err(|_| E_ARGS)?.owner_id();
+    if input.caller != Caller::External(config.owner) || owner_id != config.owner {
         return Err(E_AUTH);
     }
     zero_value(&input)?;
@@ -51,11 +54,16 @@ fn process(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
     if input.message.is_callback() {
         return callback(input, s);
     }
-    let Caller::External(actor) = input.caller else {
-        return Err(E_AUTH);
-    };
+    // The owner acts by an external signed with the owner key or from its wallet;
+    // a beneficiary acts from its wallet. Value only arrives on internal messages.
+    let owner = input.caller == Caller::External(s.config.owner)
+        || input.caller == Caller::Internal(s.config.owner_wallet);
     let method = input.message.method_id();
     let body = input.message.body();
+    // A contract reaches the callback handler only by a native callback.
+    if method == ids::CALLBACK && matches!(input.caller, Caller::Internal(_)) {
+        return Err(E_AUTH);
+    }
     if method == ids::TOPUP {
         no_body(body)?;
         if input.message.extra().is_empty()
@@ -71,7 +79,7 @@ fn process(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
     }
     if method == ids::FUND {
         no_body(body)?;
-        if actor != s.config.owner {
+        if !owner {
             return Err(E_AUTH);
         }
         if s.funded || s.last_time >= s.config.first_start() {
@@ -101,7 +109,7 @@ fn process(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
         return Err(E_PHASE);
     }
     if method == ids::CANCEL {
-        if actor != s.config.owner {
+        if !owner {
             return Err(E_AUTH);
         }
         if !cfg.revocable {
@@ -117,12 +125,12 @@ fn process(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
         return finish(s, ids::EVENT_CANCELLED, "stream.cancelled", i as u8, 255, cap);
     }
     let (kind, destination) = if method == ids::CLAIM {
-        if actor != cfg.key {
+        if input.caller != Caller::Internal(cfg.wallet) {
             return Err(E_AUTH);
         }
         (0, cfg.payout)
     } else if method == ids::REFUND {
-        if actor != s.config.owner {
+        if !owner {
             return Err(E_AUTH);
         }
         (1, cfg.refund)

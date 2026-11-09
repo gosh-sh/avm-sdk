@@ -19,5 +19,7 @@ export CARGO_PROFILE_RELEASE_STRIP=symbols
 for contract in vesting receiver; do
   "$builder" build --manifest-path "contracts/$contract/Cargo.toml" | tee "$evidence/build-$contract.txt"
 done
+# The journey's participants act through the SDK wallet example.
+"$builder" build --manifest-path ../wallet/Cargo.toml | tee "$evidence/build-wallet.txt"
 python3 -B scripts/sync_ids.py --check
 python3 -B scripts/optimize.py --wasm-opt "$optimizer" --output "$evidence/optimization.json"

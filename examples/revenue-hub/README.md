@@ -3,7 +3,8 @@
 A fixed-share revenue vault, bound payout receivers and an authenticated
 AccountBatch receipt ledger. The same Rust entrypoints run in native regressions
 and real guest WASM. Governance is 2-of-3 with a timelock; recipients and weights
-are fixed at deployment. This is a local synthetic-funds example, not a production
+are fixed at deployment. Members and governance act through their own keyed
+wallets (the SDK `wallet` example); the vault itself keeps no owner key. This is a local synthetic-funds example, not a production
 wallet or audited financial service.
 
 ## Principal and fees
@@ -11,8 +12,9 @@ wallet or audited financial service.
 `PRINCIPAL_CURRENCY_ID = 0` explicitly selects the example principal for new
 ECC-only instances. This does not name a live token, reserve ID 0, identify or
 convert the old unnamed main asset, or support existing-state migration.
-Deposit with the stand option `--extra-currencies 0:10007`; a simultaneous
-positive SHELL donation may use `0:10007,2:10000`. Other assets are rejected.
+Deposit by sending principal from a wallet: `wallet.send` to
+`hub.vault.deposit` with ECC `0:10007`; a simultaneous positive SHELL donation
+may add `2:10000`. An external never carries value. Other assets are rejected.
 Claims send the stored member's exact principal amount and immutable destination.
 
 SHELL (ECC 2) funds execution separately. The topup method accepts only positive

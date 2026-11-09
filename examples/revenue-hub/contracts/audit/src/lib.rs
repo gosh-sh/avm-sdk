@@ -46,9 +46,11 @@ impl Contract for AuditLedger {
     }
 }
 fn initialize(input: MessageInput<'_>) -> HubResult<MessageOutput> {
-    let Caller::External(owner) = input.caller else {
+    // The owner key sits at owner_key_offset 4: the deploy owner_id.
+    let owner = input.deploy().map_err(|_| E_ARGS)?.owner_id();
+    if owner == [0; 32] {
         return Err(E_AUDIT_AUTH);
-    };
+    }
     let init = input.deploy().map_err(|_| E_ARGS)?.init_data();
     if input.required_state_output_mode != StateOutputMode::FullReplace
         || init.len() != 1

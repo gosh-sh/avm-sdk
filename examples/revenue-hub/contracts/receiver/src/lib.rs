@@ -19,9 +19,11 @@ impl Contract for PayoutReceiver {
     }
 }
 fn initialize(input: MessageInput<'_>) -> HubResult<MessageOutput> {
-    let Caller::External(owner) = input.caller else {
+    // The owner key sits at owner_key_offset 0: the deploy owner_id.
+    let owner = input.deploy().map_err(|_| E_ARGS)?.owner_id();
+    if owner == [0; 32] {
         return Err(E_RECEIVER_AUTH);
-    };
+    }
     let body = input.deploy().map_err(|_| E_ARGS)?.init_data();
     if body.len() != 88
         || body[65..72] != [0; 7]

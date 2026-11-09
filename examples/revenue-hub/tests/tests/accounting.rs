@@ -1,4 +1,5 @@
 mod support;
+use avm_contract_sdk::AccountAddress;
 use avm_revenue_core::{vault::*, *};
 use avm_revenue_vault::RevenueVault;
 use support::*;
@@ -16,14 +17,18 @@ fn sixteen_beneficiaries_can_hold_and_settle_full_u128_revenue_concurrently() {
     let mut c = config();
     c.count = 16;
     for (i, m) in c.members.iter_mut().enumerate() {
-        *m = Member { key: [0x61 + i as u8; 32], destination: address(2 + i as u8), weight: 625 };
+        *m = Member {
+            wallet: wallet([0x61 + i as u8; 32]),
+            destination: address(2 + i as u8),
+            weight: 625,
+        };
     }
     let spec = Spec { deploy: true, body: envelope(&c.encode()), ..Spec::default() };
     let state = initialize::<RevenueVault>(&spec);
     let mut v = Vault { state, time: 10, lt: 10 };
     v.deposit(u128::MAX);
     for i in 0..16 {
-        assert_eq!(v.call(c.members[i].key, ids::CLAIM, vec![i as u8], 0).status_code, 0);
+        assert_eq!(v.call([0x61 + i as u8; 32], ids::CLAIM, vec![i as u8], 0).status_code, 0);
     }
     assert_eq!(v.snapshot().held(), Ok(15));
     for i in (0..16).rev() {
@@ -57,7 +62,7 @@ fn duplicate_signers_are_rejected() {
 #[test]
 fn duplicate_recipient_keys_are_rejected() {
     let mut c = config();
-    c.members[1].key = c.members[0].key;
+    c.members[1].wallet = c.members[0].wallet;
     assert_eq!(Config::decode(&c.encode()), Err(E_ARGS));
 }
 #[test]
@@ -79,10 +84,11 @@ fn invalid_member_count_or_unused_entries_are_rejected() {
 }
 #[test]
 fn zero_keys_addresses_weights_and_reserves_are_rejected() {
-    for kind in 0..4 {
+    for kind in 0..5 {
         let mut c = config();
         match kind {
-            0 => c.members[0].key = [0; 32],
+            0 => c.members[0].wallet = zero_address(),
+            3 => c.signers[2] = zero_address(),
             1 => c.members[0].destination = zero_address(),
             2 => c.members[0].weight = 0,
             _ => c.initial_fuel = 0,
@@ -152,7 +158,7 @@ fn carried_rounding_dust_becomes_claimable() {
 fn principal_state_corruption_fails_closed() {
     let mut v = Vault::new();
     v.deposit(1000);
-    for offset in [1792, 1808, 1840, 1841, 1896, 1912, 1928, 1944, 1960] {
+    for offset in [2400, 2416, 2448, 2449, 2504, 2520, 2536, 2552, 2568] {
         let mut s = v.state.clone();
         s[offset] ^= 0x7f;
         assert!(State::decode(&s).is_err(), "{offset}");
@@ -171,7 +177,9 @@ fn config_and_state_truncations_do_not_panic() {
     }
 }
 #[test]
-fn init_rejects_non_manager() {
+fn init_is_permissionless_and_the_config_is_fixed() {
+    // Deploy is permissionless: any deployer gets the state its configuration,
+    // which the address commits to, defines.
     let s = Spec {
         actor: STRANGER,
         deploy: true,
@@ -179,7 +187,40 @@ fn init_rejects_non_manager() {
         ..Spec::default()
     };
     let b = frame(&[], &s);
-    fails(&<RevenueVault as avm_contract_sdk::Contract>::init(input(&b)), E_AUTH);
+    let out = <RevenueVault as avm_contract_sdk::Contract>::init(input(&b));
+    assert_eq!(apply(&[], out.state_update.as_ref().unwrap()), Vault::new().state);
+    // Only the reserve slot of the configuration ever changes after init.
+    let mut v = Vault::new();
+    v.deposit(1000);
+    v.claim(0);
+    v.settle(0, true);
+    v.governance(SET_FUEL, 20000);
+    v.governance(PAUSE, 0);
+    let mut expected = config();
+    expected.initial_fuel = 20000;
+    assert_eq!(&v.state[..CONFIG_BYTES], &expected.encode()[..]);
+    assert_eq!(&v.state[..200], &config().encode()[..200]);
+    assert_eq!(&v.state[216..CONFIG_BYTES], &config().encode()[216..]);
+}
+#[test]
+fn members_claim_only_from_their_wallets() {
+    let mut v = Vault::new();
+    v.deposit(1000);
+    for actor in [MEMBER_KEYS[1], SIGNERS[0], STRANGER] {
+        fails(&v.call(actor, ids::CLAIM, vec![0], 0), E_AUTH);
+    }
+    // A member key external and the same account id in another DApp are not the wallet.
+    for source in [None, Some(AccountAddress { dapp_id: [0x22; 32], account_id: MEMBER_KEYS[0] })] {
+        let s = Spec {
+            actor: MEMBER_KEYS[0],
+            source,
+            method: ids::CLAIM,
+            body: vec![0],
+            ..Spec::default()
+        };
+        fails(&invoke::<RevenueVault>(&v.state, &s), E_AUTH);
+    }
+    assert_eq!(v.claim(0).status_code, 0);
 }
 #[test]
 fn deposit_requires_value_and_accepts_only_shell_as_extra() {
@@ -340,7 +381,7 @@ fn payout_refuses_missing_operating_shell_or_insolvent_principal() {
     let mut v = Vault::new();
     v.deposit(1000);
     let mut s = Spec {
-        actor: MEMBER_KEYS[0],
+        source: Some(wallet(MEMBER_KEYS[0])),
         method: ids::CLAIM,
         body: vec![0],
         shells: 9999,

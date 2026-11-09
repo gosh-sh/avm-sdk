@@ -29,9 +29,11 @@ fn validate(b: &[u8]) -> ResultCode<()> {
     Ok(())
 }
 fn initialize(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
-    let Caller::External(owner) = input.caller else {
+    // The owner key sits at owner_key_offset 0: the deploy owner_id.
+    let owner = input.deploy().map_err(|_| E_RECEIVER_ARGS)?.owner_id();
+    if owner == [0; 32] {
         return Err(E_RECEIVER_AUTH);
-    };
+    }
     let body = deploy_data(input)?;
     if body.len() != 2
         || body[0] > 1

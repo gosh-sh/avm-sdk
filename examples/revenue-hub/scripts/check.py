@@ -63,6 +63,8 @@ def main():
         provenance = (ROOT / "contracts" / contract / "target/avm-build-provenance.txt").read_text()
         env["AVM_GUEST_ARENA_BYTES"] = next(line.removeprefix("arena_bytes: ") for line in provenance.splitlines() if line.startswith("arena_bytes: "))
         run("wasm-clippy-" + contract, ["cargo", "+1.99.1", "clippy", "-p", "avm-revenue-" + contract, "--target", "wasm32-unknown-unknown", "--locked", "--offline", "--", "-D", "warnings"])
+    # The journeys' participants act through the SDK wallet example.
+    run("build-wallet", [args.builder, "build", "--manifest-path", ROOT.parent / "wallet/Cargo.toml"])
     run("optimization", ["python3", "scripts/optimize.py", "--wasm-opt", args.optimizer.resolve(), "--out", out / "optimization.json"])
     run("canonical-ids", ["python3", "scripts/sync_ids.py", "--check"])
     run("artifact-inspection", ["python3", "scripts/verify_artifacts.py", "--out", out / "artifacts.json"])

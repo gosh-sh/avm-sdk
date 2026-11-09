@@ -7,7 +7,7 @@ operational SHELL is ECC 2. This is a new-instance example choice, not a live
 token denomination or a mapping/conversion of the former unnamed main asset.
 A deposit requires positive principal and may also donate positive SHELL; no
 other ECC is accepted. Membership is fixed on initialization: each of 1–16
-members has a unique key, a unique recipient address, and positive basis-point
+members has a unique wallet address, a unique recipient address, and positive basis-point
 weight. Weights sum to 10,000. All component addresses are in the same DApp.
 
 For cumulative deposited principal `R`, member `i` is entitled to
@@ -31,9 +31,20 @@ the vault in an outbound intent and remains an unsettled liability. A new claim
 requires the account to cover held principal and the proposed operating reserve.
 The runtime still enforces fixed fees and rent; this is not a fee-price oracle.
 
+## Wallets and authority
+
+Members and governance signers act through their own keyed wallet contracts:
+the participant signs an external to its wallet and the wallet sends the
+internal call, with any value, to the vault. An external call is admitted only
+under the owner key the destination keeps in its data, and no external carries
+value. The vault keeps no owner key: every external to it is rejected, and it
+identifies a member or a signer only by the internal caller address
+(`Caller::Internal`). Deposits, top-ups, status and proposal execution accept
+any caller. A contract reaches the callback handler only by a native callback.
+
 ## Claim lifecycle
 
-1. The member signs the index of their own claim. Amount and destination are
+1. The member sends the index of their own claim from their wallet. Amount and destination are
    derived exclusively from stored entitlement and immutable configuration.
 2. The vault atomically moves that member's claimable balance to pending, assigns
    the next global claim nonce, and emits a transfer with a native callback request.
@@ -61,7 +72,7 @@ leaves that member pending; governance cannot reissue or sweep the liability.
 
 ## Governance
 
-Three unique public keys are fixed at deployment. Supported actions are:
+Three unique governance wallet addresses are fixed at deployment. Supported actions are:
 
 | Action | Value | Effect |
 | --- | --- | --- |
@@ -71,19 +82,19 @@ Three unique public keys are fixed at deployment. Supported actions are:
 
 Proposal body: `nonce:u64 + action:u8 + value:u128`, all little-endian (25 bytes).
 The nonce must be the next monotonic proposal nonce. A proposer contributes one
-vote. Another signer must approve the identical full body. A key can vote once;
+vote. Another signer must approve the identical full body. A signer can vote once;
 votes are represented as a three-bit set.
 
 `ready = created_block_time + configured_delay`.
 
 `expires = ready + configured_vote_window`.
 
-Execution is allowed for any external signer when at least two votes exist and
+Execution is allowed for any caller when at least two votes exist and
 `ready <= block_time < expires`. An executed proposal is cleared and cannot be
 replayed. A live proposal cannot be replaced; an expired proposal may be replaced
 with the next nonce and a new vote set. Overflow of timestamps/nonces is rejected.
 
-Governance never changes member keys, weights, or destinations, and offers no
+Governance never changes signer or member wallets, weights, or destinations, and offers no
 principal withdrawal or arbitrary call. Native receipts still settle during a
 pause. Governance has an explicit availability power: pausing or choosing an
 unfunded reserve can prevent new claims.
@@ -92,35 +103,40 @@ unfunded reserve can prevent new claims.
 
 All fields are little-endian; addresses are DApp ID then account ID.
 
-### Configuration — 1,792 bytes
+### Configuration — 2,400 bytes
 
 | Offset | Bytes | Field |
 | --- | --- | --- |
-| 0 | 96 | Three signer public keys |
-| 96 | 4 | Governance delay |
-| 100 | 4 | Vote window |
-| 104 | 16 | Initial operating reserve (current reserve in persisted state) |
-| 120 | 1 | Member count |
-| 121 | 7 | Zero padding |
-| 128 | 1,664 | Sixteen 104-byte member slots |
+| 0 | 192 | Three signer wallet addresses |
+| 192 | 4 | Governance delay |
+| 196 | 4 | Vote window |
+| 200 | 16 | Initial operating reserve (current reserve in persisted state) |
+| 216 | 1 | Member count |
+| 217 | 7 | Zero padding |
+| 224 | 2,176 | Sixteen 136-byte member slots |
 
-Each member slot contains key (32), destination (64), weight (2), padding (6).
-Unused slots are zero. Init extracts this configuration from the admitted ACDP
-deployment envelope; it requires a signer from the configured governance set.
+Each member slot contains wallet address (64), destination (64), weight (2),
+padding (6). Unused slots are zero. Init extracts this configuration from the
+admitted ACDP deployment envelope. Deploy is permissionless: the configuration,
+governance and member wallets included, is part of `init_data` and so of the
+account address. A redeploy with the same package, `owner_id`, salt and
+configuration is the same address; a different configuration is a different
+vault. No method changes the configuration after init except the operating
+reserve slot, which governance controls.
 
-### Persisted state — 3,560 bytes
+### Persisted state — 4,168 bytes
 
 | Offset | Bytes | Field |
 | --- | --- | --- |
-| 0 | 1,792 | Configuration; reserve slot is governance-controlled |
-| 1,792 | 16 | Received principal |
-| 1,808 | 16 | Total paid principal |
-| 1,824 | 8 | Claim nonce |
-| 1,832 | 8 | Proposal nonce |
-| 1,840 | 1 | Paused flag |
-| 1,841 | 7 | Zero padding |
-| 1,848 | 48 | Active proposal or all-zero idle proposal |
-| 1,896 | 1,664 | Sixteen 104-byte member accounting records |
+| 0 | 2,400 | Configuration; reserve slot is governance-controlled |
+| 2,400 | 16 | Received principal |
+| 2,416 | 16 | Total paid principal |
+| 2,432 | 8 | Claim nonce |
+| 2,440 | 8 | Proposal nonce |
+| 2,448 | 1 | Paused flag |
+| 2,449 | 7 | Zero padding |
+| 2,456 | 48 | Active proposal or all-zero idle proposal |
+| 2,504 | 1,664 | Sixteen 104-byte member accounting records |
 
 Proposal fields: nonce (8), action (1), votes (1), padding (6), value (16), created
 (4), ready (4), expires (4), padding (4).
@@ -133,7 +149,9 @@ and every successful state output.
 
 ## Receiver fixture
 
-The 224-byte receiver state holds its init authority, audit address, once-bound
+The 224-byte receiver state holds its owner key (the deploy `owner_id`, at
+`owner_key_offset` 0; binding, fault controls and status are that owner's
+externals), audit address, once-bound
 vault address, member index, last accepted claim nonce, received total, receipt
 count, audit reserve, and rejection/duplicate fault controls.
 
@@ -149,13 +167,14 @@ the received principal. The receiver has no general wallet withdrawal method.
 ## Audit ledger
 
 The state is 65,540 bytes: a canonical 4-byte length prefix followed by a 65,536-byte
-payload. Owner is at offset 4; member count at 36; source bindings begin at 68.
+payload. The owner key, the deploy `owner_id`, is at offset 4, the
+`owner_key_offset`; binding and status are that owner's externals; member count at 36; source bindings begin at 68.
 Sixteen optional source-address slots are followed by reserved zero data.
 Records begin at offset 2,052; each is 32 bytes:
 
 `last_nonce:u64 + received_total:u128 + receipt_count:u64`.
 
-Only the initialization authority can bind each member index once to a distinct
+Only the owner can bind each member index once to a distinct
 receiver in the same DApp. Reports must have the correct index/source, regular
 internal method, zero transferred principal, no extras, and an increasing nonce.
 

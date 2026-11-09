@@ -19,8 +19,10 @@ Canonical method/event IDs are checked against official builder ACAB output by
 executes the complete local stand journey and replay. `AVM_LOCAL_STAND` and
 `AVM_WASMTIME_PROFILE` may select an explicit matching stand/profile.
 
-The journey independently expects the CLI deploy signer, Developer, to own
-each receiver and checks that expectation against receiver state. Package
-publication ownership and the external caller visible to `init` are different
-roles. Real native callbacks settle payments; no callback is fabricated by
+The journey deploys each receiver and the vesting account with the Developer
+key as deploy `owner_id` and checks that the receiver state carries it at
+`owner_key_offset` 0. Package publication ownership and the owner key are
+different roles. Participants act through wallets built from `examples/wallet`;
+the application status of a wallet call is read from the wallet's
+`wallet.callback` event. Real native callbacks settle payments; no callback is fabricated by
 the journey.

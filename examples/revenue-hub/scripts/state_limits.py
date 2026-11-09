@@ -43,8 +43,11 @@ def account_size(stand, address):
                 if a["address"] == address)
 
 
-def call_mode(stand, address, expected, force=0, extra=""):
-    result = stand.call(address, "boundary.update", bytes([force]), extra=extra)
+# The fixture keeps the deploy owner_id, by default the User identity, at
+# owner_key_offset 8; its updates are that owner's externals.
+def call_mode(stand, address, expected, force=0):
+    result = stand.call(address, "boundary.update", bytes([force]), identity="user")
+    stand.update_id = int(result["method_id"], 16)
     raw = bytes.fromhex(result["raw_executor_output"])
     state = bytes.fromhex(result["raw_state"])
     assert raw[9] == state[4] == expected, (raw[:20].hex(), state[:8].hex(), expected)
@@ -55,7 +58,7 @@ def call_mode(stand, address, expected, force=0, extra=""):
 def mismatch(stand, address, force):
     result = stand.command("call", address=address, method="boundary.update",
                            args_json=json.dumps("0x" + bytes([force]).hex()),
-                           identity="package-owner", extra_currencies="",
+                           identity="user", extra_currencies="",
                            **stand.timestamps())
     assert result["status"] == "error", result
     # This is the exact released diagnostic, not reinterpreted as output overflow.
@@ -67,7 +70,9 @@ def run(sdk, output):
     rows = []
     with tempfile.TemporaryDirectory(prefix="hub-state-limits-") as directory:
         stand = Stand(sdk, Path(directory))
-        assert stand.command("init", dapp_id=DAPP)["status"] == "ok"
+        identities = stand.command("init", dapp_id=DAPP)["identities"]
+        # Value reaches the fixture only on an internal message from a wallet.
+        stand.wallet("user", "user", identities["user"], extra_currencies="7:1")
         # 39 fixed bytes + one 20-byte SHELL currency entry in these accounts.
         for canonical, expected in [(65_535, 0), (65_536, 0), (65_537, 1)]:
             data = canonical - 59
@@ -84,7 +89,11 @@ def run(sdk, output):
         # and the subsequent update must switch to patches.
         address = deploy(stand, 65_477, "balance-transition")
         assert account_size(stand, address) == 65_536
-        before = call_mode(stand, address, 0, extra="7:1")
+        # The update that brings ECC 7 comes from the wallet; with force 0 the
+        # fixture writes the host-required mode, which is its output mode, to state[4].
+        sent = stand.send(address, stand.update_id, bytes([0]), wallet="user", extra=[(7, 1)])
+        assert bytes.fromhex(sent["raw_state"])[4] == 0, sent["raw_state"][:16]
+        before = {"mode": "FullReplace", "data_bytes": len(bytes.fromhex(sent["raw_state"])), "sent_by_wallet": True}
         assert account_size(stand, address) == 65_556
         after = call_mode(stand, address, 1)
         replay = stand.command("replay")

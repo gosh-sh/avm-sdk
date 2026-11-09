@@ -1,7 +1,8 @@
 #![forbid(unsafe_code)]
 
 use avm_contract_sdk::{
-    encode_event_fields, AccountAddress, CurrencyAmounts, EventField, EventIntent, EventKind,
+    encode_event_fields, AccountAddress, Caller, CurrencyAmounts, EventField, EventIntent,
+    EventKind,
 };
 pub mod ids;
 pub mod vault;
