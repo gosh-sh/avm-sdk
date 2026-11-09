@@ -462,17 +462,6 @@ impl Sim {
         self.call(actor, ids::SWAP_EXACT_IN, &body, &[])
     }
 
-    pub fn swap_exact_out(
-        &mut self,
-        actor: [u8; 32],
-        direction: u8,
-        amount_out: u128,
-        max_in: u128,
-    ) -> MessageOutput {
-        let body = Self::swap_body(direction, amount_out, max_in, NEVER);
-        self.call(actor, ids::SWAP_EXACT_OUT, &body, &[])
-    }
-
     pub fn withdraw(
         &mut self,
         actor: [u8; 32],

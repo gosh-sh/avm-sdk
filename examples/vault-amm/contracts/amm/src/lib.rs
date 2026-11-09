@@ -299,12 +299,7 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
         }
         ids::SWAP_EXACT_IN => {
             no_value(value)?;
-            let event = swap(&mut state, actor, body, now, Exactness::In)?;
-            finish(&state, event)
-        }
-        ids::SWAP_EXACT_OUT => {
-            no_value(value)?;
-            let event = swap(&mut state, actor, body, now, Exactness::Out)?;
+            let event = swap(&mut state, actor, body, now)?;
             finish(&state, event)
         }
         ids::WITHDRAW => {
@@ -458,26 +453,16 @@ fn remove_liquidity(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -
         .u128("shares", shares))
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Exactness {
-    In,
-    Out,
-}
-
-fn swap(
-    state: &mut State,
-    actor: [u8; 32],
-    body: &[u8],
-    now: u32,
-    exactness: Exactness,
-) -> Result<Ev> {
+/// Exact-input swap. (`math::swap_in` prices the exact-output direction; the
+/// contract does not expose it, to keep the guest under the deploy-body limit.)
+fn swap(state: &mut State, actor: [u8; 32], body: &[u8], now: u32) -> Result<Ev> {
     not_paused(state)?;
     expect_len(body, SWAP_ARGS_BYTES)?;
     let direction = body[0];
     if direction > 1 {
         return Err(ERR_ARGS);
     }
-    let (exact, bound) = (read_u128(body, 1)?, read_u128(body, 17)?);
+    let (amount_in, min_out) = (read_u128(body, 1)?, read_u128(body, 17)?);
     before_deadline(now, read_u32(body, 33)?)?;
     if !state.live() {
         return Err(ERR_NO_LIQUIDITY);
@@ -485,25 +470,14 @@ fn swap(
     let (side_in, side_out) = (usize::from(direction), 1 - usize::from(direction));
     let (reserve_in, reserve_out) = (state.reserve[side_in], state.reserve[side_out]);
     let fee = state.config.swap_fee_bps;
-    let (amount_in, amount_out) = match exactness {
-        Exactness::In => {
-            let out = math::swap_out(reserve_in, reserve_out, exact, fee).map_err(price_error)?;
-            if out == 0 {
-                return Err(ERR_ZERO);
-            }
-            if out < bound {
-                return Err(ERR_SLIPPAGE);
-            }
-            (exact, out)
-        }
-        Exactness::Out => {
-            let paid = math::swap_in(reserve_in, reserve_out, exact, fee).map_err(price_error)?;
-            if paid > bound {
-                return Err(ERR_SLIPPAGE);
-            }
-            (paid, exact)
-        }
-    };
+    let amount_out =
+        math::swap_out(reserve_in, reserve_out, amount_in, fee).map_err(price_error)?;
+    if amount_out == 0 {
+        return Err(ERR_ZERO);
+    }
+    if amount_out < min_out {
+        return Err(ERR_SLIPPAGE);
+    }
     // Split the fee: the protocol's cut leaves the pool, the rest stays in the
     // reserve and so raises the value of every LP share.
     let after_fee = math::amount_after_fee(amount_in, fee).ok_or(ERR_OVERFLOW)?;
