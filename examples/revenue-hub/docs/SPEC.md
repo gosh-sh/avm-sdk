@@ -103,7 +103,7 @@ unfunded reserve can prevent new claims.
 
 All fields are little-endian; addresses are DApp ID then account ID.
 
-### Configuration — 2,400 bytes
+### Configuration - 2,400 bytes
 
 | Offset | Bytes | Field |
 | --- | --- | --- |
@@ -124,7 +124,7 @@ configuration is the same address; a different configuration is a different
 vault. No method changes the configuration after init except the operating
 reserve slot, which governance controls.
 
-### Persisted state — 4,168 bytes
+### Persisted state - 4,168 bytes
 
 | Offset | Bytes | Field |
 | --- | --- | --- |

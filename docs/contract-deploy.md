@@ -17,7 +17,9 @@ committed fails with `VM_CODE_ALREADY_EXISTS`: name the committed code instead.
 ## Publish new code: the two-phase deploy
 
 Only an external deploy can carry a new module. On the network it completes
-in two phases, and the destination address moves through these states:
+in two phases, and the destination address moves through three states,
+`Uninit`, `Verify` and `Active`; `Finalized` and `Init` are records that
+blocks write for it:
 
 1. `Uninit`: the block producer of the destination thread admits the deploy,
    with its signatures, times, nonce and funding, and records it without the
@@ -28,10 +30,12 @@ in two phases, and the destination address moves through these states:
    every node then compiles it in the background. A module that fails
    admission validation instead ends the deploy with `VM_DEPLOY_FAILED`:
    nothing commits and the publication fee is burnt.
-3. `Finalized` and `Init`: once the block that published the code is final,
-   a `Finalized` record is written, and `code_deploy_window_seconds` after it
+3. `Active`: once the block that published the code is final, a
+   `Finalized` record is written, and `code_deploy_window_seconds` after it
    the `Init` record runs `init`. With a successful `init` the code, its
    selection, package and ABI metadata and the account commit together.
+   When the module does not compile or `init` fails, nothing commits and the
+   publication fee is still burnt: it burns in every case.
 
 While the address is `Uninit` or `Verify`, messages to it wait in its queue.
 A block carries at most one `Init` record with a successful `init` for a

@@ -16,7 +16,7 @@ every external call.
 |---|---|---|
 | `wallet.send` | external, owner key | one internal message with value; state unchanged |
 | `wallet.set_owner_key` | external, owner key | writes a new 32-byte key; it authorizes external calls from the next block, and a zero key makes the wallet keyless |
-| `wallet.receive` | any internal message | accepts the message value; state unchanged |
+| `wallet.receive` | any caller: an internal message, or an external under the owner key | accepts the message value; state unchanged |
 | `wallet.callback` | callback of a send | keeps the returned value and emits the `wallet.callback` event |
 
 `wallet.send` takes, after the length prefix of its ABI `bytes` argument: the

@@ -215,7 +215,7 @@ class Journey:
         assert self.state.read_bytes() == before, "unfunded deploy must have no state effects"
         address = missing["address"]
         # The 64-KiB batch fixture incurs rent at each later logical second.
-        # Fund the entire journey so its error probe reaches real guest code.
+        # Fund the entire journey so rent never exhausts the account.
         # An external carries no value: the account is funded with any
         # currency it later sends.
         funding = {"extra_currencies": funding_extra} if funding_extra else {}
