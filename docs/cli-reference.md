@@ -148,14 +148,16 @@ A command sends the message with `POST /v2/avm/messages`. When the node
 answers `WRONG_PRODUCER`, `NOT_BLOCK_PRODUCER` or `THREAD_MISMATCH`, it sends
 the same bytes to the first producer the answer names. It then reads
 `GET /v2/avm/messages/{message_hash}` every 0.5 seconds while the message is
-`queued`, and stops at its `expire_at`. The result's `outcome` holds
+`queued`, and stops 10 seconds after its `expire_at`: a node removes an
+expired message from its queue only when the next message arrives for the
+same thread, so the status can stay `queued` after `expire_at`. The result's `outcome` holds
 `message_hash`, `status`, `error`, `http_status`, the final `url` and the
 number of `posts` and `polls`. `status` is one of:
 
 | `status` | Meaning |
 |---|---|
 | `consumed` | A block of the destination thread consumed the message. That block can still be discarded before it is final |
-| `queued` | Still queued when `expire_at` passed |
+| `not_final` | Still queued 10 seconds after `expire_at`: its outcome is not known |
 | `failed` | The message left the queue without being consumed; `error.code` is the node's code, for example `MESSAGE_REJECTED` with `error.message` `AccountKeyNotAllowed` or `NonceReplay` |
 | `refused` | The node refused the message when it was sent; for example `INVALID_MESSAGE` whose `error.message` ends with `ExternalValueNotAllowed` for an external that carries value |
 
