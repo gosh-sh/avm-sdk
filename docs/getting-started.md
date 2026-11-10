@@ -182,6 +182,14 @@ execute without a SHELL charge while their source and destination remain in the
 same active routing partition. See [FUEL And SHELL](fuel-and-fees.md) before
 choosing reserves for internal messages.
 
+## Use A Network
+
+The same artifacts deploy to a network node with `avm-local-stand
+network-deploy`, and the owner key calls the contract with `network-call`.
+Both sign with key files and need the node's HTTP API URL; see
+[contract deploy](contract-deploy.md#deploy-on-a-network) and
+[owner key and external calls](owner-key-and-external-calls.md#call-a-contract-on-a-network).
+
 ## Upgrade And Replay
 
 Build a new version, publish it with `publish-version`, then call `upgrade`

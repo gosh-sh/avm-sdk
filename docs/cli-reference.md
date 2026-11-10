@@ -96,6 +96,74 @@ runs, reports peak linear-memory bytes and the maximum, warns at 80% of the decl
 maximum and fails on rejected growth or incomplete capture.
 See [contract memory](contract-memory.md) for the report's scope.
 
+## Network client
+
+Three `avm-local-stand` commands build, sign and send external messages to a
+network node. They keep no local state and print one JSON object:
+
+```text
+avm-local-stand network-call --endpoint <url> [--token-file <path>]
+  --wasmtime-profile <path> [--network-id <hex>] --key <path>
+  --address <dapp_id:account_id> --acab <path> --method <name>
+  --args-json <json> --fuel-fee-shells <n> [--nonce <n>]
+  [--created-at <s>] [--expire-at <s>]
+avm-local-stand network-deploy --endpoint <url> [--token-file <path>]
+  --wasmtime-profile <path> [--network-id <hex>] --key <path>
+  --dapp-id <hex> --wasm <path> --acab <path> --descriptor <path>
+  (--package-owner-key <path> | --committed) --salt-hex <hex>
+  --init-json <json> [--owner-id <hex>] --fuel-fee-shells <n>
+  [--created-at <s>] [--expire-at <s>] [--quote-address]
+avm-local-stand network-status --endpoint <url> [--token-file <path>]
+  --message-hash <hex>
+```
+
+- `--endpoint` is the node's HTTP API base URL, for example
+  `http://10.0.0.1:8600`; the commands use plain HTTP. `--token-file` holds
+  the API token that the node may require; it is sent as
+  `Authorization: Bearer <token>`.
+- `--key` and `--package-owner-key` name an ed25519 key file: the 32-byte
+  secret seed as 64 hex digits, or a JSON file
+  `{"public": "<hex>", "secret": "<hex>"}`.
+- The messages are signed for the network execution configuration of this
+  bundle and the `--wasmtime-profile`. `--network-id` replaces its network id
+  for a network that uses another one; the id is part of every signature.
+- `network-call` encodes the method arguments with the contract's ACAB and
+  signs the call with `--key`, which must be the destination's owner key. The
+  nonce defaults to the current Unix time in milliseconds: a message is
+  accepted only with a nonce above the last one accepted for the destination
+  and key, so pass `--nonce` to send several calls in the same millisecond or
+  to repeat a call deliberately.
+- `network-deploy` signs the deploy with `--key` and nonce 1, the first
+  external of that key to the new address. With `--package-owner-key` it
+  publishes the artifacts as a new package owned by that key; with
+  `--committed` it deploys over the committed code of the same artifacts,
+  which must already be published. `--owner-id` defaults to the public key of
+  `--key`. `--quote-address` prints the address, package and selection ids
+  without sending: fund the address first, because an external message
+  carries no value.
+- `--expire-at` defaults to 300 seconds after `--created-at`, which defaults to
+  the current time.
+
+A command sends the message with `POST /v2/avm/messages`. When the node
+answers `WRONG_PRODUCER`, `NOT_BLOCK_PRODUCER` or `THREAD_MISMATCH`, it sends
+the same bytes to the first producer the answer names. It then reads
+`GET /v2/avm/messages/{message_hash}` every 0.5 seconds while the message is
+`queued`, and stops at its `expire_at`. The result's `outcome` holds
+`message_hash`, `status`, `error`, `http_status`, the final `url` and the
+number of `posts` and `polls`. `status` is one of:
+
+| `status` | Meaning |
+|---|---|
+| `consumed` | A block of the destination thread consumed the message. That block can still be discarded before it is final |
+| `queued` | Still queued when `expire_at` passed |
+| `failed` | The message left the queue without being consumed; `error.code` is the node's code, for example `MESSAGE_REJECTED` with `error.message` `AccountKeyNotAllowed` or `NonceReplay` |
+| `refused` | The node refused the message when it was sent; for example `INVALID_MESSAGE` whose `error.message` ends with `ExternalValueNotAllowed` for an external that carries value |
+
+The command exits with status 0 only for `consumed`, and `network-deploy
+--quote-address` with 0 after building the deploy. `network-status` makes one
+status read with the same fields. Only the node that queued a message knows
+its status, for 10 minutes.
+
 ## Additional tooling
 
 The following tooling is available in SDK 0.3.0 and later; these options are

@@ -82,8 +82,28 @@ message is accepted only with a nonce above the last one accepted for that
 pair. The local stand assigns nonces and signs with its `developer`,
 `package-owner` and `user` identities (`call --identity`). A BM token
 attributes paid external execution to a Block Manager; it does not authorize
-the call. This SDK release does not include network tooling that builds,
-signs or submits external messages.
+the call.
+
+## Call a contract on a network
+
+`avm-local-stand network-call` signs a call with the owner key and sends it to
+a network node, following the node's redirect to the producer of the
+destination thread and waiting for its outcome:
+
+```bash
+avm-local-stand network-call --endpoint "$AVM_NODE" \
+  --wasmtime-profile "$AVM_PROFILE" --key owner.key \
+  --address "$WALLET_ADDRESS" --acab target/avm/contract.acab \
+  --method wallet.send --args-json "$SEND_ARGS" --fuel-fee-shells 100000
+```
+
+A call under another key ends with `status` `failed`, `error.code`
+`MESSAGE_REJECTED` and `error.message` `AccountKeyNotAllowed`; a repeated
+nonce with `NonceReplay`. Without `--nonce` the command uses the current Unix
+time in milliseconds. The node refuses an external with value before it
+queues it: `status` `refused`, `error.code` `INVALID_MESSAGE` and an
+`error.message` that ends with `ExternalValueNotAllowed`. See the
+[CLI reference](cli-reference.md#network-client) for every option and result.
 
 ## Calls from other people
 

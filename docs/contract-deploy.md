@@ -45,9 +45,35 @@ hash, `code_len` and `function_count`.
 
 The local stand runs a deploy that carries code in one command: it does not
 model the producer's compile window, the `Verify` wait or finality, so a
-network deploy completes later than the same deploy on the stand. This SDK
-release does not include network tooling that submits or tracks a two-phase
-deploy.
+network deploy completes later than the same deploy on the stand.
+
+## Deploy on a network
+
+`avm-local-stand network-deploy` signs a deploy and sends it to a network node.
+Derive the address with `--quote-address`, fund it by an internal message, for
+example from a wallet, and then send the deploy:
+
+```bash
+avm-local-stand network-deploy --endpoint "$AVM_NODE" \
+  --wasmtime-profile "$AVM_PROFILE" --key deployer.key \
+  --package-owner-key package-owner.key --dapp-id "$DAPP_ID" \
+  --wasm target/avm/contract.wasm --acab target/avm/contract.acab \
+  --descriptor target/avm/contract.descriptor \
+  --salt-hex 01 --init-json null --fuel-fee-shells 100000 --quote-address
+```
+
+With `--package-owner-key` the deploy publishes the artifacts as a new package
+through the two-phase deploy. With `--committed` instead it deploys another
+account over the committed code of the same artifacts, at once. The result
+names the address, `package_id`, `selected_code_id` and `code_hash`.
+
+The node reports the deploy message's status, not the phases of its address:
+`consumed` means a block consumed the deploy, which for new code is the block
+of its `Uninit` record. The later `Verify`, `Finalized` and `Init` records do
+not change that status. Messages to the address wait in its queue until
+`Init`, so the first call to the new contract that ends `consumed` shows that
+the deploy completed. A deploy that failed leaves no account, and such a call
+is not consumed.
 
 ## Fees and caps
 
