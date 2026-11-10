@@ -31,8 +31,10 @@ def deploy(stand, length, salt):
     deployed = stand.command("deploy", **options)
     assert deployed["status"] == "ok", deployed
     if "boundary" not in stand.selections:
+        # The wallet code is committed first; take the selection that is new.
+        existing = {v["selected_code_id"] for v in stand.selections.values()}
         entries = stand.command("inspect")["registry_entries"]
-        entry = next(e for e in entries if e["key"].startswith("02"))
+        entry = next(e for e in entries if e["key"].startswith("02") and e["value"][:64] not in existing)
         stand.selections["boundary"] = {"selected_code_id": entry["value"][:64],
                                          "package_id": entry["value"][64:128]}
     return address
