@@ -31,7 +31,7 @@ setting changes, except through a *proposal*:
 | `SET_POLICY` | per-currency **fast limit** (transfers up to it skip the delay) and **window limit** (max outflow per `window_secs`); `window_secs = 0` removes the policy |
 | `UNFREEZE` | lifts a freeze; no delay, still needs the threshold |
 
-Governance proposals never get the fast lane. Every proposal is re-validated just
+Governance proposals other than `UNFREEZE` never get the fast lane. Every proposal is re-validated just
 before it executes (the owner set, threshold and balances may have changed).
 
 **Freeze.** Any single owner can freeze the treasury. While frozen nothing can be
@@ -41,8 +41,8 @@ available accounting capacity; there is no recovery method for missing or invali
 
 **Payouts.** A transfer debits the ledger first and sends the funds with a callback
 request. `TRS1 | currency u32 | proposal id u64 | amount u128` is the receipt the
-payee must echo. A bounce returns the funds, restores the spending allowance and puts the
-proposal back in the queue; one payout per recipient may be in flight (at most 4
+payee must echo. A bounce returns the funds and puts the proposal back in the queue. It restores
+spending allowance only if the spending window has not rolled over; one payout per recipient may be in flight (at most 4
 overall), so the callback's source address identifies the payout.
 
 **Safety net.** Every call decodes and validates the structural state invariants.
@@ -85,6 +85,27 @@ for artifact sizes/hashes, logs and scope. Earlier figures below are historical
 
 ## Verify
 
+For the recorded SDK 0.4.0 results, use the checksum-verified immutable bundle
+`avm-dev-d103b6ccc759-sdk-21364083b24a` and Rust/Cargo 1.99.1.
+Install that exact tag using the repository's `scripts/release.py install`
+with its release archive and checksum file before continuing. The commands below
+assume the default SDK installation directory; adjust it for a custom installation.
+They select the immutable release directly rather than the mutable `current` link:
+
+```sh
+export AVM_REPRO_SDK="$HOME/.local/share/avm-sdk/releases/avm-dev-d103b6ccc759-sdk-21364083b24a/avm-sdk-linux-x86_64"
+test -x "$AVM_REPRO_SDK/bin/avm-contract-build" &&
+test -x "$AVM_REPRO_SDK/bin/avm-local-stand" || exit 1
+export PATH="$AVM_REPRO_SDK/bin:$PATH"
+export RUSTUP_TOOLCHAIN=1.99.1
+rustc --version
+cargo --version
+```
+
+Run the following commands from this example's directory in the same shell.
+Using another SDK bundle or toolchain requires a new validation; these instructions
+do not qualify SDK 0.5.x.
+
 ```sh
 pip install blake3
 ./scripts/check.sh      # id rule, manifests, fmt, clippy (native and wasm32) -D warnings, tests
@@ -95,7 +116,7 @@ On Linux with the SDK commands installed, build both contracts and run the journ
 ```sh
 avm-contract-build build --manifest-path contracts/treasury/Cargo.toml
 avm-contract-build build --manifest-path contracts/payee/Cargo.toml
-python3 scripts/e2e.py --sdk ~/.local/share/avm-sdk/current
+python3 scripts/e2e.py --sdk "$AVM_REPRO_SDK"
 ```
 
 ## Sizes
