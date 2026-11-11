@@ -108,6 +108,27 @@ for artifact sizes/hashes, logs and scope. Earlier figures below are historical
 
 ## Verify
 
+For the recorded SDK 0.4.0 results, use the checksum-verified immutable bundle
+`avm-dev-d103b6ccc759-sdk-21364083b24a` and Rust/Cargo 1.99.1.
+Install that exact tag using the repository's `scripts/release.py install`
+with its release archive and checksum file before continuing. The commands below
+assume the default SDK installation directory; adjust it for a custom installation.
+They select the immutable release directly rather than the mutable `current` link:
+
+```sh
+export AVM_REPRO_SDK="$HOME/.local/share/avm-sdk/releases/avm-dev-d103b6ccc759-sdk-21364083b24a/avm-sdk-linux-x86_64"
+test -x "$AVM_REPRO_SDK/bin/avm-contract-build" &&
+test -x "$AVM_REPRO_SDK/bin/avm-local-stand" || exit 1
+export PATH="$AVM_REPRO_SDK/bin:$PATH"
+export RUSTUP_TOOLCHAIN=1.99.1
+rustc --version
+cargo --version
+```
+
+Run the following commands from this example's directory in the same shell.
+Using another SDK bundle or toolchain requires a new validation; these instructions
+do not qualify SDK 0.5.x.
+
 ```sh
 pip install blake3
 ./scripts/check.sh      # ids, oracle vectors, fmt, clippy -D warnings, tests
@@ -119,7 +140,7 @@ build both contracts and run the journey on the local stand:
 ```sh
 avm-contract-build build --manifest-path contracts/amm/Cargo.toml
 avm-contract-build build --manifest-path contracts/receiver/Cargo.toml
-python3 scripts/e2e.py --sdk "$HOME/.local/share/avm-sdk/current"
+python3 scripts/e2e.py --sdk "$AVM_REPRO_SDK"
 ```
 
 ## Sizes
