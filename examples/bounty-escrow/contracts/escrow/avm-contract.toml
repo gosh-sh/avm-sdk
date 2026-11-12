@@ -1,6 +1,6 @@
 [descriptor]
 execution_mode = "message_isolated"
-state_schema_id = "61edafacedc1f6bf1ab506351d539ce2f2fc5f110907890621830cc8be75a7ba"
+state_schema_id = "611387b8821a94e71fe7a21553d177ef902715f238624b464ba94ec81999b8a7"
 owner_key_offset = 0
 
 [abi]
@@ -10,7 +10,7 @@ state_root_type_id = 1
 id = 1
 kind = "fixed_bytes"
 name = "state"
-len = 2864
+len = 2872
 
 [[abi.types]]
 id = 2
@@ -475,3 +475,41 @@ message = "attempt limit"
 status_code = 2009
 name = "insufficient_balance"
 message = "insufficient balance"
+
+[[abi.events]]
+name = "escrow.expired"
+
+[[abi.events.fields]]
+id = 1
+type_id = 7
+name = "amount"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "attempt"
+
+[[abi.events.fields]]
+id = 3
+type_id = 7
+name = "funded"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "index"
+
+[[abi.events.fields]]
+id = 5
+type_id = 7
+name = "paid"
+
+[[abi.events.fields]]
+id = 6
+type_id = 7
+name = "pending"
+
+[[abi.events.fields]]
+id = 7
+type_id = 7
+name = "refunded"

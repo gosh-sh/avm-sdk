@@ -17,7 +17,7 @@ METHODS = {
     "RECEIVE": "bounty.receiver.receive", "BIND": "bounty.receiver.bind",
     "REJECT": "bounty.receiver.reject",
 }
-EVENTS = ["created", "status", "fees_added", "funded", "submitted", "approved",
+EVENTS = ["expired", "created", "status", "fees_added", "funded", "submitted", "approved",
           "transfer_pending", "transfer_settled", "transfer_failed"]
 
 def identifier(contract, name, prefix):

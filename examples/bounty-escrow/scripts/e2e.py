@@ -59,6 +59,9 @@ class Stand:
         precondition = self.command("deploy", quote_address=True, **options)
         assert precondition.get("quoted") is True, precondition
         address = precondition["address"]
+        if contract == "escrow":
+            later = dict(options, block_time=self.time+100000, created_at=self.time+100000, expire_at=self.time+103600)
+            assert self.command("deploy", quote_address=True, **later)["address"] == address
         funding = self.command("fund-user", address=address, shells=10_000_000,
                                **({"extra_currencies": extra} if extra else {}))
         assert funding["status"] == "ok", funding
@@ -114,7 +117,7 @@ class Stand:
 
 def assert_state(result, funded, paid, refunded, pending, attempts, phases):
     raw = bytes.fromhex(result["raw_state"])
-    assert len(raw) == 2864, len(raw)
+    assert len(raw) == 2872, len(raw)
     actual = dict(funded=int.from_bytes(raw[456:472],"little"),
                   paid=int.from_bytes(raw[472:488],"little"),
                   refunded=int.from_bytes(raw[488:504],"little"),
@@ -130,7 +133,7 @@ def assert_event(result, name):
 def address_bytes(value):
     return bytes.fromhex(value.replace(":", ""))
 
-def config(owner, owner_wallet, worker_wallet, refund, pay):
+def config(owner, owner_wallet, worker_wallet, refund, pay, deadline=100):
     data = bytearray(456)
     data[:32] = bytes.fromhex(owner)
     data[32:96] = address_bytes(owner_wallet)
@@ -138,7 +141,7 @@ def config(owner, owner_wallet, worker_wallet, refund, pay):
     data[160:224] = address_bytes(refund)
     data[224:288] = address_bytes(pay)
     data[288:304] = (1000).to_bytes(16, "little")
-    data[304:308] = (BASE_TIME+100).to_bytes(4, "little")
+    data[304:308] = deadline.to_bytes(4, "little")
     data[308] = 3
     for i,amount in enumerate([300,400,300]):
         data[312+i*16:328+i*16] = amount.to_bytes(16,"little")
@@ -163,6 +166,7 @@ def run(sdk, output):
             refund = stand.deploy("receiver", "client", owner)
             escrow = stand.deploy("escrow", "bounty", owner,
                                   config(owner, owner_wallet, worker_wallet, refund, pay))
+            origin = stand.time
             stand.call(escrow, "bounty.escrow.status")
             stand.send(owner_wallet, "developer", escrow, "bounty.escrow.fund", extra=[(7, 1000)], expected_status=2004)
             # The node admits an external only under the destination's owner
@@ -203,7 +207,7 @@ def run(sdk, output):
             body = b"\x01" + b"\x43"*32
             stand.send(worker_wallet,"user",escrow,"bounty.escrow.submit",body)
             stand.call(escrow,"bounty.escrow.approve",body)
-            stand.time = BASE_TIME+100
+            stand.time = origin+100
             stand.call(refund,"bounty.receiver.reject",b"\x01",identity="developer")
             result = stand.call(escrow,"bounty.escrow.refund")
             assert result["status"] == "ok", result
@@ -215,10 +219,20 @@ def run(sdk, output):
             result = stand.send(worker_wallet,"user",escrow,"bounty.escrow.pay",b"\x01")
             assert_state(result,1000,700,300,0,5,[3,3,4])
             stand.call(escrow,"bounty.escrow.refund",expected_status=2003)
-            stand.send(worker_wallet,"user",escrow,"bounty.escrow.submit",b"\x02"+b"\x44"*32,expected_status=2005)
+            stand.send(worker_wallet,"user",escrow,"bounty.escrow.submit",b"\x02"+b"\x44"*32)
             result = stand.call(escrow,"bounty.escrow.status")
             assert result["status"] == "ok", result
             final = assert_state(result,1000,700,300,0,5,[3,3,4])
+            late_pay = stand.deploy("receiver", "late-pay", owner)
+            late_refund = stand.deploy("receiver", "late-refund", owner)
+            late_escrow = stand.deploy("escrow", "late-escrow", owner,
+                config(owner, owner_wallet, worker_wallet, late_refund, late_pay, deadline=0))
+            for destination in (late_pay, late_refund):
+                stand.call(destination, "bounty.receiver.bind", address_bytes(late_escrow))
+            late = stand.send(owner_wallet, "developer", late_escrow, "bounty.escrow.fund", extra=[(0, 1000)])
+            assert_state(late,1000,0,0,0,0,[0,0,0])
+            late = stand.call(late_escrow,"bounty.escrow.refund")
+            late_final = assert_state(late,1000,0,1000,0,1,[4,4,4])
             events = stand.command("events")
             inspect = stand.command("inspect")
             replay = stand.command("replay")
@@ -226,7 +240,7 @@ def run(sdk, output):
             assert inspect["queue"]["message_count"] == 0, inspect["queue"]
             for key in ["account_state_root", "registry_root", "cumulative_fee_shells", "accepted_input_count"]:
                 assert replay[key] == inspect[key], (key,replay[key],inspect[key])
-            output.write_text(json.dumps({"status":"PASS", "accounting":final, "escrow":escrow, "events":events,
+            output.write_text(json.dumps({"status":"PASS", "accounting":final, "late_accounting":late_final, "escrow":escrow, "events":events,
                                          "inspect":inspect, "replay":replay, "journal":stand.log}, indent=2)+"\n")
             print(f"AVM journey PASS: {output}")
         except Exception:

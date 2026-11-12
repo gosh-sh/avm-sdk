@@ -23,6 +23,7 @@ pub const EVENT_CLAIM_FAILED: u64 = 0xb09c41a209f8f87d;
 pub const EVENT_PROPOSED: u64 = 0x33308d7ed2d69d29;
 pub const EVENT_VOTED: u64 = 0x88f8bc0db4117ed3;
 pub const EVENT_EXECUTED: u64 = 0xf0daabd551426fca;
+pub const EVENT_EXPIRED: u64 = 0xbb9572824b99c1a6;
 pub const EVENT_STATUS: u64 = 0x75403d3e78643495;
 pub const EVENT_FEES_ADDED: u64 = 0x6a7a1b3c0154fe74;
 pub const EVENT_AUDITED: u64 = 0x60e231e6813a96aa;

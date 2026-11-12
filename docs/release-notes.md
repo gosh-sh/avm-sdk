@@ -1,5 +1,10 @@
 # AVM SDK 0.6.1
 
+- Use relative schedules in `vesting-streams`: start, cliff and end are offsets from the first execution, zero start is allowed, late deployment and funding are accepted, and cancellation after end preserves the full earned amount with no refund entitlement. State grows from 3592 to 3600 bytes; the new schema id is `252aa2507344852d6703cbe2d53e2020230641e4c6938a93e3ca2f5599af63a5`.
+- Use a relative deadline in `bounty-escrow`, measured from its first execution. Deployment and exact one-time funding are accepted after the offset; late submission and approval acknowledge expiry without creating approved rights, and unapproved funds become refundable. Zero offset is valid. State grows from 2864 to 2872 bytes; the new schema id is `611387b8821a94e71fe7a21553d177ef902715f238624b464ba94ec81999b8a7`.
+- Store Revenue Hub governance times as wide elapsed offsets from the first execution. A zero governance delay is allowed; expired votes and executions succeed with `hub.expired` and apply no vote or action. Vault state grows from 4168 to 4192 bytes; the new schema id is `9b29bb574f1cbe12d9904f2e1c40ea1fade8285ef49566d274b5195ce6a9335f`.
+- Fix the local stand's execution context so `block_seq_no` matches the node for the same block. Its value is one higher than earlier local-stand output.
+
 - Deploy a module above 1 MiB, up to `max_code_size`, on the network and on the local stand: the input of a deploy that carries code is bounded only by its own `max_code_deploy_input_bytes` (3276800 bytes). SDK 0.6.0 also applied the general 1048576-byte input limit and rejected such deploys; every other input keeps that general limit.
 - The `init` of a deploy that carries code receives the whole deploy message, module included, so the contract's `arena_bytes` must hold that input and the `init` output together. Measure both deploy forms, a deploy that carries the code and a deploy from a committed selection, with production-sized `init_data`, `salt`, `ui_name` and `deploy_meta`, and remeasure `avm-memory.json` after any source, dependency, toolchain or supported-input change; see [contract memory](contract-memory.md).
 - Keep a deploy's `salt`, `ui_name` and all `deploy_meta` field names and values within 235 bytes together: the mandatory `avm.account.init` event must fit `max_event_value_bytes` (500 bytes), and a larger deploy fails its `init` with status 44 (`VM_ABI_OUTPUT_MALFORMED`) on the network and on the local stand. Put larger deploy data into `init_data`.
@@ -9,6 +14,8 @@
 - AccountBatch execution is not supported by the node yet; a message to such code ends with status 21. The local stand ends it the same way, and the bundled `contract-batch-patch` example and the Revenue Hub audit ledgers are now message-isolated contracts.
 
 ## Compatibility
+
+- Rebuild and redeploy copies of `vesting-streams`, `bounty-escrow` and the Revenue Hub vault to use the new relative schedules and state schemas. Existing deployments keep their old WASM and behavior; no migration handler is provided. Constructor schedule values are durations rather than calendar timestamps.
 
 - Fund the address of every external deploy for its whole pre-execution charge, including the publication fee of a new selection, and give the deploy a non-zero `fuel_fee_shells`: such deploys that SDK 0.6.0 admitted are now refused.
 - Scripts that match the local stand's refusal reason for an unpaid external call must expect the network's reason.

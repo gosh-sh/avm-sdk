@@ -1,10 +1,10 @@
 use crate::*;
 
 pub const CONFIG_BYTES: usize = 2400;
-pub const STATE_BYTES: usize = 4168;
+pub const STATE_BYTES: usize = 4192;
 pub const MEMBERS_BASE: usize = 224;
 pub const MEMBER_BYTES: usize = 136;
-pub const MEMBER_STATE_BASE: usize = 2504;
+pub const MEMBER_STATE_BASE: usize = 2520;
 pub const MEMBER_STATE_BYTES: usize = 104;
 pub const PAUSE: u8 = 1;
 pub const RESUME: u8 = 2;
@@ -67,7 +67,6 @@ impl Config {
         let n = usize::from(self.count);
         if n == 0
             || n > MAX_MEMBERS
-            || self.delay == 0
             || self.vote_window == 0
             || self.initial_fuel == 0
             || self
@@ -139,9 +138,9 @@ pub struct Proposal {
     pub action: u8,
     pub votes: u8,
     pub value: u128,
-    pub created: u32,
-    pub ready: u32,
-    pub expires: u32,
+    pub created: u64,
+    pub ready: u64,
+    pub expires: u64,
 }
 impl Proposal {
     pub fn body(&self) -> Vec<u8> {
@@ -171,6 +170,8 @@ impl Proposal {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct State {
     pub config: Config,
+    /// First-execution block-time observation used only as a relative origin.
+    pub origin_time: u32,
     pub received: u128,
     pub paid: u128,
     pub claim_nonce: u64,
@@ -187,6 +188,7 @@ impl State {
         let fuel_limit = config.initial_fuel;
         Self {
             config,
+            origin_time: 0,
             received: 0,
             paid: 0,
             claim_nonce: 0,
@@ -202,7 +204,8 @@ impl State {
             || b[2449..2456] != [0; 7]
             || b[2448] > 1
             || b[2466..2472] != [0; 6]
-            || b[2500..2504] != [0; 4]
+            || b[2512..2520] != [0; 8]
+            || b[4188..4192] != [0; 4]
         {
             return Err(E_STATE);
         }
@@ -223,6 +226,7 @@ impl State {
         }
         let s = Self {
             config,
+            origin_time: u32_at(b, 4184)?,
             received: u128_at(b, 2400)?,
             paid: u128_at(b, 2416)?,
             claim_nonce: u64_at(b, 2432)?,
@@ -233,9 +237,9 @@ impl State {
                 action: b[2464],
                 votes: b[2465],
                 value: u128_at(b, 2472)?,
-                created: u32_at(b, 2488)?,
-                ready: u32_at(b, 2492)?,
-                expires: u32_at(b, 2496)?,
+                created: u64_at(b, 2488)?,
+                ready: u64_at(b, 2496)?,
+                expires: u64_at(b, 2504)?,
             },
             members,
             fuel_limit,
@@ -290,8 +294,8 @@ impl State {
             || p.votes == 0
             || p.votes & !7 != 0
             || Proposal::decode_body(&p.body()).is_err()
-            || p.created.checked_add(self.config.delay) != Some(p.ready)
-            || p.ready.checked_add(self.config.vote_window) != Some(p.expires)
+            || p.created.checked_add(u64::from(self.config.delay)) != Some(p.ready)
+            || p.ready.checked_add(u64::from(self.config.vote_window)) != Some(p.expires)
         {
             return Err(E_STATE);
         }
@@ -307,14 +311,15 @@ impl State {
         b[2432..2440].copy_from_slice(&self.claim_nonce.to_le_bytes());
         b[2440..2448].copy_from_slice(&self.proposal_nonce.to_le_bytes());
         b[2448] = u8::from(self.paused);
+        b[4184..4188].copy_from_slice(&self.origin_time.to_le_bytes());
         let p = self.proposal;
         b[2456..2464].copy_from_slice(&p.nonce.to_le_bytes());
         b[2464] = p.action;
         b[2465] = p.votes;
         b[2472..2488].copy_from_slice(&p.value.to_le_bytes());
-        b[2488..2492].copy_from_slice(&p.created.to_le_bytes());
-        b[2492..2496].copy_from_slice(&p.ready.to_le_bytes());
-        b[2496..2500].copy_from_slice(&p.expires.to_le_bytes());
+        b[2488..2496].copy_from_slice(&p.created.to_le_bytes());
+        b[2496..2504].copy_from_slice(&p.ready.to_le_bytes());
+        b[2504..2512].copy_from_slice(&p.expires.to_le_bytes());
         for (i, m) in self.members.iter().enumerate() {
             let o = MEMBER_STATE_BASE + i * MEMBER_STATE_BYTES;
             for (off, n) in [(0, m.claimable), (16, m.paid), (32, m.pending)] {

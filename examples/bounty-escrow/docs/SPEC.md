@@ -31,9 +31,9 @@ estimator: the runtime still validates fixed delivery/callback fees and rent.
 
 | Phase | Operation | Next phase |
 | --- | --- | --- |
-| Open | Worker submits nonzero hash before deadline | Submitted |
-| Submitted | Worker revises hash before deadline | Submitted with new hash |
-| Submitted | Owner approves exact current hash before deadline | Approved |
+| Open | Worker submits nonzero hash before the relative offset | Submitted |
+| Submitted | Worker revises hash before the relative offset | Submitted with new hash |
+| Submitted | Owner approves exact current hash before the relative offset | Approved |
 | Approved | Owner/worker requests payment | Approved, transfer pending |
 | Approved and pending | Successful authenticated receipt | Paid |
 | Approved and pending | Failed receipt returns exact principal | Approved, idle |
@@ -41,8 +41,18 @@ estimator: the runtime still validates fixed delivery/callback fees and rent.
 | Refund pending | Successful receipt | All remaining Open/Submitted become Refunded |
 | Refund pending | Failed receipt returns exact principal | Original phases, idle |
 
-The deadline is exclusive for funding, submission, and approval: those operations
-require `block_time < deadline`. Refund requires `block_time >= deadline`.
+The configured deadline is a `u32` offset in seconds from the first execution
+(`init`), not a calendar timestamp. Init records the canonical
+`MessageInput.context.block_time` observation as its origin. Elapsed seconds
+are `block_time.saturating_sub(origin_time)`. Init and exact one-time funding
+are accepted at every execution time. Offset zero is valid: the escrow is
+immediately eligible for its after-deadline behavior once funded.
+
+Before the offset, submission and approval operate normally. At or after it,
+an authenticated submit/approve with a valid body returns success and emits
+`escrow.expired`, without changing milestone phases or creating approved
+rights. The owner may refund the unapproved balance. A refund before the offset
+still fails as not yet eligible.
 Approved work may be paid at any later time. Any unresolved transfer blocks all
 business mutations; status and fee donations remain available.
 
@@ -72,7 +82,7 @@ phases, nonzero active delivery hashes, and a canonical receipt ledger.
 | 160 | 64 | Refund destination: DApp ID then account ID |
 | 224 | 64 | Payment destination: DApp ID then account ID |
 | 288 | 16 | Total principal |
-| 304 | 4 | Deadline (AVM logical block time) |
+| 304 | 4 | Deadline offset in seconds from init |
 | 308 | 1 | Milestone count, 1 through 8 |
 | 309 | 3 | Zero padding |
 | 312 | 128 | Eight milestone amounts; unused entries zero |
@@ -85,7 +95,7 @@ It does not confuse the deployment envelope with raw configuration. The ACDP
 parser validates its declared variable-section lengths and zero reserved bytes.
 Runtime package/hash/signature validation remains the runtime's responsibility.
 
-## State wire layout (2,864 bytes)
+## State wire layout (2,872 bytes)
 
 | Offset | Size | Field |
 | --- | --- | --- |
@@ -103,6 +113,8 @@ Runtime package/hash/signature validation remains the runtime's responsibility.
 | 552 | 256 | Eight delivery hashes |
 | 808 | 8 | Number of accepted callback causal hashes |
 | 816 | 2,048 | Up to 64 accepted causal hashes; unused slots zero |
+| 2,864 | 4 | First-execution block-time observation; not a future deadline |
+| 2,868 | 4 | Zero padding |
 
 Idle pending fields must all be zero. A pending attempt is the most recent
 dispatch. Receipt count equals attempts minus one when pending, and equals
@@ -121,7 +133,8 @@ attempts when idle. Accepted receipt hashes are nonzero and distinct.
 | `bounty.escrow.topup` | Empty; only transferred SHELL (ECC 2) | Any internal caller |
 
 No extra principal or currencies are accepted by business/status operations.
-There is no code-upgrade entrypoint. Method/event IDs in `ids.rs` are extracted
+The `escrow.expired` event uses the same accounting fields as the other escrow
+events. There is no code-upgrade entrypoint or state migration handler. Method/event IDs in `ids.rs` are extracted
 from the official builder's canonical ACAB by `scripts/sync_ids.py`.
 
 ## Payment body and receipt (32 bytes)
@@ -150,7 +163,7 @@ arbitrarily supplied synthetic callback bytes outside that runtime trust model.
 | 2002 | Malformed or inconsistent state |
 | 2003 | Operation incompatible with phase/funding |
 | 2004 | Unexpected transferred value/currency |
-| 2005 | Deadline condition failed |
+| 2005 | Refund offset not yet reached |
 | 2006 | Another transfer is unresolved |
 | 2007 | Invalid, stale, or mismatched callback |
 | 2008 | 64-attempt bound reached |

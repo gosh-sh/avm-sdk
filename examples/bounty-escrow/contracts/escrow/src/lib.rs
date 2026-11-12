@@ -17,7 +17,7 @@ pub fn principal(extra: CurrencyAmounts<'_>) -> u128 {
 }
 
 pub const CONFIG_BYTES: usize = 456;
-pub const STATE_BYTES: usize = 2864;
+pub const STATE_BYTES: usize = 2872;
 pub const MAX_MILESTONES: usize = 8;
 pub const MAX_ATTEMPTS: usize = 64;
 pub const OPEN: u8 = 0;
@@ -85,7 +85,6 @@ impl Config {
             || !nonzero_address(config.refund_to)
             || config.pay_to == config.refund_to
             || config.total == 0
-            || config.deadline == 0
             || config.fuel_reserve == 0
             || config.amounts[..n].contains(&0)
             || config.amounts[n..].iter().any(|v| *v != 0)
@@ -128,6 +127,8 @@ pub struct Pending {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct State {
     pub config: Config,
+    /// First-execution block-time observation, not a future deadline.
+    pub origin_time: u32,
     pub funded: u128,
     pub paid: u128,
     pub refunded: u128,
@@ -142,6 +143,7 @@ impl State {
     pub fn new(config: Config) -> Self {
         Self {
             config,
+            origin_time: 0,
             funded: 0,
             paid: 0,
             refunded: 0,
@@ -153,7 +155,7 @@ impl State {
         }
     }
     pub fn decode(b: &[u8]) -> Result<Self> {
-        if b.len() != STATE_BYTES || b[514..520] != [0; 6] {
+        if b.len() != STATE_BYTES || b[514..520] != [0; 6] || b[2868..2872] != [0; 4] {
             return Err(ERR_STATE);
         }
         let receipt_count = u64::from_le_bytes(array(b, 808)?);
@@ -175,6 +177,7 @@ impl State {
         }
         let state = Self {
             config: Config::decode(&b[..CONFIG_BYTES]).map_err(|_| ERR_STATE)?,
+            origin_time: u32::from_le_bytes(array(b, 2864)?),
             funded: read_u128(b, 456)?,
             paid: read_u128(b, 472)?,
             refunded: read_u128(b, 488)?,
@@ -261,6 +264,7 @@ impl State {
     pub fn encode(&self) -> Vec<u8> {
         let mut b = vec![0; STATE_BYTES];
         b[..CONFIG_BYTES].copy_from_slice(&self.config.encode());
+        b[2864..2868].copy_from_slice(&self.origin_time.to_le_bytes());
         for (offset, value) in
             [(456, self.funded), (472, self.paid), (488, self.refunded), (520, self.pending.amount)]
         {
@@ -304,18 +308,21 @@ fn initialize(input: MessageInput<'_>) -> Result<MessageOutput> {
     if config.owner != deploy.owner_id() {
         return Err(ERR_AUTH);
     }
-    if !input.state.is_empty() || config.deadline <= input.context.block_time {
+    if !input.state.is_empty() {
         return Err(ERR_ARGS);
     }
     if config.pay_to == input.destination || config.refund_to == input.destination {
         return Err(ERR_ARGS);
     }
     zero_value(&input)?;
-    finish(State::new(config), "escrow.created", 255, 0)
+    let mut state = State::new(config);
+    state.origin_time = input.context.block_time;
+    finish(state, "escrow.created", 255, 0)
 }
 
 fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
     let mut state = State::decode(input.state)?;
+    let elapsed = input.context.block_time.saturating_sub(state.origin_time);
     if input.message.is_callback() {
         return callback(input, state);
     }
@@ -355,9 +362,6 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
         if !owner_wallet {
             return Err(ERR_AUTH);
         }
-        if input.context.block_time >= state.config.deadline {
-            return Err(ERR_DEADLINE);
-        }
         if state.funded != 0 {
             return Err(ERR_PHASE);
         }
@@ -381,9 +385,6 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
             if !worker {
                 return Err(ERR_AUTH);
             }
-            if input.context.block_time >= state.config.deadline {
-                return Err(ERR_DEADLINE);
-            }
             if input.message.body().len() != 33 {
                 return Err(ERR_ARGS);
             }
@@ -391,6 +392,9 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
             let hash = array(input.message.body(), 1)?;
             if hash == [0; 32] {
                 return Err(ERR_ARGS);
+            }
+            if elapsed >= state.config.deadline {
+                return finish(state, "escrow.expired", index as u8, 0);
             }
             if !matches!(state.phases[index], OPEN | SUBMITTED) {
                 return Err(ERR_PHASE);
@@ -403,15 +407,15 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
             if !owner {
                 return Err(ERR_AUTH);
             }
-            if input.context.block_time >= state.config.deadline {
-                return Err(ERR_DEADLINE);
-            }
             // The owner signs the exact delivery hash; a later worker revision cannot
             // silently substitute the submission being approved.
             if input.message.body().len() != 33 {
                 return Err(ERR_ARGS);
             }
             let index = index(input.message.body()[0], &state)?;
+            if elapsed >= state.config.deadline {
+                return finish(state, "escrow.expired", index as u8, 0);
+            }
             if state.phases[index] != SUBMITTED {
                 return Err(ERR_PHASE);
             }
@@ -440,7 +444,7 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
                 return Err(ERR_AUTH);
             }
             empty(input.message.body())?;
-            if input.context.block_time < state.config.deadline {
+            if elapsed < state.config.deadline {
                 return Err(ERR_DEADLINE);
             }
             let amount = state.refundable()?;
@@ -627,6 +631,7 @@ avm_contract_sdk::export_message_contract!(Escrow);
 
 fn event_class(name: &str) -> Result<u64> {
     match name {
+        "escrow.expired" => Ok(ids::EVENT_EXPIRED),
         "escrow.created" => Ok(ids::EVENT_CREATED),
         "escrow.status" => Ok(ids::EVENT_STATUS),
         "escrow.fees_added" => Ok(ids::EVENT_FEES_ADDED),

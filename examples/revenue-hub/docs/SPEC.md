@@ -85,14 +85,26 @@ The nonce must be the next monotonic proposal nonce. A proposer contributes one
 vote. Another signer must approve the identical full body. A signer can vote once;
 votes are represented as a three-bit set.
 
-`ready = created_block_time + configured_delay`.
+The initializer records the execution context's block-time observation as an
+origin, not a deadline. Proposal times are `u64` elapsed-second offsets from
+that first execution. Configuration contains only durations.
+
+`created = block_time.saturating_sub(origin_time)`.
+
+`ready = created + configured_delay`.
 
 `expires = ready + configured_vote_window`.
 
 Execution is allowed for any caller when at least two votes exist and
-`ready <= block_time < expires`. An executed proposal is cleared and cannot be
+`ready <= elapsed < expires`. An executed proposal is cleared and cannot be
 replayed. A live proposal cannot be replaced; an expired proposal may be replaced
-with the next nonce and a new vote set. Overflow of timestamps/nonces is rejected.
+with the next nonce and a new vote set. A valid vote or execution after expiry
+returns success with `hub.expired`, retains the expired proposal as evidence,
+and adds no vote or action. A zero governance delay is valid and allows execution
+as soon as quorum exists. The vote window must be positive: a zero-length window
+admits no additional vote or execution. Wide offsets avoid rejection merely
+because a proposal is created near the execution clock's `u32` limit; nonce
+overflow still fails closed.
 
 Governance never changes signer or member wallets, weights, or destinations, and offers no
 principal withdrawal or arbitrary call. Native receipts still settle during a
@@ -124,7 +136,7 @@ configuration is the same address; a different configuration is a different
 vault. No method changes the configuration after init except the operating
 reserve slot, which governance controls.
 
-### Persisted state - 4,168 bytes
+### Persisted state - 4,192 bytes
 
 | Offset | Bytes | Field |
 | --- | --- | --- |
@@ -135,11 +147,13 @@ reserve slot, which governance controls.
 | 2,440 | 8 | Proposal nonce |
 | 2,448 | 1 | Paused flag |
 | 2,449 | 7 | Zero padding |
-| 2,456 | 48 | Active proposal or all-zero idle proposal |
-| 2,504 | 1,664 | Sixteen 104-byte member accounting records |
+| 2,456 | 64 | Active proposal or all-zero idle proposal |
+| 2,520 | 1,664 | Sixteen 104-byte member accounting records |
+| 4,184 | 4 | First-execution block-time observation |
+| 4,188 | 4 | Zero padding |
 
 Proposal fields: nonce (8), action (1), votes (1), padding (6), value (16), created
-(4), ready (4), expires (4), padding (4).
+(8), ready (8), expires (8), padding (8).
 
 Member accounting fields: claimable (16), paid (16), pending (16), pending nonce
 (8), attempt LT boundary (8), latest callback creation LT (8), latest causal hash
@@ -203,7 +217,7 @@ hashes. Actual optimized artifacts are deployed and executed in the local stand.
 | Codes | Scope |
 | --- | --- |
 | 3000–3009 | Arguments, authorization, state, pause, value, pending/empty claims, callbacks, overflow, balance |
-| 3010–3014 | Proposal validity, duplicate vote, timelock, expiry, missing quorum |
+| 3010–3014 | Proposal validity, duplicate vote, timelock, reserved expiry code, missing quorum |
 | 3100–3102 | Receiver authority, invalid receipt, deliberate rejection |
 | 3200–3203 | Audit arguments, source authority, receipt replay, arithmetic overflow |
 

@@ -28,11 +28,14 @@ fn initialize(input: MessageInput<'_>) -> HubResult<MessageOutput> {
         return Err(E_ARGS);
     }
     zero_value(&input)?;
-    finish(State::new(config), "hub.created", 255, 0)
+    let mut state = State::new(config);
+    state.origin_time = input.context.block_time;
+    finish(state, "hub.created", 255, 0)
 }
 
 fn process(input: MessageInput<'_>) -> HubResult<MessageOutput> {
     let mut s = State::decode(input.state)?;
+    let elapsed = u64::from(input.context.block_time.saturating_sub(s.origin_time));
     if input.message.is_callback() {
         return callback(input, s);
     }
@@ -127,15 +130,15 @@ fn process(input: MessageInput<'_>) -> HubResult<MessageOutput> {
         ids::PROPOSE => {
             let signer = s.config.signer(input.caller)?;
             let (nonce, action, value) = Proposal::decode_body(body)?;
-            if s.proposal.nonce != 0 && input.context.block_time < s.proposal.expires {
+            if s.proposal.nonce != 0 && elapsed < s.proposal.expires {
                 return Err(E_GOVERNANCE);
             }
             if nonce != s.proposal_nonce.checked_add(1).ok_or(E_OVERFLOW)? {
                 return Err(E_GOVERNANCE);
             }
-            let created = input.context.block_time;
-            let ready = created.checked_add(s.config.delay).ok_or(E_OVERFLOW)?;
-            let expires = ready.checked_add(s.config.vote_window).ok_or(E_OVERFLOW)?;
+            let created = elapsed;
+            let ready = created.checked_add(u64::from(s.config.delay)).ok_or(E_OVERFLOW)?;
+            let expires = ready.checked_add(u64::from(s.config.vote_window)).ok_or(E_OVERFLOW)?;
             s.proposal =
                 Proposal { nonce, action, votes: 1 << signer, value, created, ready, expires };
             s.proposal_nonce = nonce;
@@ -147,8 +150,8 @@ fn process(input: MessageInput<'_>) -> HubResult<MessageOutput> {
             if s.proposal.nonce == 0 || body != s.proposal.body() {
                 return Err(E_GOVERNANCE);
             }
-            if input.context.block_time >= s.proposal.expires {
-                return Err(E_EXPIRED);
+            if elapsed >= s.proposal.expires {
+                return finish(s, "hub.expired", 255, snapshot_value(body)?);
             }
             let bit = 1 << signer;
             if s.proposal.votes & bit != 0 {
@@ -165,13 +168,13 @@ fn process(input: MessageInput<'_>) -> HubResult<MessageOutput> {
             if p.nonce == 0 || u64_at(body, 0)? != p.nonce {
                 return Err(E_GOVERNANCE);
             }
-            if input.context.block_time >= p.expires {
-                return Err(E_EXPIRED);
+            if elapsed >= p.expires {
+                return finish(s, "hub.expired", 255, p.value);
             }
             if p.votes.count_ones() < 2 {
                 return Err(E_QUORUM);
             }
-            if input.context.block_time < p.ready {
+            if elapsed < p.ready {
                 return Err(E_TIMELOCK);
             }
             match p.action {

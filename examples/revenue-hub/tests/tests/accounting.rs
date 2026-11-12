@@ -178,9 +178,10 @@ fn config_and_state_truncations_do_not_panic() {
 }
 #[test]
 fn init_is_permissionless_and_the_config_is_fixed() {
-    // Deploy is permissionless: any deployer gets the state its configuration,
-    // which the address commits to, defines.
+    // Deploy is permissionless: the same configuration and execution origin
+    // produce the same state for any deployer.
     let s = Spec {
+        time: 0,
         actor: STRANGER,
         deploy: true,
         body: envelope(&config().encode()),

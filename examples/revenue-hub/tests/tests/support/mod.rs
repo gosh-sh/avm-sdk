@@ -215,7 +215,8 @@ pub struct Vault {
 }
 impl Vault {
     pub fn new() -> Self {
-        let s = Spec { deploy: true, body: envelope(&config().encode()), ..Spec::default() };
+        let s =
+            Spec { time: 0, deploy: true, body: envelope(&config().encode()), ..Spec::default() };
         let state = initialize::<RevenueVault>(&s);
         Self { state, time: 10, lt: 10 }
     }
@@ -287,7 +288,7 @@ impl Vault {
         let p = Proposal { nonce, action, value, ..Proposal::default() };
         assert_eq!(self.call(SIGNERS[0], ids::PROPOSE, p.body(), 0).status_code, 0);
         assert_eq!(self.call(SIGNERS[1], ids::VOTE, p.body(), 0).status_code, 0);
-        self.time = self.snapshot().proposal.ready;
+        self.time = self.snapshot().proposal.ready as u32;
         assert_eq!(
             self.call(STRANGER, ids::EXECUTE, nonce.to_le_bytes().to_vec(), 0).status_code,
             0

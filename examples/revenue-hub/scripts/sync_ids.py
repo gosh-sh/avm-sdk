@@ -12,7 +12,7 @@ METHODS={"DEPOSIT":("vault","hub.vault.deposit"),"CLAIM":("vault","hub.vault.cla
 "AUDIT_BIND":("audit","hub.audit.bind"),"AUDIT_RECORD":("audit","hub.audit.record"),
 "AUDIT_STATUS":("audit","hub.audit.status"),"DUPLICATE_AUDIT":("receiver","hub.receiver.duplicate_audit")}
 EVENTS=["created","deposited","claim_pending","claim_settled","claim_failed","proposed",
-        "voted","executed","status","fees_added","audited"]
+        "voted","executed","expired","status","fees_added","audited"]
 def identifier(contract,name,prefix):
     data=(ROOT/"contracts"/contract/"target/avm/contract.acab").read_bytes();encoded=name.encode()
     assert data[:4]==b"ACAB"

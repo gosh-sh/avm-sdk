@@ -7,8 +7,8 @@ spec = importlib.util.spec_from_file_location("vesting_journey", Path(__file__).
 journey = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(journey)
 
-class RelativeAddressTests(unittest.TestCase):
-    def test_address_init_preimage_contains_only_schedule_offsets(self):
+class RelativeJourneyEncodingTests(unittest.TestCase):
+    def test_journey_config_contains_only_schedule_offsets(self):
         owner = "51" * 32
         address = "11" * 32 + ":" + "22" * 32
         recipients = [[address, address] for _ in range(3)]

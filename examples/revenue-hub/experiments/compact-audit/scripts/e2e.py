@@ -160,10 +160,10 @@ def vault_config(signers,receivers):
         o=224+i*136;data[o:o+64]=address_bytes(signers[i]);data[o+64:o+128]=address_bytes(receiver);data[o+128:o+130]=weight.to_bytes(2,"little")
     return bytes(data)
 def decoded(result):
-    b=bytes.fromhex(result["raw_state"]);assert len(b)==4168
+    b=bytes.fromhex(result["raw_state"]);assert len(b)==4192
     members=[]
     for i in range(b[216]):
-        o=2504+i*104
+        o=2520+i*104
         members.append({"claimable":int.from_bytes(b[o:o+16],"little"),"paid":int.from_bytes(b[o+16:o+32],"little"),
                         "pending":int.from_bytes(b[o+32:o+48],"little"),"last_callback_lt":int.from_bytes(b[o+64:o+72],"little")})
     received=int.from_bytes(b[2400:2416],"little");paid=int.from_bytes(b[2416:2432],"little")
@@ -253,21 +253,21 @@ def run(sdk,output):
             # Quorum, duplicate votes, immutable signed proposal, and timelock.
             p=proposal(1,1)
             r=stand.send(vault,"hub.vault.propose",p,wallet="developer")
-            raw=bytes.fromhex(r["raw_state"]);ready=int.from_bytes(raw[2492:2496],"little")
+            raw=bytes.fromhex(r["raw_state"]);ready=int.from_bytes(raw[2496:2504],"little")
             stand.send(vault,"hub.vault.vote",p,wallet="outsider",expected_status=3001)
             stand.send(vault,"hub.vault.execute",(1).to_bytes(8,"little"),expected_status=3014)
             stand.send(vault,"hub.vault.vote",p,wallet="developer",expected_status=3011)
             stand.send(vault,"hub.vault.vote",proposal(1,2),wallet="user",expected_status=3010)
             stand.send(vault,"hub.vault.vote",p,wallet="user")
             stand.send(vault,"hub.vault.execute",(1).to_bytes(8,"little"),expected_status=3012)
-            stand.time=ready-1
+            stand.time=int.from_bytes(bytes.fromhex(r["raw_state"])[4184:4188],"little")+ready-1
             r=stand.send(vault,"hub.vault.execute",(1).to_bytes(8,"little"));expect(r,paused=True)
             stand.send(vault,"hub.vault.deposit",value=3,expected_status=3003)
             stand.send(vault,"hub.vault.claim",b"\x01",expected_status=3003)
             p=proposal(2,2)
-            r=stand.send(vault,"hub.vault.propose",p);ready=int.from_bytes(bytes.fromhex(r["raw_state"])[2492:2496],"little")
+            r=stand.send(vault,"hub.vault.propose",p);ready=int.from_bytes(bytes.fromhex(r["raw_state"])[2496:2504],"little")
             stand.send(vault,"hub.vault.vote",p,wallet="developer")
-            stand.time=ready-1;r=stand.send(vault,"hub.vault.execute",(2).to_bytes(8,"little"));expect(r,paused=False)
+            stand.time=int.from_bytes(bytes.fromhex(r["raw_state"])[4184:4188],"little")+ready-1;r=stand.send(vault,"hub.vault.execute",(2).to_bytes(8,"little"));expect(r,paused=False)
             r=stand.send(vault,"hub.vault.deposit",value=3);expect(r,received=10010,dust=0)
             stand.call(receivers[1],"hub.receiver.duplicate_audit",b"\x01",identity=receiver_owners[1])
             for i,wallet in enumerate(members):
@@ -286,6 +286,18 @@ def run(sdk,output):
             audit_counts=[int.from_bytes(b[236+i*32+24:236+i*32+32],"little") for i in range(3)]
             assert audit_totals==actual_receipts,audit_totals
             assert audit_counts==[2,1,1],audit_counts
+            expired_body=proposal(3,1)
+            r=stand.send(vault,"hub.vault.propose",expired_body,wallet="developer")
+            raw=bytes.fromhex(r["raw_state"])
+            expired_at=int.from_bytes(raw[4184:4188],"little")+int.from_bytes(raw[2504:2512],"little")
+            stand.time=expired_at-1
+            r=stand.send(vault,"hub.vault.vote",expired_body,wallet="user")
+            expect(r,paused=False)
+            assert any(b"hub.expired" in bytes.fromhex(e) for e in r["events"])
+            r=stand.send(vault,"hub.vault.execute",(3).to_bytes(8,"little"))
+            expect(r,paused=False)
+            assert any(b"hub.expired" in bytes.fromhex(e) for e in r["events"])
+            final=expect(r,received=10010,paid=10010,claimable=0,pending=0,dust=0,claim_attempts=5)
             inspect=stand.command("inspect");events=stand.command("events");replay=stand.command("replay")
             assert replay["status"]=="ok" and inspect["queue"]["message_count"]==0
             for key in ["account_state_root","registry_root","cumulative_fee_shells","accepted_input_count"]:assert replay[key]==inspect[key],key

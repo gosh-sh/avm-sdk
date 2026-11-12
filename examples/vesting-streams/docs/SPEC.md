@@ -7,7 +7,8 @@ execution (`init`). The contract reads `MessageInput.context.block_time` from
 the canonical execution input and records it as an observation, not a deadline.
 Constructor data, deployment parameters and the account-address preimage contain
 only schedule offsets; no calendar start or wall-clock deadline is supplied.
-Positive start must precede end; start <= cliff <= end. A zero step means linear accrual; otherwise step must be
+Start may be zero, meaning accrual from the first execution. Start must
+precede end; start <= cliff <= end. A zero step means linear accrual; otherwise step must be
 positive and no longer than the duration. Before cliff, earned is zero. At and
 after end, earned is the entire amount. Between these bounds, elapsed is time
 since start, optionally rounded down to a complete step, and:
@@ -36,7 +37,9 @@ A beneficiary claims only from its configured wallet address. Status and SHELL
 top-up accept any caller. A contract reaches the callback handler only by a native
 callback. Owner cancellation is available only for revocable, uncancelled
 streams. Cancellation after end preserves the entire earned amount and leaves
-zero refund entitlement; it does not fail because time has passed. It freezes earned at the cancellation time and leaves pending payments
+zero refund entitlement; it succeeds and freezes the cap at the full
+principal. It does not fail because time has passed. A repeat cancellation
+still fails because the stream is already cancelled. It freezes earned at the cancellation time and leaves pending payments
 valid. Refund entitlement is total minus the frozen earned amount. There is no
 owner sweep, beneficiary replacement, or destination-update method.
 

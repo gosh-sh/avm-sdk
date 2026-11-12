@@ -84,3 +84,8 @@ canonical frames, explicit principal and constructor/tool interfaces are adapted
 The original MIT attribution is in [LICENSE](LICENSE) and [PROVENANCE.json](PROVENANCE.json).
 Historical validation for the original ABI remains on that PR and does not
 qualify these current guests.
+
+Governance uses elapsed seconds from the first execution, with a zero delay
+allowed and a positive vote window. An expired vote or execution succeeds with
+`hub.expired` and applies no action or vote. Rebuild and redeploy the vault for
+the 4192-byte state schema; no state migration handler is provided.

@@ -6,6 +6,12 @@ asynchronous payout callbacks, exact failed-delivery principal return, expiry
 refunds, retry, and replay/accounting checks. It is a local synthetic-funds
 example, with no production deployment or audit claim.
 
+Its deadline is a duration from the first execution, read against deterministic
+AVM block time. Offset zero is immediately eligible for refunds after funding.
+Deployment and exact one-time funding have no calendar cutoff. Late submission
+and approval acknowledge expiry without creating approved rights; approved work
+remains payable and only the unapproved balance can be refunded.
+
 ## Principal and fees
 
 `PRINCIPAL_CURRENCY_ID = 0` is an explicit application choice for this new

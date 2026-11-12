@@ -189,7 +189,7 @@ fn failure(out: MessageOutput, code: u32) {
 fn initialized() -> Vec<u8> {
     let init = envelope(OWNER_KEY, &config().encode());
     let message = external(&init, OWNER_KEY, 0, 0, address(1), true, &[]);
-    let b = frame(&message, &[], OWNER_KEY, None, address(1), 10, 0);
+    let b = frame(&message, &[], OWNER_KEY, None, address(1), 0, 0);
     state_from(&Escrow::init(decode_message_input(&b).unwrap()))
 }
 fn funded() -> Vec<u8> {
@@ -324,7 +324,7 @@ fn deployment_envelope_lengths_are_checked() {
     let b = envelope(OWNER_KEY, &config().encode());
     let extract = |body: &[u8]| {
         let message = external(body, OWNER_KEY, 0, 0, address(1), true, &[]);
-        let bytes = frame(&message, &[], OWNER_KEY, None, address(1), 10, 0);
+        let bytes = frame(&message, &[], OWNER_KEY, None, address(1), 0, 0);
         decode_message_input(&bytes).unwrap().deploy().map(|d| d.init_data().to_vec())
     };
     assert_eq!(extract(&b).unwrap(), config().encode());
@@ -345,12 +345,12 @@ fn funding_is_exact_and_once() {
     failure(evaluate(&s, OWNER_WALLET, ids::FUND, &[], 1000, 12), ERR_PHASE);
 }
 #[test]
-fn funding_requires_owner_and_live_deadline() {
+fn funding_requires_owner_at_every_elapsed_time() {
     failure(evaluate(&initialized(), STRANGER, ids::FUND, &[], 1000, 11), ERR_AUTH);
     failure(evaluate(&initialized(), WORKER, ids::FUND, &[], 1000, 11), ERR_AUTH);
     // An external carries no value, so the owner key cannot fund directly.
     failure(evaluate(&initialized(), OWNER, ids::FUND, &[], 1000, 11), ERR_AUTH);
-    failure(evaluate(&initialized(), OWNER_WALLET, ids::FUND, &[], 1000, 100), ERR_DEADLINE);
+    assert_eq!(evaluate(&initialized(), OWNER_WALLET, ids::FUND, &[], 1000, 100).status_code, 0);
 }
 #[test]
 fn unfunded_contract_rejects_work_and_refund() {
@@ -385,10 +385,10 @@ fn approval_requires_owner_and_submission() {
     }
 }
 #[test]
-fn deadline_is_exclusive_for_submit_and_approve() {
-    failure(evaluate(&funded(), WORKER, ids::SUBMIT, &hash_args(0, 1), 0, 100), ERR_DEADLINE);
+fn deadline_switches_submit_and_approve_to_expired_acknowledgments() {
+    assert_eq!(evaluate(&funded(), WORKER, ids::SUBMIT, &hash_args(0, 1), 0, 100).status_code, 0);
     let s = approved(0);
-    failure(evaluate(&s, OWNER, ids::APPROVE, &hash_args(0, 0x51), 0, 100), ERR_DEADLINE);
+    assert_eq!(evaluate(&s, OWNER, ids::APPROVE, &hash_args(0, 0x51), 0, 100).status_code, 0);
 }
 #[test]
 fn pay_requires_approval_and_authorization() {
@@ -733,17 +733,23 @@ fn relative_escrow_after_deadline_acknowledges_without_creating_earned_rights() 
     let state = relative_escrow_init(&config(), 1000);
     let state = state_from(&evaluate(&state, OWNER_WALLET, ids::FUND, &[], 1000, 1001));
     let submitted = state_from(&evaluate(&state, WORKER, ids::SUBMIT, &hash_args(0, 1), 0, 1002));
-    for (caller, method, before) in [(WORKER, ids::SUBMIT, &state), (OWNER, ids::APPROVE, &submitted)] {
+    for (caller, method, before) in
+        [(WORKER, ids::SUBMIT, &state), (OWNER, ids::APPROVE, &submitted)]
+    {
         let out = evaluate(before, caller, method, &hash_args(0, 1), 0, 1100);
         assert_eq!(out.status_code, 0);
-        assert_eq!(State::decode(&state_from(&out)).unwrap().phases, State::decode(before).unwrap().phases);
+        assert_eq!(
+            State::decode(&state_from(&out)).unwrap().phases,
+            State::decode(before).unwrap().phases
+        );
         assert!(out.outbound_intents.is_empty());
         assert_eq!(out.event_intents[0].event_name, "escrow.expired");
     }
 }
 #[test]
 fn relative_escrow_zero_offset_is_immediately_refundable() {
-    let mut c = config(); c.deadline = 0;
+    let mut c = config();
+    c.deadline = 0;
     let state = relative_escrow_init(&c, u32::MAX);
     let state = state_from(&evaluate(&state, OWNER_WALLET, ids::FUND, &[], 1000, u32::MAX));
     let out = evaluate(&state, OWNER, ids::REFUND, &[], 0, u32::MAX);

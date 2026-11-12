@@ -78,13 +78,7 @@ pub fn vested(
     step: u32,
     now: u32,
 ) -> ResultCode<u128> {
-    if total == 0
-        || start == 0
-        || start >= end
-        || cliff < start
-        || cliff > end
-        || step > end - start
-    {
+    if total == 0 || start >= end || cliff < start || cliff > end || step > end - start {
         return Err(E_ARGS);
     }
     if now < cliff || now <= start {

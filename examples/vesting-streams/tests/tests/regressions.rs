@@ -45,7 +45,7 @@ fn full_u128_half_and_last_tick() {
     assert_eq!(vested(m, 1, 1, u32::MAX, 0, u32::MAX), Ok(m))
 }
 #[test]
-fn invalid_schedule_is_rejected() {
+fn schedule_validation_includes_zero_start() {
     for (a, b, c, d, e) in [
         (0, 1, 1, 2, 0),
         (1, 0, 0, 2, 0),
@@ -54,7 +54,8 @@ fn invalid_schedule_is_rejected() {
         (1, 2, 4, 3, 0),
         (1, 2, 2, 3, 2),
     ] {
-        assert_eq!(vested(a, b, c, d, e, 100), Err(E_ARGS))
+        let expected = if (b, c, d) == (0, 0, 2) { Ok(a) } else { Err(E_ARGS) };
+        assert_eq!(vested(a, b, c, d, e, 100), expected)
     }
 }
 #[test]

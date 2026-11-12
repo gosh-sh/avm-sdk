@@ -99,6 +99,7 @@ pub fn read_payment(b: &[u8]) -> HubResult<(usize, u64, u128)> {
 pub fn event(input_index: u32, name: &str, mut fields: Vec<EventField>) -> HubResult<EventIntent> {
     fields.sort_by(|a, b| a.name.cmp(&b.name));
     let class = match name {
+        "hub.expired" => ids::EVENT_EXPIRED,
         "hub.created" => ids::EVENT_CREATED,
         "hub.deposited" => ids::EVENT_DEPOSITED,
         "hub.claim_pending" => ids::EVENT_CLAIM_PENDING,

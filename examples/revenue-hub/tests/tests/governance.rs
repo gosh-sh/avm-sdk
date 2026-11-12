@@ -31,7 +31,7 @@ fn second_signer_and_timelock_are_both_required() {
     v.call(SIGNERS[0], ids::PROPOSE, p(1, PAUSE, 0), 0);
     v.call(SIGNERS[1], ids::VOTE, p(1, PAUSE, 0), 0);
     fails(&v.call(STRANGER, ids::EXECUTE, 1u64.to_le_bytes().to_vec(), 0), E_TIMELOCK);
-    v.time = v.snapshot().proposal.ready - 1;
+    v.time = v.snapshot().proposal.ready as u32 - 1;
     assert_eq!(v.call(STRANGER, ids::EXECUTE, 1u64.to_le_bytes().to_vec(), 0).status_code, 0);
     assert!(v.snapshot().paused);
 }
@@ -41,7 +41,7 @@ fn any_distinct_pair_of_managers_forms_quorum() {
         let mut v = Vault::new();
         v.call(SIGNERS[pair.0], ids::PROPOSE, p(1, PAUSE, 0), 0);
         v.call(SIGNERS[pair.1], ids::VOTE, p(1, PAUSE, 0), 0);
-        v.time = v.snapshot().proposal.ready;
+        v.time = v.snapshot().proposal.ready as u32;
         assert_eq!(v.call(STRANGER, ids::EXECUTE, 1u64.to_le_bytes().to_vec(), 0).status_code, 0);
     }
 }
@@ -63,18 +63,19 @@ fn active_proposal_cannot_be_replaced() {
 fn expired_proposal_can_be_replaced_with_next_nonce() {
     let mut v = Vault::new();
     v.call(SIGNERS[0], ids::PROPOSE, p(1, PAUSE, 0), 0);
-    v.time = v.snapshot().proposal.expires;
+    v.time = v.snapshot().proposal.expires as u32;
     assert_eq!(v.call(SIGNERS[1], ids::PROPOSE, p(2, RESUME, 0), 0).status_code, 0);
     assert_eq!(v.snapshot().proposal.votes, 2);
 }
 #[test]
-fn expired_votes_and_execution_are_rejected() {
+fn expired_votes_and_execution_acknowledge_without_applying_actions() {
     let mut v = Vault::new();
     v.call(SIGNERS[0], ids::PROPOSE, p(1, PAUSE, 0), 0);
     v.call(SIGNERS[1], ids::VOTE, p(1, PAUSE, 0), 0);
-    v.time = v.snapshot().proposal.expires - 1;
-    fails(&v.call(SIGNERS[2], ids::VOTE, p(1, PAUSE, 0), 0), E_EXPIRED);
-    fails(&v.call(STRANGER, ids::EXECUTE, 1u64.to_le_bytes().to_vec(), 0), E_EXPIRED);
+    v.time = v.snapshot().proposal.expires as u32 - 1;
+    assert_eq!(v.call(SIGNERS[2], ids::VOTE, p(1, PAUSE, 0), 0).status_code, 0);
+    assert_eq!(v.call(STRANGER, ids::EXECUTE, 1u64.to_le_bytes().to_vec(), 0).status_code, 0);
+    assert!(!v.snapshot().paused);
 }
 #[test]
 fn executed_proposal_cannot_be_replayed() {
@@ -119,8 +120,8 @@ fn unsupported_governance_actions_cannot_redirect_money() {
     assert_eq!(v.snapshot().config.members, config().members);
 }
 #[test]
-fn proposal_timestamp_overflow_fails_without_changes() {
+fn proposal_clock_limit_preserves_wide_relative_offsets() {
     let mut v = Vault::new();
     v.time = u32::MAX - 1;
-    fails(&v.call(SIGNERS[0], ids::PROPOSE, p(1, PAUSE, 0), 0), E_OVERFLOW);
+    assert_eq!(v.call(SIGNERS[0], ids::PROPOSE, p(1, PAUSE, 0), 0).status_code, 0);
 }

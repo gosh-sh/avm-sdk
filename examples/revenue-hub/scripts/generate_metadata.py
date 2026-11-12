@@ -17,7 +17,7 @@ EVENT_FIELDS={
     "audit":[("amount",8),("member",9),("nonce",9),("receipts",9),("total",8)],
 }
 EVENTS={"vault":["created","deposited","claim_pending","claim_settled","claim_failed",
-                 "proposed","voted","executed","status","fees_added"],"audit":["audited"],"receiver":[]}
+                 "proposed","voted","executed","expired","status","fees_added"],"audit":["audited"],"receiver":[]}
 ERRORS={"vault":list(enumerate(["invalid_args","unauthorized","invalid_state","paused","invalid_value",
     "claim_pending","nothing_to_claim","invalid_callback","overflow","insufficient_balance",
     "invalid_proposal","duplicate_vote","timelock","proposal_expired","quorum_missing"],3000)),
@@ -25,7 +25,7 @@ ERRORS={"vault":list(enumerate(["invalid_args","unauthorized","invalid_state","p
     "audit":[(3200,"invalid_args"),(3201,"unauthorized"),(3202,"receipt_replay"),(3203,"overflow")]}
 
 def generate():
-    for contract,size,init_bytes,version,owner_key_offset in [("vault",4168,2400,2,None),("receiver",224,88,1,0),("audit",65540,1,1,4)]:
+    for contract,size,init_bytes,version,owner_key_offset in [("vault",4192,2400,3,None),("receiver",224,88,1,0),("audit",65540,1,1,4)]:
         schema=hashlib.sha256(f"avm.revenue.{contract}.v{version}".encode()).hexdigest()
         mode="message_isolated"
         # Accounts with an owner role keep the owner key at owner_key_offset.

@@ -10,6 +10,7 @@ pub const TOPUP: u64 = 0x87655bb82b51d673;
 pub const RECEIVE: u64 = 0xb914fe67cce93577;
 pub const BIND: u64 = 0x4ce368a64e18d258;
 pub const REJECT: u64 = 0x95bd52c9e37338ec;
+pub const EVENT_EXPIRED: u64 = 0x4ce502ffbcad6bbc;
 pub const EVENT_CREATED: u64 = 0xd6f347263848367f;
 pub const EVENT_STATUS: u64 = 0x2cd964cba5d7abd3;
 pub const EVENT_FEES_ADDED: u64 = 0x6cb4e9405443b5e8;

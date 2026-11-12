@@ -32,3 +32,8 @@ different roles. Participants act through wallets built from `examples/wallet`;
 the application status of a wallet call is read from the wallet's
 `wallet.callback` event. Real native callbacks settle payments; no callback is fabricated by
 the journey.
+
+The native address-preimage regression passes real deployment envelopes to
+`Vesting::init`, checks the borrowed constructor bytes, and compares the
+contract's persisted configuration across execution origins. The stand journey
+also compares actual address quotes at different execution times.
