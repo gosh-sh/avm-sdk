@@ -27,12 +27,10 @@ ERRORS={"vault":list(enumerate(["invalid_args","unauthorized","invalid_state","p
 def generate():
     for contract,size,init_bytes,version,owner_key_offset in [("vault",4168,2400,2,None),("receiver",224,88,1,0),("audit",65540,1,1,4)]:
         schema=hashlib.sha256(f"avm.revenue.{contract}.v{version}".encode()).hexdigest()
-        mode="account_batch" if contract=="audit" else "message_isolated"
+        mode="message_isolated"
         # Accounts with an owner role keep the owner key at owner_key_offset.
         key=f'owner_key_offset = {owner_key_offset}\n' if owner_key_offset is not None else ''
         text=f'[descriptor]\nexecution_mode = "{mode}"\n{key}state_schema_id = "{schema}"\n\n[abi]\nstate_root_type_id = 1\n'
-        if contract=="audit":
-            text=text.replace('\n[abi]\n','\n[descriptor.batch]\nmax_batch_messages = 256\nmax_batch_state_bytes = 131072\nmax_batch_input_bytes = 262144\nmax_batch_output_bytes = 262144\nbatch_min_fuel_fee_shells = 1\n\n[abi]\n')
         for i,name,kind,length in [(1,"state","bytes" if contract=="audit" else "fixed_bytes",None if contract=="audit" else size),(2,"config","fixed_bytes",init_bytes),
             (3,"index","fixed_bytes",1),(4,"payload","fixed_bytes",25),(5,"nonce","fixed_bytes",8),
             (6,"address","fixed_bytes",64),(7,"index_address","fixed_bytes",65),(8,"amount","u128",None),(9,"counter","u64",None)]:

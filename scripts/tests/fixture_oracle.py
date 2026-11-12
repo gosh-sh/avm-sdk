@@ -275,6 +275,11 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     names = ["contract-a-v1", second]
     artifacts = [{key: (bundle / "examples" / name / "target/avm" / ("contract." + key)).read_bytes()
                   for key in ("wasm", "acab", "descriptor")} for name in names]
+    # A patch message to message-isolated code (descriptor byte 0 is the
+    # execution mode) in the sender's DApp takes the local-free route: it
+    # carries no FUEL fee and the sender's reserve is not debited.
+    if batch and artifacts[1]["descriptor"][0] == 0:
+        batch_reserve = 0
     codes = [h(item["wasm"]) for item in artifacts]
     descriptors = [h(item["descriptor"]) for item in artifacts]
     abis = [h(b"AVM_ABI" + item["acab"]) for item in artifacts]

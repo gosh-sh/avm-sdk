@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import tomllib
 
 from release import file_digest, parse_profile, require
@@ -153,180 +154,278 @@ def main():
     evidence.mkdir(parents=True, exist_ok=False)
     result = {"schema": "gosh.avm-sdk.gates.v1", "source_commit": head(source),
               "sdk_commit": head(sdk), "passed": False, "gates": []}
+    # Independent gate groups run concurrently. Each group owns a separate
+    # Cargo target directory, so no group reuses another group's artifacts.
+    # gates.json lists the gates in this fixed section order, which is the
+    # former serial order.
+    order = ("checks", "sdk", "runtime", "unit", "applications", "applications-revenue-hub", "applications-tail", "executor", "engine", "e2e")
+    sections = {name: [] for name in order}
+    lock = threading.Lock()
+    failed = threading.Event()
+    target_root = Path(os.environ.get("CARGO_TARGET_DIR") or source / "target").resolve() / "gate-groups"
 
-    def run(label, argv, cwd=source, tests=False, exact=None, python_tests=False,
-            environment=None, stdout_file=None):
-        log = evidence / (label + ".log")
-        (evidence / "current.json").write_text(json.dumps({"gate": label, "pid": os.getpid(), "completed": len(result["gates"]), "source_commit": result["source_commit"], "sdk_commit": result["sdk_commit"]}) + "\n")
-        with log.open("wb") as stream:
-            if stdout_file is None:
-                process = subprocess.run(argv, cwd=cwd, env=environment, stdout=stream, stderr=subprocess.STDOUT)
-            else:
-                with stdout_file.open("wb") as generated:
-                    process = subprocess.run(argv, cwd=cwd, env=environment, stdout=generated, stderr=stream)
-        text = log.read_text(errors="replace")
-        counts = [int(n) for n in re.findall(r"test result: ok\. (\d+) passed", text)]
-        matched = sum(counts)
-        passed = process.returncode == 0 and (not tests or matched > 0)
-        if python_tests:
-            count = re.search(r"Ran (\d+) tests? in", text)
-            passed = passed and count is not None and int(count[1]) > 0
-        if exact:
-            passed = passed and re.search(r"test " + re.escape(exact) + r" \.{3} ok", text) is not None
-        result["gates"].append({"name": label, "argv": argv, "cwd": str(cwd),
-                                "exit_code": process.returncode, "rust_tests_passed": matched,
-                                "exact_selector": exact, "passed": passed,
-                                "log_sha256": file_digest(log)})
-        if stdout_file is not None:
-            result["gates"][-1]["stdout_file"] = stdout_file.name
-            result["gates"][-1]["stdout_sha256"] = file_digest(stdout_file)
-        (evidence / "gates.json").write_text(json.dumps(result, indent=2) + "\n")
-        if not passed:
-            print(f"gate={label} exit_code={process.returncode} failure log tail:", file=sys.stderr)
-            print(_failure_log_tail(text), file=sys.stderr)
-        require(passed, f"gate failed: {label}; see {log}")
-        return text
+    def runner(section, target):
+        def run(label, argv, cwd=source, tests=False, exact=None, python_tests=False,
+                environment=None, stdout_file=None):
+            require(not failed.is_set(), f"gate skipped after another gate failed: {label}")
+            environment = dict(os.environ if environment is None else environment)
+            environment["CARGO_TARGET_DIR"] = str(target)
+            log = evidence / (label + ".log")
+            with lock:
+                (evidence / "current.json").write_text(json.dumps({"gate": label, "pid": os.getpid(), "completed": len(result["gates"]), "source_commit": result["source_commit"], "sdk_commit": result["sdk_commit"]}) + "\n")
+            with log.open("wb") as stream:
+                if stdout_file is None:
+                    process = subprocess.run(argv, cwd=cwd, env=environment, stdout=stream, stderr=subprocess.STDOUT)
+                else:
+                    with stdout_file.open("wb") as generated:
+                        process = subprocess.run(argv, cwd=cwd, env=environment, stdout=generated, stderr=stream)
+            text = log.read_text(errors="replace")
+            counts = [int(n) for n in re.findall(r"test result: ok\. (\d+) passed", text)]
+            matched = sum(counts)
+            passed = process.returncode == 0 and (not tests or matched > 0)
+            if python_tests:
+                count = re.search(r"Ran (\d+) tests? in", text)
+                passed = passed and count is not None and int(count[1]) > 0
+            if exact:
+                passed = passed and re.search(r"test " + re.escape(exact) + r" \.{3} ok", text) is not None
+            record = ({"name": label, "argv": argv, "cwd": str(cwd),
+                                    "exit_code": process.returncode, "rust_tests_passed": matched,
+                                    "exact_selector": exact, "passed": passed,
+                                    "log_sha256": file_digest(log)})
+            if stdout_file is not None:
+                record["stdout_file"] = stdout_file.name
+                record["stdout_sha256"] = file_digest(stdout_file)
+            with lock:
+                sections[section].append(record)
+                result["gates"] = [gate for name in order for gate in sections[name]]
+                (evidence / "gates.json").write_text(json.dumps(result, indent=2) + "\n")
+            if not passed:
+                failed.set()
+                print(f"gate={label} exit_code={process.returncode} failure log tail:", file=sys.stderr)
+                print(_failure_log_tail(text), file=sys.stderr)
+            require(passed, f"gate failed: {label}; see {log}")
+            return text
+        return run
 
-    run("shared-avm-preflight", ["bash", "scripts/check-avm-ci-preflight.sh"],
-        environment=preflight_environment(scratch))
-    run("engine-format", ["cargo", "fmt", "-p", "avm-wasm-code", "-p", "avm-wasm-executor", "--", "--check"])
-    run("guest-source-parity", ["diff", "-ru", str(sdk / "crates/avm-contract-sdk"), str(source / "node/libs/avm-contract-sdk")])
-    run("profile-parity", ["cmp", str(sdk / "profiles/wasmtime-release-profile.v1"), str(source / "specs/avm-vm/wasmtime-release-profile.v1")])
-    run("release-text", [sys.executable, "-B", "scripts/check-release-text.py"], sdk)
-    run("installer-regressions", [sys.executable, "-B", "-m", "unittest", "discover", "-s", "scripts/tests", "-p", "test_*.py", "-v"], sdk, python_tests=True)
+    def tester(run):
+        def test(package, target, selectors=(), release=False):
+            common = ["cargo", "test", "--locked", "--offline", "--message-format=json", "-p", package, *target]
+            if release:
+                common.append("--release")
+            if not selectors:
+                run(package + "-" + "-".join(target).replace("--", ""), common + ["--", "--test-threads=1"], tests=True)
+            for selector in selectors:
+                run(package + "-" + selector.replace("::", "-"), common + [selector, "--", "--exact", "--test-threads=1"], tests=True, exact=selector)
+        return test
+
     guest = guest_environment()
-    run("sdk-format", [guest["CARGO"], "fmt", "--", "--check"], sdk, environment=guest)
-    run("sdk-clippy", [guest["CARGO"], "clippy", "--locked", "--offline", "--all-targets", "--", "-D", "warnings"], sdk, environment=guest)
-    run("sdk-tests", [guest["CARGO"], "test", "--locked", "--offline", "--", "--test-threads=1"], sdk, tests=True, environment=guest)
-    for manifest in sorted((sdk / "examples").glob("*/Cargo.toml")):
-        # These workspaces own full native, guest, optimizer and application
-        # gates below; compiling a virtual root as one WASM package is invalid.
-        if manifest.parent.name in {"bounty-escrow", "revenue-hub", "vesting-streams"}:
-            continue
-        run(manifest.parent.name + "-format", [guest["CARGO"], "fmt", "--manifest-path", str(manifest), "--", "--check"], sdk, environment=guest)
-        environment = example_environment(source, manifest, evidence, run)
-        run(manifest.parent.name + "-clippy", [guest["CARGO"], "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk, environment=environment)
-    packages = ["avm-config", "avm-contract-sdk", "avm-contract-build", "avm-code-registry", "avm-deploy-upgrade", "avm-economics", "avm-effect-materializer", "avm-test-harness", "avm-wasm-code", "avm-wasm-executor"]
-    selection = [arg for package in packages for arg in ("-p", package)]
-    run("runtime-check", ["cargo", "check", "--locked", "--offline", "--all-targets", *selection])
-    run("runtime-clippy", ["cargo", "clippy", "--locked", "--offline", "--all-targets", *selection, "--", "-D", "warnings"])
-    for fixture in ("contract-b", "contract-batch-patch", "contract-a-v1"):
-        manifest = source / "node/libs/avm-test-harness/tests/fixtures/e2e-standard-contract-stand" / fixture / "Cargo.toml"
-        run("runtime-" + fixture + "-clippy", [guest["CARGO"], "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], environment=guest)
 
-    def test(package, target, selectors=(), release=False):
-        common = ["cargo", "test", "--locked", "--offline", "--message-format=json", "-p", package, *target]
-        if release:
-            common.append("--release")
-        if not selectors:
-            run(package + "-" + "-".join(target).replace("--", ""), common + ["--", "--test-threads=1"], tests=True)
-        for selector in selectors:
-            run(package + "-" + selector.replace("::", "-"), common + [selector, "--", "--exact", "--test-threads=1"], tests=True, exact=selector)
+    def checks_and_sdk():
+        cargo_target = target_root / "checks"
+        run = runner("checks", cargo_target)
+        run("shared-avm-preflight", ["bash", "scripts/check-avm-ci-preflight.sh"],
+            environment=preflight_environment(scratch))
+        run("engine-format", ["cargo", "fmt", "-p", "avm-wasm-code", "-p", "avm-wasm-executor", "--", "--check"])
+        run("guest-source-parity", ["diff", "-ru", str(sdk / "crates/avm-contract-sdk"), str(source / "node/libs/avm-contract-sdk")])
+        run("profile-parity", ["cmp", str(sdk / "profiles/wasmtime-release-profile.v1"), str(source / "specs/avm-vm/wasmtime-release-profile.v1")])
+        run("release-text", [sys.executable, "-B", "scripts/check-release-text.py"], sdk)
+        run("installer-regressions", [sys.executable, "-B", "-m", "unittest", "discover", "-s", "scripts/tests", "-p", "test_*.py", "-v"], sdk, python_tests=True)
+        run = runner("sdk", cargo_target)
+        run("sdk-format", [guest["CARGO"], "fmt", "--", "--check"], sdk, environment=guest)
+        run("sdk-clippy", [guest["CARGO"], "clippy", "--locked", "--offline", "--all-targets", "--", "-D", "warnings"], sdk, environment=guest)
+        run("sdk-tests", [guest["CARGO"], "test", "--locked", "--offline", "--", "--test-threads=1"], sdk, tests=True, environment=guest)
+        for manifest in sorted((sdk / "examples").glob("*/Cargo.toml")):
+            # These workspaces own full native, guest, optimizer and application
+            # gates below; compiling a virtual root as one WASM package is invalid.
+            if manifest.parent.name in {"bounty-escrow", "revenue-hub", "vesting-streams"}:
+                continue
+            run(manifest.parent.name + "-format", [guest["CARGO"], "fmt", "--manifest-path", str(manifest), "--", "--check"], sdk, environment=guest)
+            environment = example_environment(source, manifest, evidence, run)
+            run(manifest.parent.name + "-clippy", [guest["CARGO"], "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], sdk, environment=environment)
 
-    # Preserve every pre-existing release gate, then add the audited owner cases.
-    for package in ("avm-test-harness", "avm-contract-sdk", "avm-contract-build", "avm-wasm-code"):
-        test(package, ["--lib"])
-    # Library tests and --all-targets check/clippy do not execute these owner
-    # admission/preparation boundaries.
-    for target in ("validate_wasm_module", "prepare_code", "get_prepared",
-                   "invalid_forbidden_sections", "invalid_mvp_function_body",
-                   "disabled_feature_encodings"):
-        test("avm-wasm-code", ["--test", target])
-    for package in ("avm-code-registry", "avm-deploy-upgrade", "avm-economics", "avm-config"):
-        test(package, [])
-    test("avm-effect-materializer", ["--test", "zero_intent_checkpoint"])
-    test("avm-contract-sdk", ["--test", "canonical_io"])
-    test("avm-contract-sdk", ["--lib"], ["runtime::tests::" + case for case in "input_view_borrows_live_bytes_and_bounds_at_chunk_boundaries dispatch_preserves_live_input_and_lifo_output_ownership dispatch_failure_capacity_and_overflow_leave_input_owned direct_dispatch_writes_once_without_the_vec_growth_path batch_dispatch_preserves_count_mode_and_failed_index_checks bounded_writer_failures_release_only_the_output_reservation direct_message_sections_and_batch_match_the_public_serializer".split()])
-    test("avm-contract-build", ["--test", "reproducible_build"])
-    for target_name in ("sdk_issue_abi", "sdk_issue_bindings", "sdk_issue_diagnostics", "sdk_issue_dispatch_wasm"):
-        test("avm-contract-build", ["--test", target_name])
-    test("avm-contract-sdk", ["--test", "deploy_accessors"])
-    run("candidate-tools", ["cargo", "build", "--locked", "--offline", "-p", "avm-contract-build",
-        "--bin", "avm-contract-build", "-p", "avm-test-harness", "--bin", "avm-local-stand"])
-    target = Path(os.environ.get("CARGO_TARGET_DIR") or source / "target").resolve()
-    builder, stand = target / "debug/avm-contract-build", target / "debug/avm-local-stand"
-    profile = source / "specs/avm-vm/wasmtime-release-profile.v1"
-    consumer_sdk = evidence / "consumer-sdk"
-    consumer_sdk.mkdir()
-    archive = subprocess.check_output(["git", "-C", str(sdk), "archive", "HEAD"])
-    with tarfile.open(fileobj=io.BytesIO(archive)) as snapshot:
-        snapshot.extractall(consumer_sdk, filter="data")
-    (consumer_sdk / "bin").mkdir()
-    for binary in (builder, stand):
-        (consumer_sdk / "bin" / binary.name).symlink_to(binary)
-    run("contract-memory-sections", [sys.executable, "-B", str(sdk / "scripts/tests/contract_memory.py"),
-        "--sdk", str(consumer_sdk), "--builder", str(builder),
-        "--output", str(evidence / "contract-memory-sections")], environment=guest)
-    run("contract-memory-lifecycle", [sys.executable, "-B", str(sdk / "scripts/tests/memory_lifecycle.py"),
-        "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
-        "--profile", str(profile), "--output", str(evidence / "contract-memory-lifecycle")], environment=guest)
-    run("sdk-public-issue-paths", [sys.executable, "-B", str(sdk / "scripts/tests/sdk_issue_public_paths.py"),
-        "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
-        "--profile", str(profile), "--out", str(evidence / "public-issue-paths")], environment=guest)
-    run("sdk-deploy-callback-delivery", ["bash", str(sdk / "examples/deploy-callback-repro/repro.sh"),
-        "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
-        "--out", str(evidence / "deploy-callback-repro")], sdk, environment=guest)
-    for name in ("bounty-escrow", "revenue-hub"):
-        command = ["bash", str(consumer_sdk / "examples" / name / "scripts/check.sh"),
-            "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
-            "--out", str(evidence / name)]
-        if name == "revenue-hub":
+    def runtime_unit_and_executor():
+        cargo_target = target_root / "debug"
+        run = runner("runtime", cargo_target)
+        packages = ["avm-config", "avm-contract-sdk", "avm-contract-build", "avm-code-registry", "avm-deploy-upgrade", "avm-economics", "avm-effect-materializer", "avm-test-harness", "avm-wasm-code", "avm-wasm-executor"]
+        selection = [arg for package in packages for arg in ("-p", package)]
+        run("runtime-check", ["cargo", "check", "--locked", "--offline", "--all-targets", *selection])
+        run("runtime-clippy", ["cargo", "clippy", "--locked", "--offline", "--all-targets", *selection, "--", "-D", "warnings"])
+        for fixture in ("contract-b", "contract-batch-patch", "contract-a-v1"):
+            manifest = source / "node/libs/avm-test-harness/tests/fixtures/e2e-standard-contract-stand" / fixture / "Cargo.toml"
+            run("runtime-" + fixture + "-clippy", [guest["CARGO"], "clippy", "--locked", "--offline", "--manifest-path", str(manifest), "--target", "wasm32-unknown-unknown", "--", "-D", "warnings"], environment=guest)
+        test = tester(runner("unit", cargo_target))
+        # Preserve every pre-existing release gate, then add the audited owner cases.
+        for package in ("avm-test-harness", "avm-contract-sdk", "avm-contract-build", "avm-wasm-code"):
+            test(package, ["--lib"])
+        # Library tests and --all-targets check/clippy do not execute these owner
+        # admission/preparation boundaries.
+        for target in ("validate_wasm_module", "prepare_code", "get_prepared",
+                       "invalid_forbidden_sections", "invalid_mvp_function_body",
+                       "disabled_feature_encodings"):
+            test("avm-wasm-code", ["--test", target])
+        for package in ("avm-code-registry", "avm-deploy-upgrade", "avm-economics", "avm-config"):
+            test(package, [])
+        test("avm-effect-materializer", ["--test", "zero_intent_checkpoint"])
+        test("avm-contract-sdk", ["--test", "canonical_io"])
+        test("avm-contract-sdk", ["--lib"], ["runtime::tests::" + case for case in "input_view_borrows_live_bytes_and_bounds_at_chunk_boundaries dispatch_preserves_live_input_and_lifo_output_ownership dispatch_failure_capacity_and_overflow_leave_input_owned direct_dispatch_writes_once_without_the_vec_growth_path batch_dispatch_preserves_count_mode_and_failed_index_checks bounded_writer_failures_release_only_the_output_reservation direct_message_sections_and_batch_match_the_public_serializer".split()])
+        test("avm-contract-build", ["--test", "reproducible_build"])
+        for target_name in ("sdk_issue_abi", "sdk_issue_bindings", "sdk_issue_diagnostics", "sdk_issue_dispatch_wasm"):
+            test("avm-contract-build", ["--test", target_name])
+        test("avm-contract-sdk", ["--test", "deploy_accessors"])
+        test = tester(runner("executor", cargo_target))
+        cases = "deploy_init_success_executes_real_wasm_with_exact_output_and_fuel process_message_selects_real_export_with_exact_output_and_fuel process_batch_uses_the_batch_export_and_output_at_effective_cap_succeeds allocator_fuel_exhaustion_precedes_the_generic_trap_status invalid_non_null_allocator_ranges_do_not_copy_call_init_or_free output_cap_precedes_pointer_validation invalid_output_pointer_range_and_input_overlap_are_rejected_before_read_or_free output_free_non_fuel_trap_skips_input_free_and_discards_copied_output fuel_exhaustion_at_output_free_and_input_free_has_fuel_precedence successful_cleanup_copies_output_then_frees_output_before_input same_input_uses_fresh_stores_and_is_deterministic failed_attempts_also_discard_their_store_state".split()
+        test("avm-wasm-executor", ["--lib"], ["tests::" + case for case in cases])
+        test("avm-wasm-executor", ["--lib"], ["tests::deadline::" + case for case in "completed_controlled_exports_preserve_exact_output_status_and_fuel expired_control_starts_no_guest_or_alarm cutoff_interrupts_allocator_entrypoint_and_each_free cancelled_store_is_discarded_and_next_call_matches_fresh_execution".split()])
+        test("avm-canonical", ["--test", "compact_maps"])
+        test("avm-canonical", ["--test", "compact_account"], ["profile_dispatch_preserves_legacy_roots_errors_and_load_trace", "source_rejects_wrong_hashes_missing_nodes_and_mixed_profiles"])
+        test("avm-event-capnp-codec", ["--test", "build_event_log"], "avm_event_capnp_codec_build_event_log_fixed_raw_vectors avm_event_capnp_codec_parse_event_log_unit_determinism_and_no_payload_copy avm_event_capnp_codec_parse_event_log_negative avm_event_capnp_codec_parse_event_log_does_not_replace_inner_validation verified_log_preserves_encoding_and_rejects_invalid_inputs avm_event_capnp_codec_build_event_log_competing_fault_precedence".split())
+        test("avm-scheduler", ["--test", "isolated_fuel_admission"])
+        test("avm-test-harness", ["--lib"], ["local_stand::tests::" + case for case in "owner_event_reads_use_block_start_and_advance_only_in_the_next_block owner_block_records_failed_batch_and_rejected_input_fuel_burns_once account_batch_exhausted_pool_settles_zero_fuel_fallback_without_state_effects".split()])
+
+    def applications():
+        cargo_target = target_root / "applications"
+        run = runner("applications", cargo_target)
+        run("candidate-tools", ["cargo", "build", "--locked", "--offline", "-p", "avm-contract-build",
+            "--bin", "avm-contract-build", "-p", "avm-test-harness", "--bin", "avm-local-stand"])
+        target = cargo_target.resolve()
+        builder, stand = target / "debug/avm-contract-build", target / "debug/avm-local-stand"
+        profile = source / "specs/avm-vm/wasmtime-release-profile.v1"
+        archive = subprocess.check_output(["git", "-C", str(sdk), "archive", "HEAD"])
+
+        def consumer_copy(name):
+            # Every application group gets its own writable SDK copy: the
+            # checks build and write inside the example directories.
+            consumer = evidence / name
+            consumer.mkdir()
+            with tarfile.open(fileobj=io.BytesIO(archive)) as snapshot:
+                snapshot.extractall(consumer, filter="data")
+            (consumer / "bin").mkdir()
+            for binary in (builder, stand):
+                (consumer / "bin" / binary.name).symlink_to(binary)
+            return consumer
+
+        consumer_sdk = consumer_copy("consumer-sdk")
+        # The application checks share the candidate tools above and run in
+        # three concurrent groups; each group's own Cargo commands use a
+        # separate target directory.
+        def tools_and_bounty():
+            run = runner("applications", cargo_target / "tools")
+            run("contract-memory-sections", [sys.executable, "-B", str(sdk / "scripts/tests/contract_memory.py"),
+                "--sdk", str(consumer_sdk), "--builder", str(builder),
+                "--output", str(evidence / "contract-memory-sections")], environment=guest)
+            run("contract-memory-lifecycle", [sys.executable, "-B", str(sdk / "scripts/tests/memory_lifecycle.py"),
+                "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
+                "--profile", str(profile), "--output", str(evidence / "contract-memory-lifecycle")], environment=guest)
+            run("sdk-public-issue-paths", [sys.executable, "-B", str(sdk / "scripts/tests/sdk_issue_public_paths.py"),
+                "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
+                "--profile", str(profile), "--out", str(evidence / "public-issue-paths")], environment=guest)
+            run("sdk-deploy-callback-delivery", ["bash", str(sdk / "examples/deploy-callback-repro/repro.sh"),
+                "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
+                "--out", str(evidence / "deploy-callback-repro")], sdk, environment=guest)
+            name = "bounty-escrow"
+            command = ["bash", str(consumer_sdk / "examples" / name / "scripts/check.sh"),
+                "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
+                "--out", str(evidence / name)]
+            run(name + "-application-checks", command, consumer_sdk, environment=guest)
+
+        def revenue_hub():
+            run = runner("applications-revenue-hub", cargo_target / "revenue-hub")
+            consumer_sdk = consumer_copy("consumer-sdk-revenue-hub")
+            name = "revenue-hub"
+            command = ["bash", str(consumer_sdk / "examples" / name / "scripts/check.sh"),
+                "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
+                "--out", str(evidence / name)]
             command.extend(("--optimizer", str(optimizer)))
-        run(name + "-application-checks", command, consumer_sdk, environment=guest)
-    application_environment = guest.copy()
-    application_environment.update(AVM_CONTRACT_BUILD=str(builder), AVM_LOCAL_STAND=str(stand),
-                                   AVM_WASMTIME_PROFILE=str(profile),
-                                   AVM_EVIDENCE_DIR=str(evidence / "vesting-streams"))
-    run("vesting-streams-application-checks", ["bash",
-        str(consumer_sdk / "examples/vesting-streams/scripts/check.sh"), str(consumer_sdk), str(optimizer)],
-        consumer_sdk, environment=application_environment)
-    application_environment.update(AVM_TOKEN_WORK=str(evidence / "fungible-token"),
-                                   PROVENANCE_OUT=str(evidence / "factory-child-provenance"), PROVENANCE_KEEP="1")
-    run("wallet-application-checks", ["bash",
-        str(consumer_sdk / "examples/wallet/stand-e2e.sh")], consumer_sdk,
-        environment={**application_environment, "AVM_WALLET_WORK": str(evidence / "wallet")})
-    run("fungible-token-application-checks", ["bash",
-        str(consumer_sdk / "examples/fungible-token/stand-e2e.sh")], consumer_sdk,
-        environment=application_environment)
-    run("factory-child-provenance-application-checks", ["bash",
-        str(consumer_sdk / "examples/factory-child-provenance/prove.sh")], consumer_sdk,
-        environment=application_environment)
-    cases = "deploy_init_success_executes_real_wasm_with_exact_output_and_fuel process_message_selects_real_export_with_exact_output_and_fuel process_batch_uses_the_batch_export_and_output_at_effective_cap_succeeds allocator_fuel_exhaustion_precedes_the_generic_trap_status invalid_non_null_allocator_ranges_do_not_copy_call_init_or_free output_cap_precedes_pointer_validation invalid_output_pointer_range_and_input_overlap_are_rejected_before_read_or_free output_free_non_fuel_trap_skips_input_free_and_discards_copied_output fuel_exhaustion_at_output_free_and_input_free_has_fuel_precedence successful_cleanup_copies_output_then_frees_output_before_input same_input_uses_fresh_stores_and_is_deterministic failed_attempts_also_discard_their_store_state".split()
-    test("avm-wasm-executor", ["--lib"], ["tests::" + case for case in cases])
-    test("avm-wasm-executor", ["--lib"], ["tests::deadline::" + case for case in "completed_controlled_exports_preserve_exact_output_status_and_fuel expired_control_starts_no_guest_or_alarm cutoff_interrupts_allocator_entrypoint_and_each_free cancelled_store_is_discarded_and_next_call_matches_fresh_execution".split()])
-    test("avm-canonical", ["--test", "compact_maps"])
-    test("avm-canonical", ["--test", "compact_account"], ["profile_dispatch_preserves_legacy_roots_errors_and_load_trace", "source_rejects_wrong_hashes_missing_nodes_and_mixed_profiles"])
-    test("avm-event-capnp-codec", ["--test", "build_event_log"], "avm_event_capnp_codec_build_event_log_fixed_raw_vectors avm_event_capnp_codec_parse_event_log_unit_determinism_and_no_payload_copy avm_event_capnp_codec_parse_event_log_negative avm_event_capnp_codec_parse_event_log_does_not_replace_inner_validation verified_log_preserves_encoding_and_rejects_invalid_inputs avm_event_capnp_codec_build_event_log_competing_fault_precedence".split())
-    test("avm-scheduler", ["--test", "isolated_fuel_admission"])
-    test("avm-test-harness", ["--lib"], ["local_stand::tests::" + case for case in "owner_event_reads_use_block_start_and_advance_only_in_the_next_block owner_block_records_failed_batch_and_rejected_input_fuel_burns_once account_batch_exhausted_pool_settles_zero_fuel_fallback_without_state_effects".split()])
-    # Inspect and compile the actual node graph. Separately run
-    # the owner assertions with the exact same compiled Wasmtime feature set.
-    tree = ["cargo", "tree", "--locked", "--offline", "--edges", "normal,build",
-            "--prefix", "none", "--format", "{p}|{f}"]
-    sdk_features = tree_engine_features(run("sdk-engine-graph", tree + ["-p", "avm-contract-build", "-p", "avm-test-harness"]))
-    node_features = tree_engine_features(run("node-engine-graph", tree + ["-p", "node"]))
-    profile = parse_profile((source / "specs/avm-vm/wasmtime-release-profile.v1").read_bytes())
-    required_features = set(profile["wasmtime_required_features"].split(","))
-    for features in (sdk_features, node_features):
-        require(required_features <= set(features) and "component-model-async" not in features,
-                "unqualified Wasmtime build capability")
+            run(name + "-application-checks", command, consumer_sdk, environment=guest)
+
+        def remaining_applications():
+            run = runner("applications-tail", cargo_target / "tail")
+            consumer_sdk = consumer_copy("consumer-sdk-tail")
+            application_environment = guest.copy()
+            application_environment.update(AVM_CONTRACT_BUILD=str(builder), AVM_LOCAL_STAND=str(stand),
+                                           AVM_WASMTIME_PROFILE=str(profile),
+                                           AVM_EVIDENCE_DIR=str(evidence / "vesting-streams"))
+            run("vesting-streams-application-checks", ["bash",
+                str(consumer_sdk / "examples/vesting-streams/scripts/check.sh"), str(consumer_sdk), str(optimizer)],
+                consumer_sdk, environment=application_environment)
+            application_environment.update(AVM_TOKEN_WORK=str(evidence / "fungible-token"),
+                                           PROVENANCE_OUT=str(evidence / "factory-child-provenance"), PROVENANCE_KEEP="1")
+            run("wallet-application-checks", ["bash",
+                str(consumer_sdk / "examples/wallet/stand-e2e.sh")], consumer_sdk,
+                environment={**application_environment, "AVM_WALLET_WORK": str(evidence / "wallet")})
+            run("fungible-token-application-checks", ["bash",
+                str(consumer_sdk / "examples/fungible-token/stand-e2e.sh")], consumer_sdk,
+                environment=application_environment)
+            run("factory-child-provenance-application-checks", ["bash",
+                str(consumer_sdk / "examples/factory-child-provenance/prove.sh")], consumer_sdk,
+                environment=application_environment)
+
+        groups = [threading.Thread(target=guarded, args=(group,), name=group.__name__)
+                  for group in (tools_and_bounty, revenue_hub, remaining_applications)]
+        for thread in groups:
+            thread.start()
+        for thread in groups:
+            thread.join()
+
+    engine = {}
+
+    def engine_qualification():
+        cargo_target = target_root / "engine"
+        run = runner("engine", cargo_target)
+        # Inspect and compile the actual node graph. Separately run
+        # the owner assertions with the exact same compiled Wasmtime feature set.
+        tree = ["cargo", "tree", "--locked", "--offline", "--edges", "normal,build",
+                "--prefix", "none", "--format", "{p}|{f}"]
+        sdk_features = tree_engine_features(run("sdk-engine-graph", tree + ["-p", "avm-contract-build", "-p", "avm-test-harness"]))
+        node_features = tree_engine_features(run("node-engine-graph", tree + ["-p", "node"]))
+        profile = parse_profile((source / "specs/avm-vm/wasmtime-release-profile.v1").read_bytes())
+        required_features = set(profile["wasmtime_required_features"].split(","))
+        for features in (sdk_features, node_features):
+            require(required_features <= set(features) and "component-model-async" not in features,
+                    "unqualified Wasmtime build capability")
+        node_build = run("node-release-compiler-artifacts", ["cargo", "build", "--locked", "--offline",
+                         "--release", "--message-format=json", "-vv", "-p", "node", "--bin", "node"])
+        require(compiled_engine_features(node_build) == node_features,
+                "actual node build differs from its resolved graph")
+        for package in ("avm-wasm-code", "avm-wasm-executor"):
+            text = run(package + "-node-engine-features", ["cargo", "test", "--locked", "--offline",
+                       "--release", "--message-format=json", "-p", package,
+                       "--lib", "--", "--test-threads=1"], tests=True)
+            require(compiled_engine_features(text) == node_features,
+                    "node feature assertions ran under a different engine build graph")
+        engine["sdk_wasmtime_features"] = sdk_features
+        engine["node_wasmtime_features"] = node_features
+
+    def end_to_end():
+        test = tester(runner("e2e", target_root / "e2e"))
+        test("avm-test-harness", ["--test", "e2e_standard_contract_stand"], ["e2e_standard_contract_stand"], release=True)
+        test("avm-test-harness", ["--test", "e2e_deploy_upgrade_and_code_lifecycle"], release=True)
+
+    errors = []
+
+    def guarded(group):
+        try:
+            group()
+        except BaseException as error:  # a failed require() in a group thread
+            failed.set()
+            with lock:
+                errors.append(f"{group.__name__}: {error}")
+
+    threads = [threading.Thread(target=guarded, args=(group,), name=group.__name__)
+               for group in (checks_and_sdk, runtime_unit_and_executor, applications,
+                             engine_qualification, end_to_end)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    require(not errors, "gate groups failed: " + "; ".join(errors))
+    sdk_features = engine["sdk_wasmtime_features"]
+    node_features = engine["node_wasmtime_features"]
     require(compiled_engine_features((evidence / "avm-wasm-code-lib.log").read_text()) == sdk_features,
             "SDK graph differs from its executed engine assertions")
-    node_build = run("node-release-compiler-artifacts", ["cargo", "build", "--locked", "--offline",
-                     "--release", "--message-format=json", "-vv", "-p", "node", "--bin", "node"])
-    require(compiled_engine_features(node_build) == node_features,
-            "actual node build differs from its resolved graph")
-    for package in ("avm-wasm-code", "avm-wasm-executor"):
-        text = run(package + "-node-engine-features", ["cargo", "test", "--locked", "--offline",
-                   "--release", "--message-format=json", "-p", package,
-                   "--lib", "--", "--test-threads=1"], tests=True)
-        require(compiled_engine_features(text) == node_features,
-                "node feature assertions ran under a different engine build graph")
     result["engine_qualification"] = {"sdk_wasmtime_features": sdk_features,
                                       "node_wasmtime_features": node_features,
                                       "profile_sha256": file_digest(source / "specs/avm-vm/wasmtime-release-profile.v1")}
-    test("avm-test-harness", ["--test", "e2e_standard_contract_stand"], ["e2e_standard_contract_stand"], release=True)
-    test("avm-test-harness", ["--test", "e2e_deploy_upgrade_and_code_lifecycle"], release=True)
     clean(source)
     clean(sdk)
     require(head(source) == result["source_commit"] and head(sdk) == result["sdk_commit"], "source changed during gates")

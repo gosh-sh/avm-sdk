@@ -1,9 +1,6 @@
 //! Application regressions against the current in-tree guest SDK.
 mod support;
-use avm_contract_sdk::{
-    decode_batch_input, encode_batch_output, encode_message_output, BatchContract, Contract,
-    StateOutputMode, StateUpdate,
-};
+use avm_contract_sdk::{encode_message_output, Contract, StateOutputMode, StateUpdate};
 use avm_revenue_audit::*;
 use avm_revenue_core::*;
 use support::*;
@@ -95,89 +92,53 @@ fn isolated_binding_status_and_receipt_follow_runtime_mode() {
 }
 
 #[test]
-fn incompatible_batch_mode_is_rejected_with_matching_unchanged_output() {
-    let state = audit_state();
-    for messages in [vec![], vec![audit_message(0, 1, 7)]] {
-        let mut bytes = batch_frame(&state, &messages);
-        bytes[148] = StateOutputMode::FullReplace as u8;
-        let input = decode_batch_input(&bytes).unwrap();
-        let out = AuditLedger::process_batch(input);
-        assert_eq!(out.status_codes, vec![E_AUDIT_ARGS; messages.len()]);
-        assert_eq!(out.state_update.mode(), input.required_state_output_mode);
-        assert_eq!(apply(&state, &out.state_update), state);
-        assert!(out.event_intents.is_empty() && out.outbound_intents.is_empty());
-        encode_batch_output(&out).unwrap();
-    }
-}
-
-#[test]
-fn malformed_batch_state_and_oversized_batch_fail_atomically_in_both_modes() {
+fn malformed_state_fails_atomically_in_both_modes() {
     for mode in [StateOutputMode::FullReplace, StateOutputMode::DataPatchList] {
-        for (state, messages) in [
-            (vec![], vec![audit_message(0, 1, 7)]),
-            (audit_state(), vec![audit_message(0, 1, 7); MAX_BATCH + 1]),
-        ] {
-            let mut bytes = batch_frame(&state, &messages);
-            bytes[148] = mode as u8;
-            let out = AuditLedger::process_batch(decode_batch_input(&bytes).unwrap());
-            assert_eq!(out.status_codes, vec![E_AUDIT_ARGS; messages.len()]);
-            assert_eq!(out.state_update.mode(), mode);
-            assert_eq!(apply(&state, &out.state_update), state);
-            assert!(out.event_intents.is_empty() && out.outbound_intents.is_empty());
-        }
+        let receipt = Spec { mode, ..audit_receipt(0, 1, 7) };
+        fails(&invoke::<AuditLedger>(&[], &receipt), E_AUDIT_ARGS);
     }
 }
 
 #[test]
-fn all_sixteen_members_produce_sorted_disjoint_bounded_patches() {
+fn all_sixteen_members_receive_disjoint_bounded_patches() {
     let mut state = initialize::<AuditLedger>(&init_spec(StateOutputMode::FullReplace));
     for i in 0..16 {
         let out = invoke::<AuditLedger>(&state, &bind_spec(i, StateOutputMode::DataPatchList));
         assert_eq!(out.status_code, 0);
         state = apply(&state, out.state_update.as_ref().unwrap());
     }
-    let messages = (1..=MAX_BATCH)
+    // 16 receipts for each member, in reversed member order.
+    let receipts = (1..=256_usize)
         .map(|n| {
-            let i = (MAX_BATCH - n) % 16;
-            message(&Spec {
+            let i = (256 - n) % 16;
+            Spec {
                 source: Some(address(20 + i as u8)),
                 destination: address(9),
                 method: ids::AUDIT_RECORD,
                 body: payment_body(i as u8, n as u64, 7),
+                mode: StateOutputMode::DataPatchList,
                 ..Spec::default()
-            })
+            }
         })
         .collect::<Vec<_>>();
-    let bytes = batch_frame(&state, &messages);
-    let out = AuditLedger::process_batch(decode_batch_input(&bytes).unwrap());
-    assert_eq!(out.status_codes, vec![0; MAX_BATCH]);
-    assert_eq!(out.event_intents.len(), MAX_BATCH);
-    let StateUpdate::DataPatchList(patches) = &out.state_update else { panic!() };
-    assert_eq!(patches.len(), 16);
-    let mut changed = 0;
-    for (i, patch) in patches.iter().enumerate() {
-        assert_eq!(patch.offset as usize, RECORD_BASE + i * RECORD_BYTES);
-        assert_eq!(patch.old_len as usize, RECORD_BYTES);
-        assert_eq!(patch.new_bytes.len(), RECORD_BYTES);
-        changed += patch.new_bytes.len();
+    for (k, receipt) in receipts.iter().enumerate() {
+        let out = invoke::<AuditLedger>(&state, receipt);
+        assert_eq!(out.status_code, 0);
+        assert_eq!(out.event_intents.len(), 1);
+        let Some(StateUpdate::DataPatchList(patches)) = &out.state_update else { panic!() };
+        assert_eq!(patches.len(), 1);
+        let i = (255 - k) % 16;
+        assert_eq!(patches[0].offset as usize, RECORD_BASE + i * RECORD_BYTES);
+        assert_eq!(patches[0].old_len as usize, RECORD_BYTES);
+        assert_eq!(patches[0].new_bytes.len(), RECORD_BYTES);
+        state = apply(&state, out.state_update.as_ref().unwrap());
     }
-    assert_eq!(changed, 512);
-    assert!(patches.len() <= 512 && changed <= 262_144);
-    assert!(bytes.len() < 262_144);
-    assert!(encode_batch_output(&out).unwrap().len() < 262_144);
-    let next = apply(&state, &out.state_update);
     for i in 0..16 {
-        let r = record(&next, i).unwrap();
+        let r = record(&state, i).unwrap();
         assert_eq!(r.total, 16 * 7);
         assert_eq!(r.count, 16);
     }
-    // Every event retains its input position despite reversed member order.
-    for (i, event) in out.event_intents.iter().enumerate() {
-        assert_eq!(event.input_index as usize, i);
+    for receipt in &receipts {
+        fails(&invoke::<AuditLedger>(&state, receipt), E_AUDIT_REPLAY);
     }
-    let repeated =
-        AuditLedger::process_batch(decode_batch_input(&batch_frame(&next, &messages)).unwrap());
-    assert_eq!(repeated.status_codes, vec![E_AUDIT_REPLAY; MAX_BATCH]);
-    assert_eq!(repeated.state_update, StateUpdate::DataPatchList(vec![]));
-    assert!(repeated.event_intents.is_empty());
 }

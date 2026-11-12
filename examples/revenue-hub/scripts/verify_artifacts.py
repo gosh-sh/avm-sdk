@@ -51,8 +51,8 @@ for contract in ["vault", "receiver", "audit"]:
     directory = ROOT / "contracts" / contract / "target/avm"
     wasm = (directory / "contract.wasm").read_bytes()
     names = exports(wasm)
-    if contract == "audit":
-        assert "process_batch" in names
+    # Every contract is message-isolated and exports no AccountBatch entry point.
+    assert "process_batch" not in names
     result["contracts"][contract] = {
         "exports":names, "host_imports":0,
         "sha256":{name:hashlib.sha256((directory / name).read_bytes()).hexdigest()

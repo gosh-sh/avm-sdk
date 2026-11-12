@@ -1,6 +1,6 @@
 # Runtime limits, rent and deployment identity
 
-These are the **SDK 0.6.0 local stand** settings. Its FUEL caps are the network
+These are the **SDK 0.6.1 local stand** settings. Its FUEL caps are the network
 execution defaults. All of them are development configuration, not mainnet
 promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the
@@ -47,7 +47,9 @@ before execution, or the compute FUEL plus the
 [memory payment](fuel-and-fees.md#memory-payment) after it. The meter includes the
 runtime's metered allocation, guest entrypoint and cleanup work, not just your
 method body. Validation failures before execution have no attempted FUEL to
-report. Diagnostics do not imply that a failed external call was committed.
+report. An external call that reached WASM execution was admitted: when it
+fails, it is committed with its charge and its spent nonce, and none of its
+effects are kept (`state_committed` and the receipt in the CLI output).
 
 Status **33** is `VM_WASM_STACK_LIMIT`: the call exceeded the WASM stack limit,
 for example through recursion that is too deep. Bound recursion depth in the

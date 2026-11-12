@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
 use avm_contract_sdk::{
-    AccountAddress, BatchContract, BatchInput, BatchOutput, Caller, CanonicalMessage, Contract,
-    EventField, EventValue, MessageInput, MessageOutput, StateOutputMode, StatePatch, StateUpdate,
+    AccountAddress, Caller, CanonicalMessage, Contract, EventField, EventValue, MessageInput,
+    MessageOutput, StateOutputMode, StatePatch, StateUpdate,
 };
 use avm_revenue_core::*;
 
@@ -18,7 +18,6 @@ pub const E_AUDIT_ARGS: u32 = 3200;
 pub const E_AUDIT_AUTH: u32 = 3201;
 pub const E_AUDIT_REPLAY: u32 = 3202;
 pub const E_AUDIT_OVERFLOW: u32 = 3203;
-pub const MAX_BATCH: usize = 256;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Record {
@@ -256,76 +255,8 @@ fn isolated(input: MessageInput<'_>) -> HubResult<MessageOutput> {
     Ok(out)
 }
 
-impl BatchContract for AuditLedger {
-    fn process_batch(input: BatchInput<'_>) -> BatchOutput {
-        let failure = |code| BatchOutput {
-            // Even a rejected batch must satisfy the guest ABI's mode check.
-            // Return no ledger changes, effects, or successful message statuses.
-            state_update: replacement(input.state, input.required_state_output_mode, vec![]),
-            status_codes: vec![code; input.message_count() as usize],
-            outbound_intents: vec![],
-            event_intents: vec![],
-        };
-        let Ok(count) = validate(input.state) else {
-            return failure(E_AUDIT_ARGS);
-        };
-        if input.message_count() as usize > MAX_BATCH {
-            return failure(E_AUDIT_ARGS);
-        }
-        let mut records = [Record::default(); MAX_MEMBERS];
-        for (i, r) in records[..count].iter_mut().enumerate() {
-            let Ok(value) = record(input.state, i) else {
-                return failure(E_AUDIT_ARGS);
-            };
-            *r = value;
-        }
-        let mut touched = [false; MAX_MEMBERS];
-        let mut statuses = Vec::new();
-        let mut events = Vec::new();
-        for (input_index, message) in input.messages().enumerate() {
-            let result = match message {
-                Ok(CanonicalMessage::Internal(m)) if m.destination == input.destination => {
-                    accepted(
-                        input.state,
-                        count,
-                        m.source,
-                        CanonicalMessage::Internal(m),
-                        &mut records,
-                    )
-                }
-                _ => Err(E_AUDIT_AUTH),
-            };
-            match result {
-                Ok((index, nonce, amount, r)) => {
-                    match audit_event(input_index as u32, index, nonce, amount, r) {
-                        Ok(e) => {
-                            touched[index] = true;
-                            statuses.push(0);
-                            events.push(e);
-                        }
-                        Err(code) => return failure(code),
-                    }
-                }
-                Err(code) => statuses.push(code),
-            }
-        }
-        let patches = touched
-            .iter()
-            .enumerate()
-            .filter(|(_, v)| **v)
-            .map(|(i, _)| patch(input.state, i, records[i]))
-            .collect();
-        BatchOutput {
-            state_update: replacement(input.state, input.required_state_output_mode, patches),
-            status_codes: statuses,
-            outbound_intents: vec![],
-            event_intents: events,
-        }
-    }
-}
-
 #[cfg(target_arch = "wasm32")]
-avm_contract_sdk::export_batch_contract!(AuditLedger);
+avm_contract_sdk::export_message_contract!(AuditLedger);
 
 /// Offline conversion only: no on-chain migration entrypoint or authority is supplied.
 /// Rejects unknown/noncanonical bytes rather than silently discarding them.

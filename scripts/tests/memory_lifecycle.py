@@ -13,6 +13,15 @@ from contract_memory import check_built_memory, memory_limits
 from packaged_lifecycle import read_state
 
 
+def shells(state, address):
+    """The SHELL (currency 2) balance of one account of the developer state."""
+    image = bytes.fromhex(read_state(state)[0][address]["image"])
+    for offset in range(35, 35 + 20 * int.from_bytes(image[33:35], "little"), 20):
+        if int.from_bytes(image[offset:offset + 4], "little") == 2:
+            return int.from_bytes(image[offset + 4:offset + 20], "little")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("sdk", "builder", "stand", "profile", "output"):
@@ -129,12 +138,18 @@ def main():
         assert "memory.grow was rejected" in diagnostic
         assert int.from_bytes(read_state(state)[0][measured_address]["data"][32:], "little") == 0xFFFFFFFF
         before_overflow = read_state(state)[0][measured_address]["data"]
-        before_overflow_state = state.read_bytes()
+        before_overflow_shells = shells(state, measured_address)
         trapped, _ = stand("call", "stack-overflow", expected=2, address=measured_address, method="memory.probe", args_json=str(0x8000_0000 | 1024), identity="user", check_memory=True, **timing())
         assert read_state(state)[0][measured_address]["data"] == before_overflow
-        assert "VM_WASM_TRAP" in trapped["error"] and state.read_bytes() == before_overflow_state
+        # The call was admitted: the trap commits its charge and keeps none of
+        # its guest effects.
+        assert trapped["error"] == "execution_failed" and trapped["status_code"] == 30
+        assert "VM_WASM_TRAP" in trapped["detail"] and trapped["state_committed"]
+        charged = int(trapped["receipt"]["charged_shells"])
+        assert charged > 0 and shells(state, measured_address) == before_overflow_shells - charged
         repeated, _ = stand("call", "stack-overflow-repeat", expected=2, address=measured_address, method="memory.probe", args_json=str(0x8000_0000 | 1024), identity="user", check_memory=True, **timing())
-        assert repeated["error"] == trapped["error"] and state.read_bytes() == before_overflow_state
+        assert (repeated["error"], repeated["status_code"]) == (trapped["error"], trapped["status_code"])
+        assert read_state(state)[0][measured_address]["data"] == before_overflow
         before = (fixture / "avm-memory.json").read_bytes()
         manifest.write_text(f"[build]\nmax_memory_bytes = {peak}\nstack_bytes = 16384\narena_bytes = 65536\n\n" + descriptor)
         build("explicit-test-build", testing=True)
@@ -147,7 +162,7 @@ def main():
             "peak_memory_bytes": peak, "deployment_maximum_bytes": peak, "testing_maximum_bytes": testing_maximum,
             "test_calls": record["test_calls"], "marker_and_purpose_verified": True, "warning_verified": True,
             "rejected_growth_preserved": True, "failed_record_preserved_previous_measurement": True,
-            "rust_stack_overflow_trap_repeated": True, "overflow_preserved_canonical_state": True,
+            "rust_stack_overflow_trap_repeated": True, "overflow_preserved_account_data": True,
             "temporary_state_removed_on_exit": True}, indent=2) + "\n")
     print("PASS: measured deployment maximum, marker, provenance, warning and rejected growth")
 

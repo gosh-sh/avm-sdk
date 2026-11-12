@@ -310,40 +310,13 @@ pub fn audit_state() -> Vec<u8> {
     }
     b
 }
-pub fn audit_message(index: usize, nonce: u64, amount: u128) -> Vec<u8> {
-    message(&Spec {
+pub fn audit_receipt(index: usize, nonce: u64, amount: u128) -> Spec {
+    Spec {
         source: Some(address(2 + index as u8)),
         destination: address(9),
         method: ids::AUDIT_RECORD,
         body: payment_body(index as u8, nonce, amount),
+        mode: StateOutputMode::DataPatchList,
         ..Spec::default()
-    })
-}
-pub fn batch_frame(state: &[u8], messages: &[Vec<u8>]) -> Vec<u8> {
-    let mut b = Vec::from(*b"ACBI");
-    b.extend_from_slice(&10u64.to_le_bytes());
-    b.extend_from_slice(&10u32.to_le_bytes());
-    b.extend_from_slice(&1u32.to_le_bytes());
-    b.extend_from_slice(&[0x12; 32]);
-    b.extend_from_slice(&address(9).dapp_id);
-    b.extend_from_slice(&address(9).account_id);
-    b.extend_from_slice(&[0x44; 32]);
-    b.push(1);
-    b.extend_from_slice(&[0; 7]);
-    extras(&mut b, &[(SHELL_CURRENCY_ID, 1_000_000)], true);
-    b.extend_from_slice(&(state.len() as u32).to_le_bytes());
-    b.extend_from_slice(state);
-    b.extend_from_slice(&(messages.len() as u32).to_le_bytes());
-    let mut offset = 0u32;
-    b.extend_from_slice(&offset.to_le_bytes());
-    for msg in messages {
-        offset += msg.len() as u32;
-        b.extend_from_slice(&offset.to_le_bytes());
     }
-    for msg in messages {
-        b.extend_from_slice(msg);
-    }
-    b.extend_from_slice(&4u32.to_le_bytes());
-    b.extend_from_slice(&[0; 4]);
-    b
 }

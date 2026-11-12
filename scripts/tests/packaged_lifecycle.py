@@ -353,7 +353,9 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
         assert len(values["contract.descriptor"]) == (70 if example.startswith("contract-a") else 66)
         artifacts[example] = {name: sha(data) for name, data in values.items()}
         maximum = fixture_memory_maximum(root, source and not deployment)
-        admission[example] = wasm_facts(values["contract.wasm"], example == "contract-batch-patch", maximum)
+        # Byte 0 of the descriptor is the execution mode; AccountBatch (1) code
+        # must also export process_batch.
+        admission[example] = wasm_facts(values["contract.wasm"], values["contract.descriptor"][0] == 1, maximum)
     assert artifacts["contract-a-v1"]["contract.acab"] == artifacts["contract-a-v2"]["contract.acab"]
     assert artifacts["contract-a-v1"]["contract.descriptor"] == artifacts["contract-a-v2"]["contract.descriptor"]
     assert artifacts["contract-a-v1"]["contract.wasm"] != artifacts["contract-a-v2"]["contract.wasm"]
@@ -376,7 +378,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
     unpaid = version.run("call", expected=2, address=address, method="causal.a.version",
                          args_json="null", identity="package-owner", extra_currencies="",
                          **version.timing(fee=0))
-    assert unpaid["error"] == "call rejected canonical operation: local call charge failed: RouteRequiresFee", unpaid
+    assert unpaid["error"] == "call rejected canonical operation: cannot pay the external: RouteRequiresFee", unpaid
     assert version.state.read_bytes() == before_unpaid, "unpaid external call must not publish effects"
     upgraded = version.deploy("contract-a-v2", command="publish-version")
     selected = read_accounts(version.state)[0][upgraded]["selected_code_id"]

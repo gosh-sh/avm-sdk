@@ -1,7 +1,7 @@
 # Revenue Hub example
 
 A fixed-share revenue vault, bound payout receivers and an authenticated
-AccountBatch receipt ledger. The same Rust entrypoints run in native regressions
+receipt ledger. The same Rust entrypoints run in native regressions
 and real guest WASM. Governance is 2-of-3 with a timelock; recipients and weights
 are fixed at deployment. Members and governance act through their own keyed
 wallets (the SDK `wallet` example); the vault itself keeps no owner key. This is a local synthetic-funds example, not a production
@@ -44,10 +44,10 @@ Explicit tools can replace `--sdk` with `--builder`, `--stand` and `--profile`.
 Use writable output outside the source tree. Current guests require the ECC-only
 SDK/runtime ABI; the historical SDK 0.2.0 distribution is incompatible.
 
-This one entry point checks native formatting/Clippy and all 82 vault/receiver/
+This one entry point checks native formatting/Clippy and all 79 vault/receiver/
 audit regressions, the separate compact audit's 10 differential regressions,
 all guests, official two-build reproducibility, two independent pinned optimizer
-outputs, canonical IDs, exports/zero host imports, and 20 native/WASM ABI vectors.
+outputs, canonical IDs, exports/zero host imports, and 12 native/WASM ABI vectors.
 It runs actual legacy and compact local-stand journeys, rejected deliveries and
 retry, governance negatives, canonical state-mode boundaries, copied-state restart,
 rent deltas, legacy upgrade rejection and journal replay.

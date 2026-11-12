@@ -1,8 +1,5 @@
 #![forbid(unsafe_code)]
 
-use avm_contract_sdk::BatchContract;
-use avm_contract_sdk::BatchInput;
-use avm_contract_sdk::BatchOutput;
 use avm_contract_sdk::CanonicalMessage;
 use avm_contract_sdk::Contract;
 use avm_contract_sdk::MessageInput;
@@ -19,7 +16,6 @@ const INTERNAL_PATCH_BODY: [u8; 16] = [0x42; 16];
 const VALUE_ECC0: u128 = 37;
 const EXTRA_CURRENCY_ID: u32 = 7;
 const EXTRA_CURRENCY_AMOUNT: u128 = 11;
-const BATCH_FUEL_FEE_SHELLS: u128 = 2;
 
 struct BatchPatchContract;
 
@@ -33,29 +29,15 @@ impl Contract for BatchPatchContract {
         MessageOutput::success(StateUpdate::FullReplace(state))
     }
 
-    fn process_message(_input: MessageInput<'_>) -> MessageOutput {
-        MessageOutput::failure(1401)
-    }
-}
-
-impl BatchContract for BatchPatchContract {
-    fn process_batch(input: BatchInput<'_>) -> BatchOutput {
-        let failure = || BatchOutput {
-            state_update: StateUpdate::DataPatchList(Vec::new()),
-            status_codes: vec![1402; input.message_count() as usize],
-            outbound_intents: Vec::new(),
-            event_intents: Vec::new(),
-        };
+    fn process_message(input: MessageInput<'_>) -> MessageOutput {
+        let failure = || MessageOutput::failure(1402);
         let Some(previous_counter) = valid_counter(input.state) else { return failure() };
         if input.required_state_output_mode != StateOutputMode::DataPatchList
-            || input.message_count() != 1
             || input.internal_event_results != 0_u32.to_le_bytes()
         {
             return failure();
         }
-        let Some(Ok(CanonicalMessage::Internal(message))) = input.messages().next() else {
-            return failure();
-        };
+        let CanonicalMessage::Internal(message) = input.message else { return failure() };
         let mut extra = message.extra.iter();
         let Some(ecc0) = extra.next() else { return failure() };
         let Some(currency) = extra.next() else { return failure() };
@@ -64,7 +46,6 @@ impl BatchContract for BatchPatchContract {
             || message.destination != input.destination
             || ecc0.currency_id != 0
             || ecc0.amount != VALUE_ECC0
-            || message.fuel_fee_shells != BATCH_FUEL_FEE_SHELLS
             || currency.currency_id != EXTRA_CURRENCY_ID
             || currency.amount != EXTRA_CURRENCY_AMOUNT
             || extra.next().is_some()
@@ -78,16 +59,11 @@ impl BatchContract for BatchPatchContract {
         }
         let Some(next_counter) = previous_counter.checked_add(1) else { return failure() };
 
-        BatchOutput {
-            state_update: StateUpdate::DataPatchList(vec![StatePatch {
-                offset: COUNTER_OFFSET as u32,
-                old_len: COUNTER_BYTES as u32,
-                new_bytes: next_counter.to_le_bytes().to_vec(),
-            }]),
-            status_codes: vec![0],
-            outbound_intents: Vec::new(),
-            event_intents: Vec::new(),
-        }
+        MessageOutput::success(StateUpdate::DataPatchList(vec![StatePatch {
+            offset: COUNTER_OFFSET as u32,
+            old_len: COUNTER_BYTES as u32,
+            new_bytes: next_counter.to_le_bytes().to_vec(),
+        }]))
     }
 }
 
@@ -101,4 +77,4 @@ fn valid_counter(state: &[u8]) -> Option<u64> {
     state[COUNTER_OFFSET..COUNTER_OFFSET + COUNTER_BYTES].try_into().ok().map(u64::from_le_bytes)
 }
 
-avm_contract_sdk::export_batch_contract!(BatchPatchContract);
+avm_contract_sdk::export_message_contract!(BatchPatchContract);

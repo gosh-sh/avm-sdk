@@ -4,7 +4,7 @@
   "arena_bytes": 131542,
   "initial_memory_bytes": 65536,
   "peak_memory_bytes": 393216,
-  "test_calls": 27,
+  "test_calls": 30,
   "test_wasm_hashes": [
     "3c55cd155ba32689ab2c97cd122302827049358dc7fa35ffb4698de05853cfca"
   ]

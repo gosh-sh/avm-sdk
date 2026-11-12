@@ -68,7 +68,6 @@ def main():
     run("optimization", ["python3", "scripts/optimize.py", "--wasm-opt", args.optimizer.resolve(), "--out", out / "optimization.json"])
     run("canonical-ids", ["python3", "scripts/sync_ids.py", "--check"])
     run("artifact-inspection", ["python3", "scripts/verify_artifacts.py", "--out", out / "artifacts.json"])
-    run("batch-probe", ["cargo", "+1.99.1", "run", "-p", "avm-revenue-tests", "--bin", "batch_probe", "--locked", "--offline"])
     run("state-boundary-format", ["cargo", "+1.99.1", "fmt", "--manifest-path", ROOT / "tests/fixtures/state-boundary/Cargo.toml", "--", "--check"])
     run("build-state-boundary", [args.builder, "build", "--manifest-path", ROOT / "tests/fixtures/state-boundary/Cargo.toml"])
     provenance = (ROOT / "tests/fixtures/state-boundary/target/avm-build-provenance.txt").read_text()

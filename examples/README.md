@@ -21,7 +21,7 @@ The available stand commands are listed in the
 
 - [bounty-escrow](bounty-escrow/README.md): milestone funding, asynchronous
   payout/refund accounting and failure/replay regressions.
-- [revenue-hub](revenue-hub/README.md): governed payouts, batch audit and compact
+- [revenue-hub](revenue-hub/README.md): governed payouts, a receipt audit ledger and compact
   state experiments with native/WASM vectors and replay.
 - [vesting-streams](vesting-streams/README.md): grant accrual, cancellation and
   callback accounting checked against an independent arithmetic oracle.
@@ -90,18 +90,19 @@ cross-DApp behavior.
 
 ### `contract-batch-patch`
 
-An account-batch contract with a 65,540-byte state. Initialization uses
-`FullReplace`; batch execution accepts one canonical internal message and
-returns a `DataPatchList` that changes only the eight-byte counter. The isolated
-message entry point intentionally fails.
+A message-isolated contract with a 65,540-byte state. Initialization uses
+`FullReplace`; its message entry point accepts one canonical internal message
+and returns a `DataPatchList` that changes only the eight-byte counter.
 
-Use it to validate `AccountBatch`, bounded batch input, large retained state,
-and narrow state patches without replacing the complete state image.
+Use it to validate large retained state and narrow state patches without
+replacing the complete state image.
 
-Contract A v1 reserves 2 SHELL for this batch delivery. With the local
-`fuel_per_shell = 1000000`, that funds 2,000,000 FUEL. For a changed profile
-or input, measure the full batch call and round the required reserve up with
-`ceil(fuel_used / fuel_per_shell)`.
+AccountBatch execution is not supported by the node yet; a message to such
+code ends with status 21.
+
+Contract A v1 sends this message within its own DApp to message-isolated code,
+so the delivery is local-free: the message carries no FUEL fee and contract A's
+reserve is not charged; see [FUEL and SHELL](../docs/fuel-and-fees.md).
 
 ## Build An Example
 
@@ -144,7 +145,7 @@ Use the examples as focused references:
 - start with `contract-a-v1` for a message-isolated contract;
 - add `contract-b` for internal messaging, callbacks, events, and deployment;
 - use the v1/v2 pair for upgrades;
-- use `contract-batch-patch` only when batch execution and patch output are required.
+- use `contract-batch-patch` for large retained state and patch output.
 
 The source-test owner, fixed values, salts, payloads, and failure hooks are test data.
 Replace them before using copied code in an application.

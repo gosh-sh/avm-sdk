@@ -7,8 +7,10 @@ already committed.
 ## Deploy over committed code
 
 A deploy that names committed code, with `code_len = 0`, can be an external
-message or an internal message from a contract. It carries no module bytes,
-keeps the 65536-byte message body limit and pays no publication fee. On the
+message or an internal message from a contract. It carries no module bytes and
+keeps the 65536-byte message body limit. It pays no publication fee when it
+names a published selection, and a publication fee of one unit, 1000 SHELL,
+when it introduces a new selection over the committed code. On the
 local stand, deploy over committed code with `deploy --package-id <id>
 --selected-code-id <id>`; `inspect` lists the package and its prepared
 selections. A deploy that carries module bytes whose code hash is already
@@ -37,7 +39,8 @@ blocks write for it:
    When the module does not compile or `init` fails, nothing commits and the
    publication fee is still burnt: it burns in every case.
 
-While the address is `Uninit` or `Verify`, messages to it wait in its queue.
+While the address is `Uninit` or `Verify`, internal messages to it wait in its
+queue and an external call to it is not admitted.
 A block carries at most one `Init` record with a successful `init` for a
 given code hash. A producer that
 misses the compile deadline is penalized by a `CodeDeployPenalty` record of
@@ -74,10 +77,11 @@ names the address, `package_id`, `selected_code_id` and `code_hash`.
 The node reports the deploy message's status, not the phases of its address:
 `consumed` means a block consumed the deploy, which for new code is the block
 of its `Uninit` record. The later `Verify`, `Finalized` and `Init` records do
-not change that status. Messages to the address wait in its queue until
-`Init`, so the first call to the new contract that ends `consumed` shows that
-the deploy completed. A deploy that failed leaves no account, and such a call
-is not consumed.
+not change that status. Internal messages to the address wait in its queue
+until `Init` and an external call to it is not admitted before `Init`, so the
+first call to the new contract that ends `consumed` shows that the deploy
+completed. A deploy that failed leaves no account, and such a call is not
+consumed.
 
 ## Fees and caps
 

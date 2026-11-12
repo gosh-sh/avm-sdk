@@ -55,6 +55,9 @@ The following routes are chargeable:
 - callbacks;
 - `AccountBatch` execution, under its Library-defined pooled economics.
 
+AccountBatch execution is not supported by the node yet; a message to such
+code ends with status 21.
+
 Local-free applies only to delivery and receiver compute for that message. It
 does not waive storage rent, code publication fees, account initialization
 fees, name fees, or other protocol operations that have their own prices.
@@ -221,9 +224,10 @@ entries in its function section, which the deploy declares in its body. Every
 started 40 KiB unit pays 1000 SHELL and includes 256 functions, so a contract
 with at most 256 functions per started unit pays 1000 SHELL per unit: 2000 SHELL
 for a 41441-byte contract, 26000 SHELL for 1 MiB and 52000 SHELL for 2 MiB.
-A deploy that publishes a new selection carries its module bytes and pays this
-fee for them; a deploy that reuses a published selection pays no publication
-fee. Fund the deploy address for this fee, the account
+A deploy that publishes a new selection with its module bytes pays this fee for
+them; a new selection over code that is already committed carries no module
+bytes and pays one unit, 1000 SHELL; a deploy that reuses a published selection
+pays no publication fee. Fund the deploy address for this fee, the account
 initialization fee and the deploy's FUEL reserve before deploying.
 
 ## Funding Is A Separate Concern

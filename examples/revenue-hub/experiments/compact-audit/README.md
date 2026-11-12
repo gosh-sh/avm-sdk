@@ -1,10 +1,10 @@
 # Separate compact audit example
 
-This optional AccountBatch ledger uses `44 + 96 * member_count` bytes of
+This optional message-isolated ledger uses `44 + 96 * member_count` bytes of
 application state. It is a separate code/schema for **new installations only**.
 It retains the regular ledger's immutable owner/source bindings, exact receipt
-amount/nonce checks, sorted patches, individual rejection statuses and event
-indexes. No contract method authorizes conversion or upgrade of existing regular
+amount/nonce checks, one record patch per receipt, individual rejection
+statuses and events. No contract method authorizes conversion or upgrade of existing regular
 ledger accounts. The offline `compact_legacy` / `expand_legacy` functions are
 comparison helpers, not on-chain migration authority.
 
@@ -23,9 +23,10 @@ bash examples/revenue-hub/experiments/compact-audit/scripts/verify.sh \
   --out /absolute/path/to/compact-check
 ```
 
-Checks retain the ten authored regressions, including 512 differential batches,
-malformed state, overflow, ownership, source authentication and serialized restart.
-Actual WASM/native vectors cover both requested state modes and rejected batches.
+Checks retain the ten authored regressions, including 512 differential receipt
+sequences, malformed state, overflow, ownership, source authentication and
+serialized restart. Actual WASM/native vectors cover both requested state modes
+and malformed state.
 The local journey reconciles `10010 = 5005 + 3003 + 2002` paid, audit totals,
 empty queues, copied-state restart and replay. Local rent probes use canonical
 byte sizes; three direct regular-to-compact upgrade attempts must reject with

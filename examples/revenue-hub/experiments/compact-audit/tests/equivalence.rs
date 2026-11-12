@@ -1,8 +1,6 @@
 #[path = "../../../tests/tests/support/mod.rs"]
 mod support;
-use avm_contract_sdk::{
-    decode_batch_input, encode_batch_output, BatchContract, Contract, StateOutputMode, StateUpdate,
-};
+use avm_contract_sdk::{decode_message_input, Contract, StateOutputMode, StateUpdate};
 use avm_revenue_audit as legacy;
 use avm_revenue_core::*;
 use compact_audit_prototype as compact;
@@ -40,36 +38,43 @@ fn receipt(i: u8, nonce: u64, amount: u128) -> Spec {
         ..Spec::default()
     }
 }
-fn batch(
+/// Runs each message in its own message-isolated call, as the node does, and
+/// returns the final state, the statuses and the event intents.
+fn sequence(
     s: &[u8],
-    msgs: &[Vec<u8>],
+    specs: &[Spec],
     mode: StateOutputMode,
     new: bool,
-) -> avm_contract_sdk::BatchOutput {
-    let mut f = batch_frame(s, msgs);
-    f[148] = mode as u8;
-    let input = decode_batch_input(&f).unwrap();
-    let out = if new {
-        compact::AuditLedger::process_batch(input)
-    } else {
-        legacy::AuditLedger::process_batch(input)
-    };
-    encode_batch_output(&out).unwrap();
-    out
+) -> (Vec<u8>, Vec<u32>, Vec<String>) {
+    let mut state = s.to_vec();
+    let mut statuses = Vec::new();
+    let mut events = Vec::new();
+    for spec in specs {
+        let spec = Spec { mode, ..spec.clone() };
+        let out = if new {
+            invoke::<compact::AuditLedger>(&state, &spec)
+        } else {
+            invoke::<legacy::AuditLedger>(&state, &spec)
+        };
+        assert!(out.outbound_intents.is_empty());
+        if let Some(update) = &out.state_update {
+            assert!(matches!(
+                (update, mode),
+                (StateUpdate::FullReplace(_), StateOutputMode::FullReplace)
+                    | (StateUpdate::DataPatchList(_), StateOutputMode::DataPatchList)
+            ));
+            state = apply(&state, update);
+        }
+        statuses.push(out.status_code);
+        events.push(format!("{:?}", out.event_intents));
+    }
+    (state, statuses, events)
 }
-fn compare(old: &[u8], new: &[u8], msgs: &[Vec<u8>], mode: StateOutputMode) -> (Vec<u8>, Vec<u8>) {
-    let a = batch(old, msgs, StateOutputMode::DataPatchList, false);
-    let b = batch(new, msgs, mode, true);
-    assert_eq!(a.status_codes, b.status_codes);
-    assert_eq!(format!("{:?}", a.event_intents), format!("{:?}", b.event_intents));
-    assert!(b.outbound_intents.is_empty());
-    assert!(matches!(
-        (&b.state_update, mode),
-        (StateUpdate::FullReplace(_), StateOutputMode::FullReplace)
-            | (StateUpdate::DataPatchList(_), StateOutputMode::DataPatchList)
-    ));
-    let old = apply(old, &a.state_update);
-    let new = apply(new, &b.state_update);
+fn compare(old: &[u8], new: &[u8], specs: &[Spec], mode: StateOutputMode) -> (Vec<u8>, Vec<u8>) {
+    let (old, a, x) = sequence(old, specs, StateOutputMode::DataPatchList, false);
+    let (new, b, y) = sequence(new, specs, mode, true);
+    assert_eq!(a, b);
+    assert_eq!(x, y);
     assert_eq!(compact::expand_legacy(&new).unwrap(), old);
     (old, new)
 }
@@ -90,23 +95,23 @@ fn sizes_init_and_lossless_conversion_all_counts() {
     }
 }
 #[test]
-fn differential_deterministic_mixed_batches_restart_all_counts_and_modes() {
+fn differential_deterministic_mixed_sequences_restart_all_counts_and_modes() {
     for n in 1..=16 {
         for mode in [StateOutputMode::FullReplace, StateOutputMode::DataPatchList] {
             let mut old = bind(n);
             let mut new = compact::compact_legacy(&old).unwrap();
             for round in 1..=16u64 {
-                let mut msgs = Vec::new();
+                let mut specs = Vec::new();
                 for i in (0..n).rev() {
                     let s = receipt(i, round * 3, 7 + (i as u128));
-                    msgs.push(message(&s));
-                    msgs.push(message(&s)); // replay in same batch
-                    msgs.push(message(&receipt(i, round * 3 - 1, 2))); // stale nonce
+                    specs.push(s.clone());
+                    specs.push(s); // replay
+                    specs.push(receipt(i, round * 3 - 1, 2)); // stale nonce
                     let mut forged = receipt(i, round * 3 + 1, 999);
                     forged.source = Some(address(99));
-                    msgs.push(message(&forged));
+                    specs.push(forged);
                 }
-                (old, new) = compare(&old, &new, &msgs, mode);
+                (old, new) = compare(&old, &new, &specs, mode);
                 // New byte allocation each round; no process-local cache is carried forward.
                 new = new.to_vec();
                 assert_eq!(compact::compact_legacy(&old).unwrap(), new);
@@ -176,7 +181,7 @@ fn overflow_nonce_exhaustion_and_other_members_are_preserved() {
         let (a, b) = compare(
             &old,
             &new,
-            &[message(&receipt(0, 2, 1)), message(&receipt(1, 1, 9))],
+            &[receipt(0, 2, 1), receipt(1, 1, 9)],
             StateOutputMode::FullReplace,
         );
         assert_eq!(legacy::record(&a, 0).unwrap(), r);
@@ -216,47 +221,27 @@ fn invalid_message_forms_match_and_no_credit() {
     let mut s = base.clone();
     s.body.pop();
     cases.push(s);
-    let mut s = base.clone();
-    s.destination = address(88);
-    cases.push(s);
     let mut s = base;
     s.source = None;
     cases.push(s);
-    let messages = cases
-        .iter()
-        .map(message)
-        .filter(|m| {
-            let f = batch_frame(&new, std::slice::from_ref(m));
-            // These forms are rejected by the SDK before either contract runs.
-            decode_batch_input(&f).is_ok()
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(messages.len(), 8);
-    let (a, b) = compare(&old, &new, &messages, StateOutputMode::FullReplace);
+    // Every form reaches both contracts.
+    assert!(cases.iter().all(|s| decode_message_input(&frame(&new, s)).is_ok()));
+    let (a, b) = compare(&old, &new, &cases, StateOutputMode::FullReplace);
     assert_eq!(a, old);
     assert_eq!(b, new);
 }
 #[test]
-fn maximum_batch_coalescing_and_oversized_empty_batches() {
+fn maximum_receipt_sequence_and_its_replay() {
     let old = bind(16);
     let new = compact::compact_legacy(&old).unwrap();
-    let msgs = (0..256)
-        .map(|k| message(&receipt((k % 16) as u8, (k / 16 + 1) as u64, 1)))
-        .collect::<Vec<_>>();
+    let specs =
+        (0..256).map(|k| receipt((k % 16) as u8, (k / 16 + 1) as u64, 1)).collect::<Vec<_>>();
     for mode in [StateOutputMode::FullReplace, StateOutputMode::DataPatchList] {
-        let (a, b) = compare(&old, &new, &msgs, mode);
+        let (a, b) = compare(&old, &new, &specs, mode);
         assert_eq!(compact::record(&b, 15).unwrap().total, 16);
-        compare(&a, &b, &msgs, mode);
-        let out = batch(&new, &msgs, mode, true);
-        if let StateUpdate::DataPatchList(p) = out.state_update {
-            assert_eq!(p.len(), 16);
-            assert!(p.windows(2).all(|p| p[0].offset + 32 == p[1].offset));
-        }
-        for invalid in [vec![], vec![msgs[0].clone(); 257]] {
-            let (a, b) = compare(&old, &new, &invalid, mode);
-            assert_eq!(a, old);
-            assert_eq!(b, new);
-        }
+        // The replayed sequence is rejected receipt by receipt and changes nothing.
+        assert_eq!(compare(&a, &b, &specs, mode), (a.clone(), b.clone()));
+        assert_eq!(sequence(&b, &specs, mode, true).1, vec![compact::E_AUDIT_REPLAY; 256]);
     }
 }
 #[test]
@@ -294,20 +279,19 @@ fn malformed_states_and_legacy_padding_fail_closed() {
 fn serialized_restart_files_preserve_replay_barrier() {
     let old = bind(1);
     let new = compact::compact_legacy(&old).unwrap();
-    let (_, next) =
-        compare(&old, &new, &[message(&receipt(0, 8, 55))], StateOutputMode::FullReplace);
+    let (_, next) = compare(&old, &new, &[receipt(0, 8, 55)], StateOutputMode::FullReplace);
     let path = std::env::temp_dir().join(format!("compact-restart-{}.bin", std::process::id()));
     std::fs::write(&path, &next).unwrap();
     let restored = std::fs::read(&path).unwrap();
     std::fs::remove_file(path).unwrap();
-    let out = batch(
+    let (state, statuses, _) = sequence(
         &restored,
-        &[message(&receipt(0, 8, 55)), message(&receipt(0, 9, 10))],
+        &[receipt(0, 8, 55), receipt(0, 9, 10)],
         StateOutputMode::FullReplace,
         true,
     );
-    assert_eq!(out.status_codes, vec![compact::E_AUDIT_REPLAY, 0]);
-    assert_eq!(compact::record(&apply(&restored, &out.state_update), 0).unwrap().total, 65);
+    assert_eq!(statuses, vec![compact::E_AUDIT_REPLAY, 0]);
+    assert_eq!(compact::record(&state, 0).unwrap().total, 65);
 }
 #[test]
 fn write_guest_vectors_when_requested() {
@@ -321,19 +305,13 @@ fn write_guest_vectors_when_requested() {
     let old = bind(16);
     let new = compact::compact_legacy(&old).unwrap();
     for mode in [StateOutputMode::FullReplace, StateOutputMode::DataPatchList] {
-        for (name, state, msgs) in [
-            ("valid", new.clone(), vec![message(&receipt(0, 1, 55))]),
-            ("empty", new.clone(), vec![]),
-            ("oversized", new.clone(), vec![message(&receipt(0, 1, 55)); 257]),
-            ("malformed", vec![0; 44], vec![message(&receipt(0, 1, 55))]),
-        ] {
-            let mut f = batch_frame(&state, &msgs);
-            f[148] = mode as u8;
-            let out = compact::AuditLedger::process_batch(decode_batch_input(&f).unwrap());
+        for (name, state) in [("valid", new.clone()), ("malformed", vec![0; 44])] {
+            let f = frame(&state, &Spec { mode, ..receipt(0, 1, 55) });
+            let out = compact::AuditLedger::process_message(input(&f));
             rows.push(format!(
-                "{name}-{mode:?}\tprocess_batch\t{}\t{}",
+                "{name}-{mode:?}\tprocess_message\t{}\t{}",
                 hex(&f),
-                hex(&encode_batch_output(&out).unwrap())
+                hex(&avm_contract_sdk::encode_message_output(&out).unwrap())
             ));
         }
         let s = Spec {

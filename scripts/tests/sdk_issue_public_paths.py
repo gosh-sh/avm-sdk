@@ -147,8 +147,37 @@ def main():
     assert after_second["counters"]["init_executor_calls"] == before_second["counters"]["init_executor_calls"] + 1
     call("tools.add", {"a": 8, "b": 9})
     assert inspect() == struct.pack("<Q", 17), "first package must remain executable"
+
+    # A committed-code deploy reuses the selection a code deploy published. Its
+    # init input carries no code, so the guest allocator grows memory in a
+    # different order than for the code deploy; the deployment build must
+    # cover both deploy forms.
+    batch_contract = args.sdk / "examples/contract-batch-patch"
+    run([args.builder, "build", "--manifest-path", batch_contract / "Cargo.toml"])
+    batch_artifact = batch_contract / "target/avm"
+    now += 10
+    batch_deploy = ["--wasm", batch_artifact / "contract.wasm", "--acab", batch_artifact / "contract.acab",
+                    "--descriptor", batch_artifact / "contract.descriptor", "--salt-hex", "1752",
+                    "--init-json", "null", *timing()]
+    batch_address = stand("deploy", *batch_deploy, "--quote-address")["address"]
+    stand("fund-user", "--address", batch_address, "--shells", 10_000_000)
+    assert stand("deploy", *batch_deploy)["status"] == "ok"
+    published = stand("inspect", "--account", batch_address)
+    now += 10
+    committed_deploy = ["--selected-code-id", published["selected_code_id"], "--salt-hex", "1753",
+                        "--init-json", "null", *timing()]
+    committed_address = stand("deploy", *committed_deploy, "--quote-address")["address"]
+    assert committed_address != batch_address
+    stand("fund-user", "--address", committed_address, "--shells", 10_000_000)
+    before_committed = stand("inspect")
+    assert stand("deploy", *committed_deploy)["status"] == "ok"
+    after_committed = stand("inspect")
+    assert after_committed["code_blobs"] == before_committed["code_blobs"]
+    committed = stand("inspect", "--account", committed_address)
+    assert committed["selected_code_id"] == published["selected_code_id"]
+    assert committed["raw_state"] == published["raw_state"]
     assert stand("replay")["status"] == "ok"
-    summary = {"status": "passed", "paths": ["constructor", "owner_key", "manifest_bindings", "abi_inspection_and_body_decode", "generated_external_internal_dispatch", "read_only_account_inspection", "quote_fund_deploy", "repeated_placeholder_and_executable_topups", "independent_package_in_populated_stand", "original_package_continuation", "replay"],
+    summary = {"status": "passed", "paths": ["constructor", "owner_key", "manifest_bindings", "abi_inspection_and_body_decode", "generated_external_internal_dispatch", "read_only_account_inspection", "quote_fund_deploy", "repeated_placeholder_and_executable_topups", "independent_package_in_populated_stand", "original_package_continuation", "committed_selection_deploy", "replay"],
                "state_sha256": hashlib.sha256(state.read_bytes()).hexdigest(),
                "wasm_sha256": hashlib.sha256((artifact / "contract.wasm").read_bytes()).hexdigest(),
                "second_wasm_sha256": hashlib.sha256((second_artifact / "contract.wasm").read_bytes()).hexdigest()}

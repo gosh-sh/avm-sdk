@@ -1,14 +1,7 @@
 [descriptor]
-execution_mode = "account_batch"
+execution_mode = "message_isolated"
 owner_key_offset = 4
 state_schema_id = "abc99b4f8247c763046e73dde1b6095cf9c578641b74bfab7ce53b68d30d94d1"
-
-[descriptor.batch]
-max_batch_messages = 256
-max_batch_state_bytes = 131072
-max_batch_input_bytes = 262144
-max_batch_output_bytes = 262144
-batch_min_fuel_fee_shells = 1
 
 [abi]
 state_root_type_id = 1

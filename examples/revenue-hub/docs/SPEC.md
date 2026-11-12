@@ -178,25 +178,20 @@ Only the owner can bind each member index once to a distinct
 receiver in the same DApp. Reports must have the correct index/source, regular
 internal method, zero transferred principal, no extras, and an increasing nonce.
 
-`process_batch` supports up to 256 canonical messages. Valid reports update a
-staged record set; invalid reports receive individual failure statuses and have
-no effect. Multiple valid reports to one member coalesce into one final patch.
-Patches are sorted by member index, and events retain the original input index.
+The audit is a message-isolated contract: each report runs in its own call. A
+valid report patches only its member's 32-byte record and emits one event; an
+invalid report fails with its own status and has no effect. AccountBatch
+execution is not supported by the node yet; a message to such code ends with
+status 21.
 
-External setup/status and internal isolated fallback support the state-update
-mode requested by the VM. The fallback and batch test compare resulting ledgers.
+External setup/status and internal reports support the state-update mode
+requested by the VM.
 
 Audit is an asynchronous receipt log, not a condition for financial settlement.
 If a queued report later fails, the log can lag a paid claim; no recovery service
 is implemented. The E2E test explicitly reconciles its successful journey.
 
 ## Output measurements and build admission
-
-`batch_probe` compares actual canonical batch patch output against a hypothetical
-full-replace serialization with the same event/status sections. That hypothetical
-representation is a byte-size comparison, not an admitted alternate output mode
-for this DataPatchList batch execution. No CPU, FUEL, or throughput comparison is
-claimed.
 
 The official builder checks two Rust compilations for reproducibility. Deployment
 then uses a pinned Binaryen optimization, run twice independently and compared
