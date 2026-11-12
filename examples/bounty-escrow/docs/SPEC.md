@@ -43,7 +43,9 @@ estimator: the runtime still validates fixed delivery/callback fees and rent.
 
 The configured deadline is a `u32` offset in seconds from the first execution
 (`init`), not a calendar timestamp. Init records the canonical
-`MessageInput.context.block_time` observation as its origin. Elapsed seconds
+`MessageInput.context.block_time` observation as its origin.
+The stored origin is the observed time of the first execution, used only as
+the reference for elapsed seconds, never as a deadline. Elapsed seconds
 are `block_time.saturating_sub(origin_time)`. Init and exact one-time funding
 are accepted at every execution time. Offset zero is valid: the escrow is
 immediately eligible for its after-deadline behavior once funded.

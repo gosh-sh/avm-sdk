@@ -4,7 +4,8 @@
 
 All schedule values are `u32` durations in seconds from the contract's first
 execution (`init`). The contract reads `MessageInput.context.block_time` from
-the canonical execution input and records it as an observation, not a deadline.
+the canonical execution input. The stored origin is the observed time of the first execution, used only as
+the reference for elapsed seconds, never as a deadline.
 Constructor data, deployment parameters and the account-address preimage contain
 only schedule offsets; no calendar start or wall-clock deadline is supplied.
 Start may be zero, meaning accrual from the first execution. Start must
@@ -39,7 +40,7 @@ callback. Owner cancellation is available only for revocable, uncancelled
 streams. Cancellation after end preserves the entire earned amount and leaves
 zero refund entitlement; it succeeds and freezes the cap at the full
 principal. It does not fail because time has passed. A repeat cancellation
-still fails because the stream is already cancelled. It freezes earned at the cancellation time and leaves pending payments
+still fails because the stream is already cancelled. Cancellation freezes earned at the cancellation time and leaves pending payments
 valid. Refund entitlement is total minus the frozen earned amount. There is no
 owner sweep, beneficiary replacement, or destination-update method.
 

@@ -85,8 +85,8 @@ The nonce must be the next monotonic proposal nonce. A proposer contributes one
 vote. Another signer must approve the identical full body. A signer can vote once;
 votes are represented as a three-bit set.
 
-The initializer records the execution context's block-time observation as an
-origin, not a deadline. Proposal times are `u64` elapsed-second offsets from
+The stored origin is the observed time of the first execution, used only as
+the reference for elapsed seconds, never as a deadline. Proposal times are `u64` elapsed-second offsets from
 that first execution. Configuration contains only durations.
 
 `created = block_time.saturating_sub(origin_time)`.
