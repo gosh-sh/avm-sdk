@@ -6,6 +6,12 @@ guests export the MessageIsolated entrypoints without host imports or external
 Rust libraries. Constructor data comes from `MessageInput::deploy().init_data()`;
 the application does not parse a second deployment-envelope format.
 
+`MessageInput.context.block_time` supplies deterministic execution time. The
+vesting initializer records its first observation; schedule fields remain
+relative seconds in both configuration and state. Later calls compute elapsed
+seconds from that observation. No host clock or host import is used. The
+initializer and funding method have no elapsed-time admission cutoff.
+
 The example chooses `PRINCIPAL_CURRENCY_ID = 0` solely for synthetic test
 principal. Funding, outbound payments and failed-payment principal returns
 carry that explicit ECC id. SHELL id 2 pays for execution and may appear in

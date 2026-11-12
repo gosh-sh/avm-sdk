@@ -2,11 +2,11 @@ use crate::*;
 use avm_contract_sdk::AccountAddress;
 
 pub const CONFIG_BYTES: usize = 1976;
-pub const STATE_BYTES: usize = 3592;
+pub const STATE_BYTES: usize = 3600;
 pub const HEADER_BYTES: usize = 120;
 pub const ROW_BYTES: usize = 232;
 pub const PROGRESS_BYTES: usize = 200;
-pub const STATE_BASE: usize = 1992;
+pub const STATE_BASE: usize = 2000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stream {
@@ -85,9 +85,6 @@ impl Config {
             .iter()
             .try_fold(0u128, |v, s| v.checked_add(s.total).ok_or(E_OVERFLOW))
     }
-    pub fn first_start(&self) -> u32 {
-        self.streams[..usize::from(self.count)].iter().map(|s| s.start).min().unwrap_or(0)
-    }
     pub fn encode(&self) -> Vec<u8> {
         let mut b = vec![0; CONFIG_BYTES];
         b[..32].copy_from_slice(&self.owner);
@@ -161,7 +158,10 @@ pub struct Progress {
 pub struct State {
     pub config: Config,
     pub funded: bool,
+    /// Elapsed seconds since the first execution, never a wall-clock deadline.
     pub last_time: u32,
+    /// Block time observed on the first execution, used only as a relative origin.
+    pub origin_time: u32,
     pub nonce: u64,
     pub progress: [Progress; MAX_STREAMS],
 }
@@ -170,7 +170,8 @@ impl State {
         Self {
             config,
             funded: false,
-            last_time: now,
+            last_time: 0,
+            origin_time: now,
             nonce: 0,
             progress: [Progress::default(); MAX_STREAMS],
         }
@@ -237,7 +238,6 @@ impl State {
             if p.cancelled {
                 if !cfg.revocable
                     || p.cutoff > self.last_time
-                    || p.cutoff >= cfg.end
                     || p.cap != cfg.earned(p.cutoff).map_err(|_| E_STATE)?
                 {
                     return Err(E_STATE);
@@ -282,7 +282,8 @@ impl State {
         b.resize(STATE_BYTES, 0);
         b[CONFIG_BYTES] = u8::from(self.funded);
         b[CONFIG_BYTES + 4..CONFIG_BYTES + 8].copy_from_slice(&self.last_time.to_le_bytes());
-        b[CONFIG_BYTES + 8..STATE_BASE].copy_from_slice(&self.nonce.to_le_bytes());
+        b[CONFIG_BYTES + 8..CONFIG_BYTES + 16].copy_from_slice(&self.nonce.to_le_bytes());
+        b[CONFIG_BYTES + 16..CONFIG_BYTES + 20].copy_from_slice(&self.origin_time.to_le_bytes());
         for (i, p) in self.progress.iter().enumerate() {
             let o = STATE_BASE + i * PROGRESS_BYTES;
             b[o] = u8::from(p.cancelled);
@@ -305,13 +306,15 @@ impl State {
         if b.len() != STATE_BYTES
             || b[CONFIG_BYTES] > 1
             || b[CONFIG_BYTES + 1..CONFIG_BYTES + 4] != [0; 3]
+            || b[CONFIG_BYTES + 20..STATE_BASE] != [0; 4]
         {
             return Err(E_STATE);
         }
         let mut s = Self::new(
             Config::decode(&b[..CONFIG_BYTES]).map_err(|_| E_STATE)?,
-            u32_at(b, CONFIG_BYTES + 4)?,
+            u32_at(b, CONFIG_BYTES + 16)?,
         );
+        s.last_time = u32_at(b, CONFIG_BYTES + 4)?;
         s.funded = b[CONFIG_BYTES] == 1;
         s.nonce = u64_at(b, CONFIG_BYTES + 8)?;
         for (i, p) in s.progress.iter_mut().enumerate() {

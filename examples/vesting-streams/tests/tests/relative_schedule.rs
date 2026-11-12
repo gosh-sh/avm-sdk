@@ -30,7 +30,8 @@ fn relative_first_claim_after_terminal_cliff_releases_all() {
     for origin in [0, 100, 1_800_000_000, u32::MAX - 300] {
         let mut cfg = config();
         cfg.streams[0].cliff = cfg.streams[0].end;
-        let spec = Spec { deploy: true, body: envelope(&cfg.encode()), time: origin, ..Spec::default() };
+        let spec =
+            Spec { deploy: true, body: envelope(&cfg.encode()), time: origin, ..Spec::default() };
         let mut book = Book { state: initialize::<Vesting>(&spec), time: origin, lt: 10 };
         assert_eq!(book.call(OWNER, ids::FUND, vec![], 2000, origin).status_code, 0);
         fails(book.claim(0, origin + 199), E_EMPTY);
@@ -52,12 +53,14 @@ fn relative_cancellation_after_end_preserves_all_earned_funds() {
 
 #[test]
 fn relative_init_uses_execution_context_not_message_creation_time() {
-    let spec = Spec { deploy: true, body: envelope(&config().encode()), time: 1000, ..Spec::default() };
+    let spec =
+        Spec { deploy: true, body: envelope(&config().encode()), time: 1000, ..Spec::default() };
     let mut bytes = frame(&[], &spec);
     bytes[12..16].copy_from_slice(&5u32.to_le_bytes());
     let output = Vesting::init(input(&bytes));
     assert_eq!(output.status_code, 0);
-    let mut book = Book { state: apply(&[], output.state_update.as_ref().unwrap()), time: 5, lt: 10 };
+    let mut book =
+        Book { state: apply(&[], output.state_update.as_ref().unwrap()), time: 5, lt: 10 };
     assert_eq!(book.call(OWNER, ids::FUND, vec![], 2000, 6).status_code, 0);
     fails(book.claim(0, 134), E_EMPTY);
     assert_outbound_principal(book.claim(0, 135), 300);

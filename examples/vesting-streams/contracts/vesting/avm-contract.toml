@@ -1,7 +1,7 @@
 [descriptor]
 execution_mode = "message_isolated"
 owner_key_offset = 0
-state_schema_id = "d89d9eb09277fbc29c2b240b63e1a727e5e25932487fff4e4f3d2cc1a72a0b59"
+state_schema_id = "252aa2507344852d6703cbe2d53e2020230641e4c6938a93e3ca2f5599af63a5"
 
 [abi]
 state_root_type_id = 1
@@ -10,7 +10,7 @@ state_root_type_id = 1
 id = 1
 name = "state"
 kind = "fixed_bytes"
-len = 3592
+len = 3600
 
 [[abi.types]]
 id = 2

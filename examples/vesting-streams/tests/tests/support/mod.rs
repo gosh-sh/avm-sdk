@@ -223,6 +223,7 @@ impl Book {
     pub fn with_config(c: Config) -> Self {
         let s = Spec {
             actor: c.owner,
+            time: 0,
             deploy: true,
             body: envelope_for(c.owner, &c.encode()),
             ..Spec::default()

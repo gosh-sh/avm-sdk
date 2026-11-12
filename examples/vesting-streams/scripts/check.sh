@@ -19,6 +19,7 @@ rustc --version
 sha256sum "$builder" "$stand" "$profile" "$optimizer" > "$evidence/tool-sha256.txt"
 cargo fmt --all -- --check
 python3 -B scripts/oracle.py --check
+python3 -B tests/test_relative_schedule.py
 cargo clippy --workspace --all-targets --locked --offline -- -D warnings 2>&1 | tee "$evidence/clippy-native.txt"
 cargo test --workspace --locked --offline 2>&1 | tee "$evidence/native-tests.txt"
 bash scripts/build.sh "$sdk" "$optimizer"

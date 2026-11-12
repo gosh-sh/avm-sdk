@@ -103,6 +103,9 @@ class Stand:
         precondition = self.command("deploy", quote_address=True, **options)
         assert precondition.get("quoted") is True, precondition
         address = precondition["address"]
+        if contract == "vesting":
+            later = dict(options, block_time=self.time + 100_000, created_at=self.time + 100_000, expire_at=self.time + 103_600)
+            assert self.command("deploy", quote_address=True, **later)["address"] == address
         funding = dict(address=address, shells=shells)
         if extra_currencies:
             funding["extra_currencies"] = extra_currencies
@@ -159,14 +162,14 @@ def config(owner, owner_wallet, wallets, recipients):
     b=bytearray(1976);b[:32]=bytes.fromhex(owner);b[32:96]=address_bytes(owner_wallet);b[96:112]=(10000).to_bytes(16,'little');b[112]=3
     for i,(amount,cliff,end,step,revocable) in enumerate([(1000,200,500,0,1),(600,100,400,100,1),(300,200,400,0,0)]):
         o=120+i*232;b[o:o+64]=address_bytes(wallets[i]);b[o+64:o+128]=address_bytes(recipients[i][0]);b[o+128:o+192]=address_bytes(recipients[i][1]);b[o+192:o+208]=amount.to_bytes(16,'little')
-        for off,value in [(208,BASE_TIME+100),(212,BASE_TIME+cliff),(216,BASE_TIME+end),(220,step)]:b[o+off:o+off+4]=value.to_bytes(4,'little')
+        for off,value in [(208,100),(212,cliff),(216,end),(220,step)]:b[o+off:o+off+4]=value.to_bytes(4,'little')
         b[o+224]=revocable
     return bytes(b)
 def decode(result):
-    b=bytes.fromhex(result['raw_state']);assert len(b)==3592
+    b=bytes.fromhex(result['raw_state']);assert len(b)==3600
     streams=[]
     for i in range(b[112]):
-        o=1992+i*200
+        o=2000+i*200
         streams.append(dict(cancelled=bool(b[o]),cutoff=int.from_bytes(b[o+4:o+8],'little'),cap=int.from_bytes(b[o+8:o+24],'little'),claimed=int.from_bytes(b[o+24:o+40],'little'),refunded=int.from_bytes(b[o+40:o+56],'little'),pending=[int.from_bytes(b[o+56+k*72:o+72+k*72],'little') for k in range(2)]))
     claimed=sum(s['claimed'] for s in streams);refunded=sum(s['refunded'] for s in streams);pending=sum(sum(s['pending']) for s in streams)
     return dict(funded=bool(b[1976]),time=int.from_bytes(b[1980:1984],'little'),attempts=int.from_bytes(b[1984:1992],'little'),claimed=claimed,refunded=refunded,pending=pending,held=1900-claimed-refunded-pending,streams=streams)
@@ -193,6 +196,7 @@ def run(sdk,output):
                     owners.append(owner_role)
                 receiver_owners.append(owners)
             vault=stand.deploy('vesting','vesting',config(owner_key,stand.wallets[owner_role],wallets,recipients),owner_id=owner_key)
+            origin_time = stand.time
             for i,pair in enumerate(recipients):
                 for k,address in enumerate(pair):stand.call(address,'stream.receiver.bind',address_bytes(vault),identity=receiver_owners[i][k])
             # The node admits an external only under the destination's owner key,
@@ -202,7 +206,7 @@ def run(sdk,output):
             stand.rejected('ExternalValueNotAllowed','call',address=vault,method='stream.vesting.fund',args_json='null',identity=owner_role,extra_currencies='0:1900',**stand.timestamps())
             stand.send(vault,'stream.vesting.fund',value=1900,identity=owner_role)
             def at(offset,send,*args,**kwargs):
-                target=BASE_TIME+offset;assert target>stand.time,(target,stand.time);stand.time=target-1
+                target=origin_time+offset;assert target>stand.time,(target,stand.time);stand.time=target-1
                 return send(*args,**kwargs)
             # A call from a foreign wallet is rejected by the vesting account.
             at(50,stand.send,vault,'stream.vesting.claim',b'\x00',identity='user',expected_status=4001)
@@ -238,6 +242,11 @@ def run(sdk,output):
                 for k,address in enumerate(pair):
                     r=stand.call(address,'stream.receiver.status',identity=receiver_owners[i][k]);b=bytes.fromhex(r['raw_state']);o=104+i*32;actual[i].append(int.from_bytes(b[o+8:o+24],'little'))
             assert actual==[[400,600],[400,200],[300,0]],actual
+            late_vault = stand.deploy('vesting', 'late-funded-vesting', config(owner_key, stand.wallets[owner_role], wallets, recipients), owner_id=owner_key)
+            stand.command('fund-user', address=stand.wallets[owner_role], shells=10_000_000, extra_currencies='0:1900')
+            stand.time += 1000
+            late = stand.send(late_vault, 'stream.vesting.fund', value=1900, identity=owner_role)
+            assert decode(late)['held'] == 1900
             inspect=stand.command('inspect');replay=stand.command('replay');events=stand.command('events')
             assert inspect['queue']['message_count']==0 and replay['status']=='ok'
             for key in ['account_state_root','registry_root','accepted_input_count','cumulative_fee_shells']:assert replay[key]==inspect[key],key

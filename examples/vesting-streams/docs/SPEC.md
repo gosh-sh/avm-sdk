@@ -1,9 +1,13 @@
 # Vesting stream protocol
 
-## Calendar and authority
+## Relative schedule and authority
 
-All schedule timestamps are `u32` AVM block times. Positive start must precede end;
-start <= cliff <= end. A zero step means linear accrual; otherwise step must be
+All schedule values are `u32` durations in seconds from the contract's first
+execution (`init`). The contract reads `MessageInput.context.block_time` from
+the canonical execution input and records it as an observation, not a deadline.
+Constructor data, deployment parameters and the account-address preimage contain
+only schedule offsets; no calendar start or wall-clock deadline is supplied.
+Positive start must precede end; start <= cliff <= end. A zero step means linear accrual; otherwise step must be
 positive and no longer than the duration. Before cliff, earned is zero. At and
 after end, earned is the entire amount. Between these bounds, elapsed is time
 since start, optionally rounded down to a complete step, and:
@@ -12,7 +16,11 @@ since start, optionally rounded down to a complete step, and:
 
 The implementation computes quotient and remainder first, avoiding a potentially
 overflowing product. Remainder and elapsed are both below `2^32`, so their product
-fits `u128`. Observed time never decreases across successful contract messages.
+fits `u128`. For every message, elapsed is the greater of the previously
+observed elapsed value and `block_time.saturating_sub(origin_time)`. Elapsed
+never decreases across successful messages. Claims release the amount due on
+that execution; no timer executes the contract automatically. With a terminal
+cliff, the first claim at or after end releases all principal.
 
 Every participant acts through its own keyed wallet contract: the participant
 signs an external to its wallet and the wallet sends the internal call, with any
@@ -22,11 +30,13 @@ account keeps the owner public key at `owner_key_offset` 0; `init` requires the
 deploy `owner_id` and the external deploy signer to be that key. The owner acts
 either by a no-value external signed with that key or from the configured owner
 wallet; funding carries value and so arrives from the owner wallet. The owner must
-authenticate initialization and exact one-time funding before the earliest start.
+authenticate initialization and exact one-time funding. Both are accepted at
+any execution time, including funding after the entire schedule has elapsed.
 A beneficiary claims only from its configured wallet address. Status and SHELL
 top-up accept any caller. A contract reaches the callback handler only by a native
-callback. Owner cancellation is available only for revocable, unfinished, uncancelled
-streams. It freezes earned at the cancellation time and leaves pending payments
+callback. Owner cancellation is available only for revocable, uncancelled
+streams. Cancellation after end preserves the entire earned amount and leaves
+zero refund entitlement; it does not fail because time has passed. It freezes earned at the cancellation time and leaves pending payments
 valid. Refund entitlement is total minus the frozen earned amount. There is no
 owner sweep, beneficiary replacement, or destination-update method.
 
@@ -83,19 +93,20 @@ start at 120:
 | 64 | 64 | Payout address |
 | 128 | 64 | Refund address |
 | 192 | 16 | Total principal |
-| 208 / 212 / 216 / 220 | 4 each | Start / cliff / end / step |
+| 208 / 212 / 216 / 220 | 4 each | Start / cliff / end offsets and step duration |
 | 224 | 1 | Revocable flag |
 | 225 | 7 | Zero padding |
 
-State: 3,592 bytes. Configuration at 0, funded flag at 1,976, zero padding to
-1,979, observed time at 1,980 (4 bytes), global nonce at 1,984 (8 bytes).
-Eight 200-byte progress rows start at 1,992:
+State: 3,600 bytes. Configuration at 0, funded flag at 1,976, zero padding to
+1,979, observed elapsed seconds at 1,980 (4 bytes), global nonce at 1,984 (8 bytes),
+first-execution block-time observation at 1,992 (4 bytes), and zero padding
+through 1,999. Eight 200-byte progress rows start at 2,000:
 
 | Row offset | Length | Meaning |
 | --- | ---: | --- |
 | 0 | 1 | Cancelled flag |
 | 1 | 3 | Zero padding |
-| 4 | 4 | Cancellation time |
+| 4 | 4 | Cancellation elapsed seconds |
 | 8 | 16 | Frozen earned cap |
 | 24 / 40 | 16 each | Claimed / refunded |
 | 56 / 128 | 72 each | Beneficiary / refund lane |
@@ -124,6 +135,7 @@ Initializers take canonical ACDP envelopes containing configuration bytes.
 
 Events: `stream.created`, `.funded`, `.cancelled`, `.pending`, `.settled`, `.failed`,
 `.status`, `.fees`. Fields are amount, claimed, held, index, kind, nonce, pending,
-refunded, time, using aggregate accounting. Index/kind 255 denote a global or
+refunded, time, using aggregate accounting. The `time` field reports elapsed
+seconds since the first execution. Index/kind 255 denote a global or
 non-lane event. Exact identifiers and declared errors are in `avm-contract.toml`
 and the generated canonical `core/src/ids.rs`.

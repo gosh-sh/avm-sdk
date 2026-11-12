@@ -215,8 +215,13 @@ fn init_refuses_attached_principal_and_extras() {
     }
 }
 #[test]
-fn init_refuses_past_start_and_repeat() {
-    init_failure(Spec { time: 100, ..Spec::default() }, E_ARGS);
+fn init_accepts_any_time_and_refuses_repeat() {
+    initialize::<Vesting>(&Spec {
+        deploy: true,
+        body: envelope(&config().encode()),
+        time: 100,
+        ..Spec::default()
+    });
     let v = Book::new();
     let s = Spec { deploy: true, body: envelope(&config().encode()), ..Spec::default() };
     let b = frame(&v.state, &s);
@@ -242,10 +247,10 @@ fn funding_is_exact_and_once() {
     fails(v.call(OWNER, ids::FUND, vec![], 2000, 12), E_PHASE)
 }
 #[test]
-fn funding_requires_owner_and_time_before_first_start() {
+fn funding_requires_owner_at_every_elapsed_time() {
     let mut v = Book::new();
     fails(v.call(STRANGER, ids::FUND, vec![], 2000, 11), E_AUTH);
-    fails(v.call(OWNER, ids::FUND, vec![], 2000, 100), E_PHASE)
+    assert_eq!(v.call(OWNER, ids::FUND, vec![], 2000, 100).status_code, 0)
 }
 #[test]
 fn funding_refuses_extras_and_insolvent_input() {
@@ -328,10 +333,11 @@ fn cancellation_is_owner_only_and_once() {
     fails(v.cancel(0, 160), E_PHASE)
 }
 #[test]
-fn irrevocable_and_completed_streams_cannot_cancel() {
+fn irrevocable_streams_cannot_cancel_and_completed_rights_are_preserved() {
     let mut v = Book::funded();
     fails(v.cancel(2, 150), E_IRREVOCABLE);
-    fails(v.cancel(0, 200), E_PHASE)
+    assert_eq!(v.cancel(0, 200).status_code, 0);
+    assert_eq!(v.snapshot().progress[0].cap, 1000)
 }
 #[test]
 fn owner_cannot_refund_active_or_earned_balance() {

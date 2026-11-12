@@ -31,7 +31,6 @@ fn initialize(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
     }
     zero_value(&input)?;
     if !input.state.is_empty()
-        || input.context.block_time >= config.first_start()
         || config.streams[..usize::from(config.count)]
             .iter()
             .flat_map(|s| [s.payout, s.refund])
@@ -50,7 +49,7 @@ fn initialize(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
 }
 fn process(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
     let mut s = State::decode(input.state)?;
-    s.last_time = s.last_time.max(input.context.block_time);
+    s.last_time = s.last_time.max(input.context.block_time.saturating_sub(s.origin_time));
     if input.message.is_callback() {
         return callback(input, s);
     }
@@ -82,7 +81,7 @@ fn process(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
         if !owner {
             return Err(E_AUTH);
         }
-        if s.funded || s.last_time >= s.config.first_start() {
+        if s.funded {
             return Err(E_PHASE);
         }
         let total = s.config.total()?;
@@ -115,7 +114,7 @@ fn process(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
         if !cfg.revocable {
             return Err(E_IRREVOCABLE);
         }
-        if s.progress[i].cancelled || s.last_time >= cfg.end {
+        if s.progress[i].cancelled {
             return Err(E_PHASE);
         }
         let cap = cfg.earned(s.last_time)?;
