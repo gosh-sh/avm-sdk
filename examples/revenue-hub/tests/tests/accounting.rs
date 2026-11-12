@@ -155,10 +155,23 @@ fn carried_rounding_dust_becomes_claimable() {
     );
 }
 #[test]
-fn principal_state_corruption_fails_closed() {
+fn state_corruption_fails_closed() {
     let mut v = Vault::new();
     v.deposit(1000);
-    for offset in [2400, 2416, 2448, 2449, 2504, 2520, 2536, 2552, 2568] {
+    assert!(State::decode(&v.state).is_ok());
+    assert_eq!(invoke::<RevenueVault>(&v.state, &Spec::default()).status_code, 0);
+    for offset in [
+        2400,
+        2416,
+        2448,
+        2449,
+        2504, // Proposal expiry remains covered alongside the member fields.
+        MEMBER_STATE_BASE,
+        MEMBER_STATE_BASE + 16,
+        MEMBER_STATE_BASE + 32,
+        MEMBER_STATE_BASE + 48,
+        MEMBER_STATE_BASE + 64, // Last-callback LT, at byte 2584.
+    ] {
         let mut s = v.state.clone();
         s[offset] ^= 0x7f;
         assert!(State::decode(&s).is_err(), "{offset}");
