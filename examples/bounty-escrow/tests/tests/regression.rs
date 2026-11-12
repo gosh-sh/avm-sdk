@@ -707,3 +707,46 @@ fn callbacks_separate_exact_principal_from_optional_shell_refund() {
         }
     }
 }
+
+fn relative_escrow_init(config: &Config, time: u32) -> Vec<u8> {
+    let bytes = config.encode();
+    let message = external(&envelope(OWNER_KEY, &bytes), OWNER_KEY, 0, 0, address(1), true, &[]);
+    let input_bytes = frame(&message, &[], OWNER_KEY, None, address(1), time, 0);
+    let input = decode_message_input(&input_bytes).unwrap();
+    assert_eq!(input.deploy().unwrap().init_data(), bytes);
+    let state = state_from(&Escrow::init(input));
+    assert_eq!(&state[..CONFIG_BYTES], bytes);
+    state
+}
+#[test]
+fn relative_escrow_accepts_late_deploy_and_funding_then_refunds() {
+    for origin in [0, 1000, 1_800_000_000, u32::MAX - 300] {
+        let state = relative_escrow_init(&config(), origin);
+        let state = state_from(&evaluate(&state, OWNER_WALLET, ids::FUND, &[], 1000, origin + 200));
+        let out = evaluate(&state, OWNER, ids::REFUND, &[], 0, origin + 200);
+        assert_eq!(out.status_code, 0);
+        assert_eq!(out.outbound_intents[0].extra[0].amount, 1000);
+    }
+}
+#[test]
+fn relative_escrow_after_deadline_acknowledges_without_creating_earned_rights() {
+    let state = relative_escrow_init(&config(), 1000);
+    let state = state_from(&evaluate(&state, OWNER_WALLET, ids::FUND, &[], 1000, 1001));
+    let submitted = state_from(&evaluate(&state, WORKER, ids::SUBMIT, &hash_args(0, 1), 0, 1002));
+    for (caller, method, before) in [(WORKER, ids::SUBMIT, &state), (OWNER, ids::APPROVE, &submitted)] {
+        let out = evaluate(before, caller, method, &hash_args(0, 1), 0, 1100);
+        assert_eq!(out.status_code, 0);
+        assert_eq!(State::decode(&state_from(&out)).unwrap().phases, State::decode(before).unwrap().phases);
+        assert!(out.outbound_intents.is_empty());
+        assert_eq!(out.event_intents[0].event_name, "escrow.expired");
+    }
+}
+#[test]
+fn relative_escrow_zero_offset_is_immediately_refundable() {
+    let mut c = config(); c.deadline = 0;
+    let state = relative_escrow_init(&c, u32::MAX);
+    let state = state_from(&evaluate(&state, OWNER_WALLET, ids::FUND, &[], 1000, u32::MAX));
+    let out = evaluate(&state, OWNER, ids::REFUND, &[], 0, u32::MAX);
+    assert_eq!(out.status_code, 0);
+    assert_eq!(out.outbound_intents[0].extra[0].amount, 1000);
+}
