@@ -30,6 +30,9 @@ deployer. Its report passes the factory's derived-address policy. This result
 is an expected **limitation**, not a successful security guarantee or a fixed VM
 bug. An application relying on this policy must trust all executable versions
 that its package owner can authorize. The SDK supplies no sender-code proof.
+Recording the children a factory spawned does not close this either: after a
+child account is removed, its address can be deployed again with another code
+version (case 8).
 
 The constructor uses borrowed `input.deploy()?.init_data()` and `.salt()`.
 The example still constructs its own reference-only ACDP envelope and bounded
@@ -67,6 +70,14 @@ The script builds strict and permissive versions, then checks actual WASM:
    limitation, rather than treating an unrelated failure as a security fix.
 6. A child without an upgrade path rejects upgrade.
 7. An external report is rejected without factory state effects.
+8. A child the factory spawned itself, with a small balance, is drained by
+   rent over a short idle period and removed with `delete-account`, which
+   requires zero ECC balances. Version 2 then takes the same quoted address
+   through a relay, and the factory accepts its report while its own state
+   still records that address as its last spawned child. A registry of the
+   children a factory deployed therefore does not pin their code either: the
+   address outlives the account. The script requires this local-stand
+   behavior; who may delete an account on a network is not specified here.
 Native tests independently reject changed package, owner, salt and DApp without
 effects. The script also requires replay to agree without changing persisted
 state. A real multi-package deployment is not part of this script. Claims are limited to the
