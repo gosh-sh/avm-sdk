@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = ["core", "contracts/staking-rewards", "contracts/test-receiver", "tests"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"

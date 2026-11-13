@@ -4,3 +4,5 @@
 /.avm/
 *.state
 *.state.lock
+__pycache__/
+*.pyc
