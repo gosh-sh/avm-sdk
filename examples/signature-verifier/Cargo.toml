@@ -1,0 +1,19 @@
+[workspace]
+
+[package]
+name = "avm-example-signature-verifier"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+avm-contract-sdk = { path = "../../crates/avm-contract-sdk" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

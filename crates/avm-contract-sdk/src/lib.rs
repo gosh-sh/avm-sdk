@@ -1,9 +1,9 @@
 #![no_std]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 //! Guest-side runtime and canonical byte codecs for AVM core-WASM contracts.
 //!
-//! The crate deliberately has no host imports. The export macros install the
+//! Optional crypto helpers use the matching AVM runtime. The export macros install the
 //! required AVM entrypoints over a bounded arena in the module's own linear
 //! memory. Small live input/output allocations use a 4 KiB static region;
 //! larger ones take heap memory on demand. The standard library supplies only
@@ -12,6 +12,7 @@
 extern crate alloc;
 extern crate std;
 
+pub mod crypto;
 mod input;
 mod output;
 mod owner_key;

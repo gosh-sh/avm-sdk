@@ -395,8 +395,9 @@ class IntegrityTests(unittest.TestCase):
 
     def test_published_wasmtime36_profile_grammar_remains_verifiable_but_not_mixable(self):
         current = PROFILE.read_bytes()
+        historical = current.replace(b"instance_pre_abi_revision=2", b"instance_pre_abi_revision=1").replace(b"fuel_semantics_revision=5", b"fuel_semantics_revision=4")
         marker = b"instance_pre_abi_revision=1\n"
-        legacy = current[:current.index(marker) + len(marker)].replace(
+        legacy = historical[:historical.index(marker) + len(marker)].replace(
             b"wasm_component_model_more_async_builtins=", b"wasm_component_model_async_builtins=")
         # Published Wasmtime 36 bundles size memory by the limit, not by memory class.
         legacy = legacy.replace(b"=selected_memory_class_bytes", b"=config.wasm.memory_limit_bytes")

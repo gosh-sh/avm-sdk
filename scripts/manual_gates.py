@@ -158,7 +158,7 @@ def main():
     # Cargo target directory, so no group reuses another group's artifacts.
     # gates.json lists the gates in this fixed section order, which is the
     # former serial order.
-    order = ("checks", "sdk", "runtime", "unit", "applications", "applications-revenue-hub", "applications-tail", "executor", "engine", "e2e")
+    order = ("checks", "sdk", "runtime", "unit", "applications", "applications-revenue-hub", "applications-tail", "applications-node", "applications-revenue-hub-node", "applications-tail-node", "executor", "engine", "e2e")
     sections = {name: [] for name in order}
     lock = threading.Lock()
     failed = threading.Event()
@@ -282,20 +282,34 @@ def main():
         test("avm-scheduler", ["--test", "isolated_fuel_admission"])
         test("avm-test-harness", ["--lib"], ["local_stand::tests::" + case for case in "owner_event_reads_use_block_start_and_advance_only_in_the_next_block owner_block_records_failed_batch_and_rejected_input_fuel_burns_once account_batch_exhausted_pool_settles_zero_fuel_fallback_without_state_effects".split()])
 
-    def applications():
-        cargo_target = target_root / "applications"
-        run = runner("applications", cargo_target)
-        run("candidate-tools", ["cargo", "build", "--locked", "--offline", "-p", "avm-contract-build",
-            "--bin", "avm-contract-build", "-p", "avm-test-harness", "--bin", "avm-local-stand"])
-        target = cargo_target.resolve()
-        builder, stand = target / "debug/avm-contract-build", target / "debug/avm-local-stand"
+    def applications(node_graph=False):
+        application_evidence = evidence / ("node-examples" if node_graph else "stand-examples")
+        application_evidence.mkdir()
+        cargo_target = target_root / ("engine" if node_graph else "applications")
+        def application_runner(section, target):
+            execute = runner(section + ("-node" if node_graph else ""), target)
+            def run(label, *positional, **options):
+                return execute(("node-" if node_graph else "") + label, *positional, **options)
+            return run
+        run = application_runner("applications", cargo_target)
+        command = ["cargo", "build", "--locked", "--offline", "--message-format=json",
+            "-p", "avm-contract-build", "--bin", "avm-contract-build",
+            "-p", "avm-test-harness", "--bin", "avm-local-stand"]
+        if node_graph:
+            command.extend(("--release", "-p", "node", "--bin", "node"))
+        built = run("candidate-tools", command)
+        if node_graph:
+            require(compiled_engine_features(built) == engine["node_wasmtime_features"],
+                    "example tools did not compile with the actual node engine graph")
+        target = cargo_target.resolve() / ("release" if node_graph else "debug")
+        builder, stand = target / "avm-contract-build", target / "avm-local-stand"
         profile = source / "specs/avm-vm/wasmtime-release-profile.v1"
         archive = subprocess.check_output(["git", "-C", str(sdk), "archive", "HEAD"])
 
         def consumer_copy(name):
             # Every application group gets its own writable SDK copy: the
             # checks build and write inside the example directories.
-            consumer = evidence / name
+            consumer = application_evidence / name
             consumer.mkdir()
             with tarfile.open(fileobj=io.BytesIO(archive)) as snapshot:
                 snapshot.extractall(consumer, filter="data")
@@ -309,50 +323,55 @@ def main():
         # three concurrent groups; each group's own Cargo commands use a
         # separate target directory.
         def tools_and_bounty():
-            run = runner("applications", cargo_target / "tools")
+            run = application_runner("applications", cargo_target / "tools")
             run("contract-memory-sections", [sys.executable, "-B", str(sdk / "scripts/tests/contract_memory.py"),
                 "--sdk", str(consumer_sdk), "--builder", str(builder),
-                "--output", str(evidence / "contract-memory-sections")], environment=guest)
+                "--output", str(application_evidence / "contract-memory-sections")], environment=guest)
             run("contract-memory-lifecycle", [sys.executable, "-B", str(sdk / "scripts/tests/memory_lifecycle.py"),
                 "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
-                "--profile", str(profile), "--output", str(evidence / "contract-memory-lifecycle")], environment=guest)
+                "--profile", str(profile), "--output", str(application_evidence / "contract-memory-lifecycle")], environment=guest)
             run("sdk-public-issue-paths", [sys.executable, "-B", str(sdk / "scripts/tests/sdk_issue_public_paths.py"),
                 "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
-                "--profile", str(profile), "--out", str(evidence / "public-issue-paths")], environment=guest)
+                "--profile", str(profile), "--out", str(application_evidence / "public-issue-paths")], environment=guest)
             run("sdk-deploy-callback-delivery", ["bash", str(sdk / "examples/deploy-callback-repro/repro.sh"),
                 "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
-                "--out", str(evidence / "deploy-callback-repro")], sdk, environment=guest)
+                "--out", str(application_evidence / "deploy-callback-repro")], sdk, environment=guest)
+            run("signature-verifier-application-checks", [sys.executable, "-B",
+                str(consumer_sdk / "examples/signature-verifier/scripts/check.py"),
+                "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
+                "--out", str(application_evidence / "signature-verifier")], consumer_sdk,
+                environment=guest)
             name = "bounty-escrow"
             command = ["bash", str(consumer_sdk / "examples" / name / "scripts/check.sh"),
                 "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
-                "--out", str(evidence / name)]
+                "--out", str(application_evidence / name)]
             run(name + "-application-checks", command, consumer_sdk, environment=guest)
 
         def revenue_hub():
-            run = runner("applications-revenue-hub", cargo_target / "revenue-hub")
+            run = application_runner("applications-revenue-hub", cargo_target / "revenue-hub")
             consumer_sdk = consumer_copy("consumer-sdk-revenue-hub")
             name = "revenue-hub"
             command = ["bash", str(consumer_sdk / "examples" / name / "scripts/check.sh"),
                 "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
-                "--out", str(evidence / name)]
+                "--out", str(application_evidence / name)]
             command.extend(("--optimizer", str(optimizer)))
             run(name + "-application-checks", command, consumer_sdk, environment=guest)
 
         def remaining_applications():
-            run = runner("applications-tail", cargo_target / "tail")
+            run = application_runner("applications-tail", cargo_target / "tail")
             consumer_sdk = consumer_copy("consumer-sdk-tail")
             application_environment = guest.copy()
             application_environment.update(AVM_CONTRACT_BUILD=str(builder), AVM_LOCAL_STAND=str(stand),
                                            AVM_WASMTIME_PROFILE=str(profile),
-                                           AVM_EVIDENCE_DIR=str(evidence / "vesting-streams"))
+                                           AVM_EVIDENCE_DIR=str(application_evidence / "vesting-streams"))
             run("vesting-streams-application-checks", ["bash",
                 str(consumer_sdk / "examples/vesting-streams/scripts/check.sh"), str(consumer_sdk), str(optimizer)],
                 consumer_sdk, environment=application_environment)
-            application_environment.update(AVM_TOKEN_WORK=str(evidence / "fungible-token"),
-                                           PROVENANCE_OUT=str(evidence / "factory-child-provenance"), PROVENANCE_KEEP="1")
+            application_environment.update(AVM_TOKEN_WORK=str(application_evidence / "fungible-token"),
+                                           PROVENANCE_OUT=str(application_evidence / "factory-child-provenance"), PROVENANCE_KEEP="1")
             run("wallet-application-checks", ["bash",
                 str(consumer_sdk / "examples/wallet/stand-e2e.sh")], consumer_sdk,
-                environment={**application_environment, "AVM_WALLET_WORK": str(evidence / "wallet")})
+                environment={**application_environment, "AVM_WALLET_WORK": str(application_evidence / "wallet")})
             run("fungible-token-application-checks", ["bash",
                 str(consumer_sdk / "examples/fungible-token/stand-e2e.sh")], consumer_sdk,
                 environment=application_environment)
@@ -419,6 +438,16 @@ def main():
     for thread in threads:
         thread.join()
     require(not errors, "gate groups failed: " + "; ".join(errors))
+    # Repeat every application gate with tools compiled in the actual node graph.
+    # The SDK and node executions retain separate consumer copies and evidence.
+    applications(node_graph=True)
+    require(not errors, "node example gates failed: " + "; ".join(errors))
+    for relative in ("signature-verifier/result.json",):
+        sdk_result = json.loads((evidence / "stand-examples" / relative).read_text())
+        node_result = json.loads((evidence / "node-examples" / relative).read_text())
+        normalize = lambda result: [(item["payload_bytes"], item["receipt"]["charged_shells"])
+                                    for item in result["outcomes"]]
+        require(normalize(sdk_result) == normalize(node_result), "crypto SDK/node charges differ")
     sdk_features = engine["sdk_wasmtime_features"]
     node_features = engine["node_wasmtime_features"]
     require(compiled_engine_features((evidence / "avm-wasm-code-lib.log").read_text()) == sdk_features,

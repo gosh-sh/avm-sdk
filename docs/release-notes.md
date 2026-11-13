@@ -1,3 +1,16 @@
+# AVM SDK 0.6.2
+
+- Add synchronous BLAKE3, SHA-256 and strict Ed25519 verification through the single `avm.precompile` host import. The safe Rust helpers are `crypto::blake3`, `crypto::sha256` and `crypto::ed25519_verify`; verification uses the supplied message directly, without an implicit prehash. See [contract crypto helpers](crypto.md).
+- Charge PROVISIONAL compute FUEL before native work: BLAKE3 costs 2,048 + 8 per input byte, SHA-256 costs 2,048 + 4 per input byte, and `ed25519_verify_strict` costs 300,000 + 12 per input byte, including the 96-byte public-key/signature prefix. WASM instructions are charged separately. These prices may change after validator calibration; existing compute allowances and memory payment are unchanged.
+- Add the safe [signature verifier example](../examples/signature-verifier/README.md). Its WASM is 29,183 bytes, down from 88,780 bytes when cryptography was compiled into the guest.
+- The bundled profile's `memory_page_price`, `memory_class_maxima_bytes`, `signals_based_traps` and `pooling_linear_memory_keep_resident` remain provisional development values; changing them changes the profile identity.
+
+## Compatibility
+
+- Contracts using these crypto helpers require a node with `avm.precompile` support. The minimum runtime source is `4eb0f4dd4a52f3e69d1dcb549a59835e233364ca`; earlier runtimes reject the import during admission. Contracts that do not use the helpers remain import-free.
+- Use this release's matching tools and profile together, and create fresh local stand state for its changed profile identity. Existing deployments keep their WASM until rebuilt and redeployed.
+- The guest crate remains version `0.1.1`; guest builds require Rust/Cargo 1.99.1 and native tools use 1.98.0. Linux x86-64-v3 and Python 3.11+ are required. Examples are educational; this release does not establish production-network or performance acceptance.
+
 # AVM SDK 0.6.1
 
 - Use relative schedules in `vesting-streams`: start, cliff and end are offsets from the first execution, zero start is allowed, late deployment and funding are accepted, and cancellation after end preserves the full earned amount with no refund entitlement. The `time` event field now reports elapsed seconds from the first execution. State grows from 3592 to 3600 bytes; the new schema id is `252aa2507344852d6703cbe2d53e2020230641e4c6938a93e3ca2f5599af63a5`.

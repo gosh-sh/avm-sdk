@@ -17,9 +17,11 @@ def priced_profile():
         "operator_cost": OPERATOR_COST,
         "variable_operator_costs": VARIABLE_COSTS,
         "fuel_semantics_revision": "fuel_semantics_revision=4",
+        "instance_pre_abi_revision": "instance_pre_abi_revision=1",
     }
     return ("\n".join(replacements.get(line.split("=", 1)[0], line)
-                      for line in PROFILE.read_text().splitlines()) + "\n").encode()
+                      for line in PROFILE.read_text().splitlines()
+                      if not line.startswith("precompile_")) + "\n").encode()
 
 
 class FuelProfileTests(unittest.TestCase):

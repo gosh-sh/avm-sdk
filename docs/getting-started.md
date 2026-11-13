@@ -1,6 +1,6 @@
 # Getting Started
 
-These instructions describe SDK 0.6.1 and Core-WASM V2. Use its matching
+These instructions describe SDK 0.6.2 and Core-WASM V2. Use its matching
 builder, local stand and profile bundle. Earlier releases retain their own
 compilers/profiles; follow the documentation inside each installed release.
 A [local bundle](releases.md#install-a-prepared-local-bundle) can also be
@@ -22,7 +22,7 @@ The installer places the selected release under
 export PATH="${HOME}/.local/bin:${PATH}"
 ```
 
-Choose the matching immutable `RELEASE_TAG` from the SDK 0.6.1 release page.
+Choose the matching immutable `RELEASE_TAG` from the SDK 0.6.2 release page.
 An unqualified install command selects the latest published release.
 
 ## Initialize The Stand

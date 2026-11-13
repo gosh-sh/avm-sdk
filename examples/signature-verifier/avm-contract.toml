@@ -1,0 +1,46 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "8181818181818181818181818181818181818181818181818181818181818181"
+owner_key_offset = 0
+
+# Explicit resources for this example's bounded local test corpus.
+[build]
+stack_bytes = 65536
+arena_bytes = 131072
+max_memory_bytes = 2097152
+
+[bindings]
+enabled = true
+
+[abi]
+init_input_type_id = 2
+
+[[abi.types]]
+id = 2
+kind = "bytes"
+name = "signed_bytes"
+
+[[abi.methods]]
+name = "crypto.verify"
+input_type_id = 2
+caller = "external"
+
+[[abi.errors]]
+status_code = 1800
+name = "invalid_input"
+message = "Expected a trusted public key or a signature and payload"
+
+[[abi.errors]]
+status_code = 1801
+name = "invalid_signature"
+message = "The payload signature is invalid"
+
+[[abi.errors]]
+status_code = 1802
+name = "invalid_state"
+message = "The verifier state is invalid"
+
+[[abi.errors]]
+status_code = 1803
+name = "unknown_method"
+message = "The method is not supported"

@@ -4,3 +4,7 @@
 /.avm/
 *.state
 *.state.lock
+
+# Python bytecode is not release source.
+__pycache__/
+*.py[cod]

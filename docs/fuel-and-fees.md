@@ -263,3 +263,21 @@ must not represent it as `vmSHELL` or infer it from `fuel_fee_shells`.
 Any implementation that stores a `vmSHELL` balance, treats
 `fuel_fee_shells` as a separate token, charges the local-free path, or debits a
 prepaid internal reserve again at the receiver is incorrect.
+
+## PROVISIONAL Precompile Compute Prices
+
+The active runtime charges `base_fuel + per_byte_fuel * input_bytes` before
+native work. These are PROVISIONAL prices; final prices require worst-host
+validator calibration and may change with a later runtime profile.
+
+- BLAKE3: base 2,048 FUEL plus 8 FUEL per input byte.
+- SHA-256: base 2,048 FUEL plus 4 FUEL per input byte.
+- Strict Ed25519 verification: base 300,000 FUEL plus 12 FUEL per input byte.
+  Its input includes the 32-byte public key and 64-byte signature, so use
+  `input_bytes = 96 + message_bytes`.
+
+The WASM call and wrapper instructions are additional metered compute.
+These charges consume the existing invocation allowance; they do not replace
+or increase it. Memory capacity payment, SHELL conversion and settlement stay
+separate and unchanged. Insufficient compute allowance stops the call before
+native cryptographic work; it is not a `false` verification result.

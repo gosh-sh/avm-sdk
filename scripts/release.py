@@ -151,7 +151,15 @@ def parse_profile(data):
             if "memory_page_price" in fields:
                 # Per-page memory payment; earlier priced bundles have no page price.
                 group(r"[1-9][0-9]*", "memory_page_price")
-            require(fields.get("fuel_semantics_revision") == "4",
+            crypto = any(name.startswith("precompile_") for name in fields)
+            if crypto:
+                literals.update({
+                    "precompile_abi_revision": "1",
+                    "precompile_import": "avm.precompile(i32,i32,i32,i32)->i32",
+                    "precompile_table": "1:blake3:32:2048:8;2:sha256:32:2048:4;3:ed25519_verify_strict:1:300000:12",
+                    "instance_pre_abi_revision": "2",
+                })
+            require(fields.get("fuel_semantics_revision") == ("5" if crypto else "4"),
                     "unsupported priced profile fuel semantics")
             parse_costs(fields["operator_cost"].split(";", 1)[1],
                         PRICED_OPERATORS, ZERO_COST_OPERATORS)
