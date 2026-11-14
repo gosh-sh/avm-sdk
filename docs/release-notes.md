@@ -107,6 +107,12 @@
 
 # AVM SDK 0.4.0
 
+## Provisional bundled engine settings
+
+- `signals_based_traps` is a provisional development setting and may change before network acceptance.
+- `pooling_linear_memory_keep_resident` is a provisional development setting and may change before network acceptance.
+
+
 - Use Rust/Cargo 1.99.1 for validated wide-arithmetic contract builds; native tools remain on 1.93.0.
 - Enable Core-WASM V2 wide arithmetic with a matching runtime profile.
 - Record wide-arithmetic compiler warnings in build provenance.
