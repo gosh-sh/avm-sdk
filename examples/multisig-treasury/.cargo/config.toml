@@ -1,0 +1,2 @@
+[target.wasm32-unknown-unknown]
+rustflags = ["-Ctarget-feature=+bulk-memory,+sign-ext,+wide-arithmetic,-extended-const,-multivalue,-nontrapping-fptoint,-reference-types,-relaxed-simd,-simd128,-tail-call"]
