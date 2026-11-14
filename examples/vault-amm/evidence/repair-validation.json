@@ -1,0 +1,250 @@
+{
+  "baseline": "82d3b23ad051e2d970bb7ff413e3f186a1637977",
+  "toolchain": "rustc 1.93.0; SDK avm-dev-2662a32e7c91-sdk-93e34e16e449",
+  "date": "2026-11-01",
+  "source_sha256": {
+    "contracts/amm/src/lib.rs": "0cef5bbd9834610c1f87de7fd9ed06bd0fed8cbe8dd15231ab10048c541cec7c",
+    "contracts/amm/src/math.rs": "03298d6e274302bba1db5bbf7ef82e630b8a20ef969aeba71d31e3bf5ce4e95b",
+    "contracts/amm/src/state.rs": "1a1ed070b5fdaf3b775a9bc8b693d14e69aba1f89149ed4ce4bcb964ba63591a",
+    "contracts/receiver/src/lib.rs": "f0dce5b702d6bd472d86d6bc494180b82cefbdd74bc9448c344724832c884c34",
+    "scripts/e2e.py": "a0cb8eae5d864d4b7d044e284eeb9ce292876eb5456101d9e97e9ca62995c853",
+    "tests/tests/amm.rs": "9271695eae41a2851a790974363f32f04aad37684734bd951d678a9ea0f3a678",
+    "tests/tests/integration.rs": "2266940af2a2b87a4b117b93982079fad4c0e025a905ab8bca7453620bf264e2"
+  },
+  "artifacts": {
+    "amm": {
+      "contract.wasm": {
+        "bytes": 54647,
+        "blake3": "de0ae1ff022a7551dda25983e7aa3d8135188a94a922f74b3706fbad8dc3e766",
+        "sha256": "8edabe7199863963b403efe313619dbcf407578e3f720b17ddc481d56d6c5d08"
+      },
+      "contract.acab": {
+        "bytes": 2103,
+        "blake3": "4a818e4a87b5bf8543e59f53a469f181dbfce0d6d19f2d87453d6f85d3316c63",
+        "sha256": "39779337fda16e84ef4f9b290ff981d64ce239cbf53bd6d21205d141af7a159d"
+      },
+      "contract.descriptor": {
+        "bytes": 66,
+        "blake3": "613259359a1aa9df389240e71871b4503da2bc4b74870c4ff72d27523832f1f6",
+        "sha256": "0add77170a20142d136a4ae351cf9bf5c8b02f9bf4bf78b8bd2a815e6e2e7302"
+      }
+    },
+    "receiver": {
+      "contract.wasm": {
+        "bytes": 27872,
+        "blake3": "28adc48ab5b2f8c4b3aba80a6e298e8c7b9dca3ba86ae25c29a59dd68388b268",
+        "sha256": "1e65034d8b39ba977bba1c4f23f8eeb3727b7f902b17a6ce7d1c7ba4fb02c961"
+      },
+      "contract.acab": {
+        "bytes": 361,
+        "blake3": "d79c229ca730b0b7f1a72db1d14ba036836f5a0a313745efe1f834132a3782d3",
+        "sha256": "3d11ab1d66e9067018bfca7138e23f38cdafcb58bd93cfbd759a0c5b86cfd222"
+      },
+      "contract.descriptor": {
+        "bytes": 66,
+        "blake3": "3e52bfcf69bdf39492ef903c6d6a5e285f1816acd98cd3cbdf2ac68b950e8a4f",
+        "sha256": "c99c1425ec94f66d668812c1b766c342dc232b6e33100f6949aa0e09df7d0dd4"
+      }
+    }
+  },
+  "native": {
+    "check_sh": "PASS",
+    "amm": 45,
+    "math": 4,
+    "fuzz": 2,
+    "integration": 5,
+    "oracle": 2,
+    "vectors": 2450,
+    "baseline_new_regressions_failed": 3,
+    "post_review_amm_rerun": "PASS, 45 tests including malformed success with SHELL refund"
+  },
+  "stand": {
+    "status": "PASS",
+    "calls": 32,
+    "fuel_bounds": [
+      [
+        "vault.receiver.bind",
+        1
+      ],
+      [
+        "vault.amm.topup",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.add_liquidity",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.swap_exact_in",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.swap_exact_in",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.receiver.reject",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.receiver.reject",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.receiver.reject",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.receiver.reject",
+        1
+      ],
+      [
+        "vault.amm.remove_liquidity",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.swap_exact_out",
+        1
+      ],
+      [
+        "vault.amm.swap_exact_out",
+        1
+      ],
+      [
+        "vault.amm.status",
+        1
+      ]
+    ],
+    "final": {
+      "reserve": [
+        515443,
+        485065
+      ],
+      "fees": [
+        0,
+        0
+      ],
+      "lp_total": 500000,
+      "last_ts": 1800001033,
+      "cumulative": [
+        18572825341232785121188,
+        19324251932271719871456
+      ],
+      "ops": 36,
+      "seq": 13,
+      "receipts": 13,
+      "accounts": {
+        "16d554e30e79ca95390896299250b5808fdee48c7c571153a7e358fedb9c65a8": [
+          [
+            594557,
+            505064
+          ],
+          499000
+        ]
+      },
+      "pending": 0
+    },
+    "replay": {
+      "accepted_input_count": 60,
+      "account_state_root": "e72a6a63b6c4f9f3083ee905ace9c47329ca7bdb5787b625ed493b01710c1b38",
+      "command": "replay",
+      "cumulative_fee_shells": "8026471",
+      "receipt_count": 60,
+      "registry_root": "3c5cc3eac894e70d03441aaf61ada17c7666e02e54b5bac1290b92967e2cc4f5",
+      "status": "ok"
+    },
+    "empty_receipt_payouts": 10,
+    "second_holder_withdrawal": "PASS"
+  },
+  "negative_control": {
+    "amm": "original baseline build",
+    "receiver": "repaired fixture in accept-with-empty-receipt mode",
+    "assertion": "pending == 0 after native success",
+    "outcome": "FAIL as expected",
+    "pending_after_native_success": 1
+  },
+  "not_claimed": [
+    "upstream CI",
+    "maintainer approval",
+    "mainnet or real funds",
+    "measured maximum heap",
+    "independent physical ECC balance oracle",
+    "second-version publication on repaired head"
+  ]
+}
