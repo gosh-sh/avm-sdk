@@ -179,6 +179,8 @@ pub fn encode_batch_output(output: &BatchOutput) -> Result<Vec<u8>, EncodeError>
     encode_batch_output_inner(output, None)
 }
 
+// Used by the WASM entrypoint dispatch and by the unit tests.
+#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) fn message_output_len_for(
     input: &MessageInput<'_>,
     is_init: bool,
@@ -189,6 +191,7 @@ pub(crate) fn message_output_len_for(
     message_output_len(output)
 }
 
+#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) fn batch_output_len_for(
     input: &BatchInput<'_>,
     output: &BatchOutput,
@@ -204,11 +207,7 @@ pub(crate) trait OutputWriter {
 
 impl OutputWriter for Vec<u8> {
     fn write(&mut self, bytes: &[u8]) -> Result<(), EncodeError> {
-        #[cfg(test)]
-        let capacity = self.capacity();
         self.extend_from_slice(bytes);
-        #[cfg(test)]
-        work::vec_write(bytes.len(), self.capacity() != capacity);
         Ok(())
     }
 }
@@ -699,10 +698,11 @@ pub(crate) mod work {
         });
     }
 
-    pub(crate) fn arena_write(bytes: usize) {
+    /// Bytes written into a preallocated output, as the guest arena writes them.
+    pub(super) fn direct_write(bytes: usize) {
         WRITES.with(|work| {
-            let (written, growths, arena) = work.get();
-            work.set((written, growths, arena + bytes));
+            let (written, growths, direct) = work.get();
+            work.set((written, growths, direct + bytes));
         });
     }
 
@@ -716,5 +716,299 @@ pub(crate) mod work {
         assert_eq!(checked_len(&[usize::MAX, 1]), Err(EncodeError::LengthOverflow));
         assert_eq!(repeated_len(usize::MAX, 2), Err(EncodeError::LengthOverflow));
         assert_eq!(checked_len(&[usize::MAX, 0]), Ok(usize::MAX));
+    }
+}
+
+#[cfg(test)]
+mod writer_tests {
+    // The output written straight into a preallocated buffer of the exact length,
+    // as the WASM entrypoint dispatch writes it into the guest arena. The arena
+    // itself is tested in real WASM (SDK docs/unsafe.md).
+    use super::*;
+    use crate::{
+        decode_batch_input, decode_message_input, BatchContract, Contract, MessageInput,
+        MessageOutput, StateUpdate,
+    };
+    use alloc::vec;
+
+    /// A preallocated output buffer that accepts exactly its length.
+    struct Exact<'a>(&'a mut [u8]);
+
+    impl OutputWriter for Exact<'_> {
+        fn write(&mut self, bytes: &[u8]) -> Result<(), EncodeError> {
+            let (destination, rest) = core::mem::take(&mut self.0)
+                .split_at_mut_checked(bytes.len())
+                .ok_or(EncodeError::LengthOverflow)?;
+            destination.copy_from_slice(bytes);
+            self.0 = rest;
+            work::direct_write(bytes.len());
+            Ok(())
+        }
+    }
+
+    /// The `Vec<u8>` writer of the public serializer, with its writes and
+    /// growths counted.
+    struct Growing(Vec<u8>);
+
+    impl OutputWriter for Growing {
+        fn write(&mut self, bytes: &[u8]) -> Result<(), EncodeError> {
+            let capacity = self.0.capacity();
+            self.0.write(bytes)?;
+            work::vec_write(bytes.len(), self.0.capacity() != capacity);
+            Ok(())
+        }
+    }
+
+    /// The public serializer path, `write_message_output` into a growing `Vec<u8>`,
+    /// checked against `encode_message_output`.
+    fn public(output: &MessageOutput) -> Vec<u8> {
+        let mut writer = Growing(Vec::new());
+        write_message_output(&mut writer, output).unwrap();
+        assert_eq!(writer.0, crate::encode_message_output(output).unwrap());
+        writer.0
+    }
+
+    /// Writes an output of the computed `len` and checks that it fills the buffer.
+    fn direct(
+        len: usize,
+        write: impl FnOnce(&mut Exact<'_>) -> Result<(), EncodeError>,
+    ) -> Vec<u8> {
+        let mut buffer = vec![0; len];
+        let mut writer = Exact(&mut buffer);
+        write(&mut writer).unwrap();
+        assert!(writer.0.is_empty(), "the output fills its computed length");
+        buffer
+    }
+
+    /// The output half of a message dispatch: exact length, then one direct write.
+    fn write_message<T: Contract>(bytes: &[u8]) -> Vec<u8> {
+        let input = decode_message_input(bytes).unwrap();
+        let output = T::process_message(input);
+        let len = message_output_len_for(&input, false, &output).unwrap();
+        direct(len, |writer| write_message_output(writer, &output))
+    }
+
+    struct Echo;
+    impl Contract for Echo {
+        fn init(input: MessageInput<'_>) -> MessageOutput {
+            Self::process_message(input)
+        }
+
+        fn process_message(input: MessageInput<'_>) -> MessageOutput {
+            MessageOutput::success(StateUpdate::FullReplace(input.state.to_vec()))
+        }
+    }
+
+    fn input() -> Vec<u8> {
+        // Canonical ACMI with one internal message, no extras or optional sections.
+        let mut bytes = vec![0; 262];
+        bytes[..4].copy_from_slice(b"ACMI");
+        bytes[60..124].fill(1);
+        bytes[156..220].fill(2);
+        bytes[220..252].fill(3);
+        bytes.extend_from_slice(&3u32.to_le_bytes());
+        bytes.extend_from_slice(b"old");
+        bytes.extend_from_slice(&176u32.to_le_bytes());
+        let mut message = vec![0; 176];
+        message[8..16].copy_from_slice(&1u64.to_le_bytes());
+        message[48..112].fill(1);
+        message[112..176].fill(2);
+        bytes.extend_from_slice(&message);
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        decode_message_input(&bytes).unwrap();
+        bytes
+    }
+
+    #[test]
+    fn direct_message_output_writes_once_without_the_vec_growth_path() {
+        let bytes = input();
+        let expected = public(&Echo::process_message(decode_message_input(&bytes).unwrap()));
+        let (vec_bytes, growths, _) = work::take();
+        assert_eq!(vec_bytes, expected.len());
+        assert!(growths > 1, "the public Vec serializer is a live positive control");
+        assert_eq!(write_message::<Echo>(&bytes), expected);
+        assert_eq!(work::take(), (0, 0, expected.len()));
+    }
+
+    #[test]
+    fn ten_thousand_wallet_sized_outputs_remove_observed_vec_growth_and_copy() {
+        // A work-count fixture, not a replacement for the registered Wallet benchmark.
+        struct OutputShape;
+        impl Contract for OutputShape {
+            fn init(input: MessageInput<'_>) -> MessageOutput {
+                Self::process_message(input)
+            }
+            fn process_message(input: MessageInput<'_>) -> MessageOutput {
+                let mut output = MessageOutput::success(StateUpdate::FullReplace(vec![1; 144]));
+                output.outbound_intents.push(crate::OutboundIntent {
+                    input_index: 0,
+                    destination: input.destination,
+                    fuel_fee_shells: 1,
+                    extra: Vec::new(),
+                    method_id: 1,
+                    body: vec![2; 64],
+                });
+                output
+            }
+        }
+        let bytes = input();
+        work::take();
+        for _ in 0..10_000 {
+            let output = OutputShape::process_message(decode_message_input(&bytes).unwrap());
+            let expected = public(&output);
+            assert_eq!(expected.len(), 339);
+            assert_eq!(write_message::<OutputShape>(&bytes), expected);
+        }
+        // Each positive-control Vec grows six times (first allocation included).
+        // The direct write adds no Vec writes/growth; only one direct write/byte.
+        assert_eq!(work::take(), (3_390_000, 60_000, 3_390_000));
+    }
+
+    #[test]
+    fn batch_output_preserves_count_mode_and_failed_index_checks() {
+        struct BatchEcho;
+        impl Contract for BatchEcho {
+            fn init(input: MessageInput<'_>) -> MessageOutput {
+                Echo::init(input)
+            }
+            fn process_message(input: MessageInput<'_>) -> MessageOutput {
+                Echo::process_message(input)
+            }
+        }
+        impl BatchContract for BatchEcho {
+            fn process_batch(input: crate::BatchInput<'_>) -> crate::BatchOutput {
+                crate::BatchOutput {
+                    state_update: StateUpdate::FullReplace(input.state.to_vec()),
+                    status_codes: vec![0, 1000],
+                    outbound_intents: Vec::new(),
+                    event_intents: Vec::new(),
+                }
+            }
+        }
+        let message = input();
+        let mut bytes = vec![0; 158];
+        bytes[..4].copy_from_slice(b"ACBI");
+        bytes[52..116].fill(2);
+        bytes[116..148].fill(3);
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(&2u32.to_le_bytes());
+        for offset in [0u32, 176, 352] {
+            bytes.extend_from_slice(&offset.to_le_bytes());
+        }
+        bytes.extend_from_slice(&message[273..449]);
+        bytes.extend_from_slice(&message[273..449]);
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        let input = decode_batch_input(&bytes).unwrap();
+        let mut output = BatchEcho::process_batch(input);
+        let expected = crate::encode_batch_output(&output).unwrap();
+        assert_eq!(batch_output_len_for(&input, &output).unwrap(), expected.len());
+        let len = batch_output_len_for(&input, &output).unwrap();
+        assert_eq!(direct(len, |writer| write_batch_output(writer, &output)), expected);
+        output.status_codes.pop();
+        output.state_update = StateUpdate::DataPatchList(Vec::new());
+        assert_eq!(batch_output_len_for(&input, &output), Err(EncodeError::InvalidIndex));
+        output.status_codes.push(1000);
+        assert_eq!(batch_output_len_for(&input, &output), Err(EncodeError::StateModeMismatch));
+        output.outbound_intents.push(crate::OutboundIntent {
+            input_index: 1,
+            destination: input.destination,
+            fuel_fee_shells: 0,
+            extra: Vec::new(),
+            method_id: 1,
+            body: Vec::new(),
+        });
+        assert_eq!(batch_output_len_for(&input, &output), Err(EncodeError::InvalidIndex));
+    }
+
+    #[test]
+    fn direct_message_sections_and_batch_match_the_public_serializer() {
+        use crate::{
+            BatchOutput, CallbackIntent, CanonicalMessage, CodeUpgradeIntent, CurrencyAmount,
+            EventIntent, EventKind, OutboundIntent, StateOutputMode, StatePatch,
+        };
+        let bytes = input();
+        let mut input = decode_message_input(&bytes).unwrap();
+        let CanonicalMessage::Internal(ref mut message) = input.message else { panic!() };
+        message.flags |= 4;
+        message.method_id = crate::CODE_UPGRADE_METHOD_ID;
+        for state in [
+            StateUpdate::FullReplace(vec![5; 144]),
+            StateUpdate::DataPatchList(vec![StatePatch {
+                offset: 1,
+                old_len: 1,
+                new_bytes: vec![6; 4096],
+            }]),
+            StateUpdate::DataPatchList(Vec::new()),
+        ] {
+            input.required_state_output_mode = state.mode();
+            let mut output = MessageOutput::success(state.clone());
+            output.callback_result_body = vec![7; 19];
+            output.outbound_intents.push(OutboundIntent {
+                input_index: 0,
+                destination: input.destination,
+                fuel_fee_shells: 9,
+                extra: vec![
+                    CurrencyAmount { currency_id: 0, amount: 8 },
+                    CurrencyAmount { currency_id: 1, amount: 10 },
+                ],
+                method_id: 11,
+                body: vec![12; 64],
+            });
+            output
+                .callback_intents
+                .push(CallbackIntent { outbound_index: 0, handler_method_id: 13 });
+            output.event_intents.push(EventIntent {
+                input_index: 0,
+                kind: EventKind::Internal,
+                event_class: 14,
+                event_name: "changed".into(),
+                topics: vec![vec![15; 17], Vec::new()],
+                fields_binary: crate::encode_event_fields(&[]).unwrap(),
+            });
+            output.code_upgrade_intent = Some(CodeUpgradeIntent {
+                target_selected_code_id: [16; 32],
+                expected_code_hash: [17; 32],
+            });
+            let expected = crate::encode_message_output(&output).unwrap();
+            let len = message_output_len_for(&input, false, &output).unwrap();
+            assert_eq!(len, expected.len());
+            assert_eq!(direct(len, |writer| write_message_output(writer, &output)), expected);
+
+            let batch = BatchOutput {
+                state_update: state,
+                status_codes: vec![0, 1000],
+                outbound_intents: output.outbound_intents,
+                event_intents: output.event_intents,
+            };
+            let expected = crate::encode_batch_output(&batch).unwrap();
+            assert_eq!(
+                direct(expected.len(), |writer| write_batch_output(writer, &batch)),
+                expected
+            );
+        }
+        let mut invalid = MessageOutput::failure(7);
+        invalid.callback_result_body.push(1);
+        assert_eq!(
+            message_output_len_for(&input, true, &invalid),
+            Err(EncodeError::InvalidCallback)
+        );
+        assert_eq!(
+            message_output_len_for(&input, false, &invalid),
+            Err(EncodeError::InvalidStatusCode)
+        );
+        input.required_state_output_mode = StateOutputMode::DataPatchList;
+        let mut output = MessageOutput::success(StateUpdate::FullReplace(Vec::new()));
+        assert_eq!(
+            message_output_len_for(&input, false, &output),
+            Err(EncodeError::UpgradeRequired)
+        );
+        output.code_upgrade_intent = Some(CodeUpgradeIntent {
+            target_selected_code_id: [1; 32],
+            expected_code_hash: [2; 32],
+        });
+        assert_eq!(
+            message_output_len_for(&input, false, &output),
+            Err(EncodeError::StateModeMismatch)
+        );
     }
 }

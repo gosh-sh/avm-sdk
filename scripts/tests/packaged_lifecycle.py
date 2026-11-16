@@ -394,7 +394,12 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
     rejected = version.run("upgrade", expected=2, address=address, selected_code_id=selected,
                 migration_payload_hex=b"avm-a-v2-migrate-state!?".hex(),
                 identity="package-owner", **version.timing())
-    assert "did not switch" in rejected["error"]
+    if current:
+        # The old contract rejects this migration payload with its status 1004;
+        # the stand reports a contract status as the node does.
+        assert rejected["error"] == "execution_failed" and rejected["status_code"] == 1004, rejected
+    else:
+        assert "did not switch" in rejected["error"]
     assert read_accounts(version.state)[0][address]["data"] == before
     assert read_accounts(version.state)[0][address]["selected_code_id"] == before_selection
     upgrade = version.run("upgrade", expected=0 if current else 2, address=address, selected_code_id=selected,

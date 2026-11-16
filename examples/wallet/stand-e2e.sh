@@ -148,8 +148,10 @@ expect_status "${work}/send-failed.json" 0
 expect_callback "${work}/send-failed.json" 1704 0:100
 
 # Malformed args fail the send itself; send and set_owner_key need an external caller.
-call "$wallet_a" wallet.send "\"0x$(printf '%0176d' 0)0200\"" user >"${work}/send-invalid.json"
-expect_status "${work}/send-invalid.json" 1702
+rc=0
+call "$wallet_a" wallet.send "\"0x$(printf '%0176d' 0)0200\"" user >"${work}/send-invalid.json" || rc=$?
+[[ $rc == 2 && "$(jq -r .status_code "${work}/send-invalid.json")" == 1702 ]] ||
+  fail "expected status 1702 in send-invalid.json"
 call "$wallet_b" wallet.send \
   "$(send_args "$wallet_a" "$send" 1000 01)" developer >"${work}/internal-send.json"
 expect_status "${work}/internal-send.json" 0

@@ -739,11 +739,6 @@ name = "timelock"
 message = "timelock"
 
 [[abi.errors]]
-status_code = 3013
-name = "proposal_expired"
-message = "proposal expired"
-
-[[abi.errors]]
 status_code = 3014
 name = "quorum_missing"
 message = "quorum missing"

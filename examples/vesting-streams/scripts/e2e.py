@@ -131,10 +131,15 @@ class Stand:
 
     def call(self, address, method, body=b"", identity="developer", expected_status=0):
         """A no-value external signed by `identity`, which must own `address`."""
-        result = self.command("call", address=address, method=method,
+        cmd, proc, result = self.run("call", address=address, method=method,
                             args_json=json.dumps("0x"+body.hex()) if body else "null",
                             identity=identity, extra_currencies="", **self.timestamps())
-        assert result["status"] == "ok", result
+        if expected_status:
+            # A contract status fails the call: exit status 2 with status_code.
+            assert proc.returncode == 2 and result.get("error") == "execution_failed" \
+                and result.get("status_code") == expected_status, {"method": method, "result": result, "expected": expected_status}
+            return result
+        assert proc.returncode == 0 and result["status"] == "ok", {"command": cmd, "result": result, "stderr": proc.stderr}
         raw = bytes.fromhex(result["raw_executor_output"])
         actual_status = int.from_bytes(raw[4:8], "little")
         assert raw[:4] == b"ACMO" and actual_status == expected_status, {"method": method, "contract_status": actual_status, "expected": expected_status}

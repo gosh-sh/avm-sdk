@@ -24,7 +24,8 @@ directory and prints its path. It builds a source copy there, leaving the SDK
 checkout or installed source bundle unchanged. Remove that output when its
 results are no longer needed.
 
-The assertions cover ordinary callback delivery, deploy without a request,
+The assertions cover ordinary callback delivery in the same DApp and across
+DApps, with a successful or rejecting receiver, deploy without a request,
 exactly one requested successful-deploy callback, an empty queue and replay.
 They also cover active-target, malformed and wrong-address pre-init rejections,
 with and without callbacks: status 63 when requested, unchanged target/registry

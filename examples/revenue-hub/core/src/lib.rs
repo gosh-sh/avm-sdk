@@ -29,7 +29,6 @@ pub const E_BALANCE: u32 = 3009;
 pub const E_GOVERNANCE: u32 = 3010;
 pub const E_DUPLICATE_VOTE: u32 = 3011;
 pub const E_TIMELOCK: u32 = 3012;
-pub const E_EXPIRED: u32 = 3013;
 pub const E_QUORUM: u32 = 3014;
 
 pub fn array<const N: usize>(b: &[u8], offset: usize) -> HubResult<[u8; N]> {

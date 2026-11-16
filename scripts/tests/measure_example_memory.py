@@ -40,6 +40,9 @@ def main():
     for path in sorted((sdk / "examples").rglob("avm-contract.toml")):
         if "target" in path.relative_to(sdk).parts:
             continue
+        # Explicit stack and arena settings replace the measurement (signature-verifier).
+        if {"stack_bytes", "arena_bytes"} <= tomllib.loads(path.read_text()).get("build", {}).keys():
+            continue
         name = tomllib.loads(path.with_name("Cargo.toml").read_text())["package"]["name"]
         if name in projects:
             raise ValueError("ambiguous contract package name")

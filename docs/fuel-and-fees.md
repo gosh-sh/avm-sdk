@@ -153,6 +153,23 @@ Fixed delivery and callback fees are separate from `fuel_fee_shells`. A
 chargeable message may therefore debit transferred SHELL, the FUEL reserve, and
 fixed fees independently.
 
+### Callback Budget
+
+A callback handler runs on the fixed callback fee: 1 SHELL, which is 1,000,000
+FUEL at the bundled `fuel_per_shell`. The requester cannot raise it. The same
+1 SHELL also pays for the handler's memory pages at the end of the call.
+The callback input is an ordinary `MessageInput`, so it carries the whole state
+of the account that receives the callback. The SDK entry does not zero-fill
+or copy that input, so its cost does not grow with the state size: a handler
+that refuses at once used 21,148 FUEL at 66,000 bytes of state and 22,423 FUEL
+at 400,000 bytes.
+A callback is terminal: if its handler fails, no second callback and no refund
+message is created. Value returned in the callback is still credited.
+Keep the handler's work independent of the state size: do not copy or decode
+the whole state in it. Above 65,536 bytes of state, return a patch list with
+only the changed ranges. When a reply needs more FUEL than the callback budget,
+answer with an ordinary message that carries its own `fuel_fee_shells`.
+
 ## Memory Payment
 
 A paid call also pays for the linear memory it ends with. The bundled profile's

@@ -89,7 +89,12 @@ call() {
   local address="$1" method="$2" args="$3"
   tick
   run call --address "$address" --method "$method" --args-json "$args" --identity user \
-    --extra-currencies '' "${timestamps[@]}" >"${work}/call.json"
+    --extra-currencies '' "${timestamps[@]}" >"${work}/call.json" || [[ $? == 2 ]] || fail "call $method"
+  # A contract status fails the call: exit status 2 with status_code.
+  if [[ "$(jq -r .error "${work}/call.json")" == execution_failed ]]; then
+    status="$(printf '%08x' "$(jq -r .status_code "${work}/call.json")" | fold -w2 | tac | tr -d '\n')"
+    return
+  fi
   [[ "$(jq -r '.raw_executor_output[0:8]' "${work}/call.json")" == 41434d4f ]] || fail "non-ACMO response"
   status="$(jq -r '.raw_executor_output[8:16]' "${work}/call.json")"
 }
@@ -110,8 +115,25 @@ slice() {
   echo "${1:$(($2 * 2)):$((($3 - $2) * 2))}"
 }
 
+# A deployed account has a code selection; a funded undeployed address is an
+# ordinary Uninit account with a zero selection.
 has_account() {
-  run inspect | jq -e --arg address "$1" 'any(.accounts[]; .address == $address)' >/dev/null
+  run inspect --account "$1" 2>/dev/null | jq -e '.selected_code_id != ("0" * 64)' >/dev/null
+}
+
+# Account hash of $2 in state $1.
+account_hash() {
+  "$stand" inspect --state "$1" --wasmtime-profile "$profile" |
+    jq -er --arg a "$2" '.accounts[] | select(.address == $a) | .account_hash'
+}
+
+# Hash of the Uninit image of address $1 funded once with $2 SHELL. Sets $uninit_hash.
+uninit_reference() {
+  local reference="${work}/uninit-reference-$2.state"
+  "$stand" init --state "$reference" --wasmtime-profile "$profile" --dapp-id "$dapp_id" >/dev/null
+  "$stand" fund-user --state "$reference" --wasmtime-profile "$profile" --address "$1" \
+    --shells "$2" >/dev/null
+  uninit_hash="$(account_hash "$reference" "$1")"
 }
 
 result() {
@@ -214,13 +236,15 @@ fund "$child_4"
 # funding pays the fixed 10 SHELL init fee once. The relay call remains valid.
 read_state "$relay_v1"
 relay_state_before="$hex"
-funding_before="$(run inspect | jq -er --arg a "$child_4" '.funding[] | select(.address == $a) | .extra[] | select(.currency_id == 2) | .amount | tonumber')"
+uninit_reference "$child_4" 10000000
+[[ "$(account_hash "$state" "$child_4")" == "$uninit_hash" ]] || fail "child 4 funding precondition"
 tick
 run call --address "$relay_v1" --method relay.forge --args-json "\"0x${factory/:/}${salt_4}\"" \
   --identity user --extra-currencies '' "${timestamps[@]}" >"${work}/failed-init.json"
-funding_after="$(run inspect | jq -er --arg a "$child_4" '.funding[] | select(.address == $a) | .extra[] | select(.currency_id == 2) | .amount | tonumber')"
+funding_after="$(account_hash "$state" "$child_4")"
+uninit_reference "$child_4" $((10000000 - 10))
 case_4() {
-  ! has_account "$child_4" && [[ "$funding_after" == $((funding_before - 10)) ]] &&
+  ! has_account "$child_4" && [[ "$funding_after" == "$uninit_hash" ]] &&
     jq -e --arg before "$relay_state_before" \
       '.raw_executor_output[0:16] == "41434d4f00000000" and .raw_state == $before and .queue.after == 0' \
       "${work}/failed-init.json" >/dev/null

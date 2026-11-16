@@ -68,9 +68,18 @@ def main():
     address = quote["address"]
     stand("fund-user", "--address", address, "--shells", 10_000_000)
     stand("fund-user", "--address", address, "--shells", 17)
-    pending = next(item for item in stand("inspect")["funding"] if item["address"] == address)
-    assert pending["extra"] == [{"currency_id": 2, "amount": "10000017"}]
-    assert all(account["address"] != address for account in stand("inspect")["accounts"])
+    # A funded undeployed address is an ordinary Uninit account without code; its
+    # image equals that of the same address funded once with the same total.
+    funded = stand("inspect")
+    assert funded["funding"] == []
+    uninit = next(account for account in funded["accounts"] if account["address"] == address)
+    assert stand("inspect", "--account", address)["selected_code_id"] == "0" * 64
+    reference = args.out / "uninit-reference.state"
+    run([args.stand, "init", "--state", reference, "--wasmtime-profile", args.profile, "--dapp-id", "75" * 32])
+    run([args.stand, "fund-user", "--state", reference, "--wasmtime-profile", args.profile,
+         "--address", address, "--shells", 10_000_017])
+    expected = json.loads(run([args.stand, "inspect", "--state", reference, "--wasmtime-profile", args.profile]))
+    assert [account for account in expected["accounts"] if account["address"] == address] == [uninit]
     assert stand("deploy", *deploy)["status"] == "ok"
 
     def inspect():
@@ -135,7 +144,9 @@ def main():
     old_registry = {row["key"]: row["value"] for row in before_second["registry_entries"]}
     new_registry = {row["key"]: row["value"] for row in after_second["registry_entries"]}
     assert all(new_registry[key] == value for key, value in old_registry.items())
-    assert len(new_registry) == len(old_registry) + 5
+    assert len(new_registry) == len(old_registry) + 7
+    added_keys = new_registry.keys() - old_registry.keys()
+    assert sorted(key[:2] for key in added_keys) == ["01", "02", "03", "04", "05", "08", "09"]
     assert len(after_second["code_blobs"]) == len(before_second["code_blobs"]) + 1
     assert stand("inspect", "--account", address) == after_account
     assert bytes.fromhex(stand("inspect", "--account", second_address)["raw_state"]) == bytes(128)

@@ -16,10 +16,10 @@ local stand, deploy over committed code with `deploy --package-id <id>
 selections. A deploy that carries module bytes whose code hash is already
 committed fails with `VM_CODE_ALREADY_EXISTS`: name the committed code instead.
 
-## Publish new code: the two-phase deploy
+## Publish new code: the three-phase deploy
 
 Only an external deploy can carry a new module. On the network it completes
-in two phases, and the destination address moves through three states,
+in three phases, in which the destination address moves through three states,
 `Uninit`, `Verify` and `Active`; `Finalized` and `Init` are records that
 blocks write for it:
 
@@ -41,8 +41,9 @@ blocks write for it:
 
 While the address is `Uninit` or `Verify`, internal messages to it wait in its
 queue and an external call to it is not admitted.
-A block carries at most one `Init` record with a successful `init` for a
-given code hash. A producer that
+A block carries at most one `Init` record with `InitExecuted` for a given
+code hash: its code compiled and its `init` ran, whether `init` succeeded or
+failed. A producer that
 misses the compile deadline is penalized by a `CodeDeployPenalty` record of
 the block; the deploy's sender takes no part in it.
 
@@ -70,7 +71,7 @@ avm-local-stand network-deploy --endpoint "$AVM_NODE" \
 ```
 
 With `--package-owner-key` the deploy publishes the artifacts as a new package
-through the two-phase deploy. With `--committed` instead it deploys another
+through the three-phase deploy. With `--committed` instead it deploys another
 account over the committed code of the same artifacts, at once. The result
 names the address, `package_id`, `selected_code_id` and `code_hash`.
 

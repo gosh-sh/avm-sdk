@@ -16,6 +16,7 @@ pub mod crypto;
 mod input;
 mod output;
 mod owner_key;
+#[cfg(target_arch = "wasm32")]
 mod runtime;
 
 pub use input::{
@@ -30,6 +31,7 @@ pub use output::{
     OutboundIntent, StatePatch, StateUpdate,
 };
 pub use owner_key::{owner_key, set_owner_key, OWNER_KEY_BYTES};
+#[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
 pub use runtime::{dispatch_batch, dispatch_init, dispatch_message, GuestArena};
 
@@ -126,18 +128,22 @@ macro_rules! export_message_contract {
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn __avm_guest_arena_bytes() -> u32 { $arena_bytes as u32 }
+        #[cfg(target_arch = "wasm32")]
         static __AVM_GUEST_ARENA: $crate::GuestArena<{ $arena_bytes }> = $crate::GuestArena::new();
 
+        #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn avm_guest_alloc(len: u32) -> u32 {
             __AVM_GUEST_ARENA.allocate(len)
         }
 
+        #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn avm_guest_free(ptr: u32, len: u32) {
             assert!(__AVM_GUEST_ARENA.free(ptr, len));
         }
 
+        #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn init(input_ptr: u32, input_len: u32) -> u64 {
             $crate::dispatch_init::<$contract, { $arena_bytes }>(
@@ -147,6 +153,7 @@ macro_rules! export_message_contract {
             )
         }
 
+        #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn process_message(input_ptr: u32, input_len: u32) -> u64 {
             $crate::dispatch_message::<$contract, { $arena_bytes }>(
@@ -155,6 +162,11 @@ macro_rules! export_message_contract {
                 input_len,
             )
         }
+
+        // The exports exist only on WASM; native builds keep the entrypoints in use.
+        #[cfg(not(target_arch = "wasm32"))]
+        const _: [for<'a> fn($crate::MessageInput<'a>) -> $crate::MessageOutput; 2] =
+            [<$contract as $crate::Contract>::init, <$contract as $crate::Contract>::process_message];
     };
 }
 
@@ -168,6 +180,7 @@ macro_rules! export_batch_contract {
     ($contract:ty, arena_bytes = $arena_bytes:expr) => {
         $crate::export_message_contract!($contract, arena_bytes = $arena_bytes);
 
+        #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn process_batch(input_ptr: u32, input_len: u32) -> u64 {
             $crate::dispatch_batch::<$contract, { $arena_bytes }>(
@@ -176,5 +189,9 @@ macro_rules! export_batch_contract {
                 input_len,
             )
         }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        const _: for<'a> fn($crate::BatchInput<'a>) -> $crate::BatchOutput =
+            <$contract as $crate::BatchContract>::process_batch;
     };
 }

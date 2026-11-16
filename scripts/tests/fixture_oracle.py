@@ -332,6 +332,11 @@ def expected_journey(bundle, label, identities, transcript, times, current):
         body += name.encode() + artifact["wasm"] + artifact["descriptor"] + artifact["acab"]
         wire = transcript[transcript_index]
         external(wire, index, developer if index == 0 else owner, 1, times[transcript_index], 0, body, deploy=True)
+        if current:
+            stamp = le(transcript_index + 1, 4) + b"\x71" * 34
+            registry[b"\x09" + selections[index]] = selections[index] + stamp
+            if index == 0:
+                registry[b"\x08" + package] = package + stamp
         fields = [("account", "address", address), ("init_data_hash", "data", h(b"")),
                   ("owner", "data", owner_ids[index]), ("package", "data", package),
                   ("salt", "data", name.encode()), ("selected_code", "data", selections[index]),

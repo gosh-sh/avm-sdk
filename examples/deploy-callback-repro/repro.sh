@@ -235,3 +235,47 @@ for failure in active malformed wrong-address; do
   done
 done
 echo "PASS: deploy precheck failures deliver requested status 63 callbacks or no-handler refunds"
+
+# Ordinary calls in the same DApp and across DApps, to a receiver that succeeds
+# or rejects with status 1505, with and without a callback request. A requested
+# callback returns the unused part of the 1000 SHELL cross-DApp reserve
+# (docs/fuel-and-fees.md). The remote child lives in DApp 22..22 and is created
+# by an internal deploy from the parent.
+remote="2222222222222222222222222222222222222222222222222222222222222222:${child#*:}"
+routes="${work}/routes.state"
+cp "$capture" "$routes"
+run "$routes" fund-user --address "$remote" --shells 10000000 >/dev/null
+call "$routes" "$parent" repro.forward \
+  "$(forward_args "$remote" "$init_method_le" 01 "$deploy_body")" "${work}/remote-deploy.json"
+has_account "$routes" "$remote" || fail "remote child was not created"
+for destination in "$child" "$remote"; do
+  route=same-dapp
+  [[ "$destination" == "$child" ]] || route=cross-dapp
+  for method_le in "$ping_method_le" 7b00000000000000; do
+    expected_status=00000000
+    [[ "$method_le" == "$ping_method_le" ]] || expected_status=e1050000
+    for request_callback in 00 01; do
+      scenario="${work}/${route}-${method_le}-${request_callback}.state"
+      cp "$routes" "$scenario"
+      read_state "$scenario" "$parent"
+      callbacks_before=$((16#$(slice "$hex" 3 4)))
+      call "$scenario" "$parent" repro.forward \
+        "$(forward_args "$destination" "$method_le" "$request_callback" "")" \
+        "${work}/${route}-${method_le}-${request_callback}.json"
+      read_state "$scenario" "$parent"
+      [[ $((16#$(slice "$hex" 3 4))) == $((callbacks_before + 10#$request_callback)) ]] ||
+        fail "${route} callback count"
+      if [[ "$request_callback" == 01 ]]; then
+        [[ "$(slice "$hex" 4 8)" == "$expected_status" ]] || fail "${route} callback status"
+        if [[ "$route" == cross-dapp ]]; then
+          [[ "$(slice "$hex" 56 64)" != 0000000000000000 ]] ||
+            fail "cross-DApp callback did not return the unused reserve"
+        fi
+      fi
+      run "$scenario" inspect | jq -e '.queue.message_count == 0' >/dev/null || fail "${route} queue not empty"
+      run "$scenario" replay | jq -e '.status == "ok"' >/dev/null || fail "${route} replay"
+      echo "${route} call, status ${expected_status}, callback ${request_callback}: committed, queue empty, replay ok"
+    done
+  done
+done
+echo "PASS: same-DApp and cross-DApp calls commit with and without callbacks"

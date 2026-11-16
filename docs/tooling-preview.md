@@ -1,12 +1,12 @@
 # SDK tooling
 
-This guide describes SDK 0.6.2. Use a matching builder and local-stand binary
+This guide describes SDK 0.6.3. Use a matching builder and local-stand binary
 for the commands below; check the source identities recorded in the distribution.
 SDK 0.2.0 does not include the constructor and CLI additions described here.
 
 ## Core-WASM V2 guest builds
 
-SDK 0.6.2 builds contracts with exact Rust/Cargo 1.99.1 and
+SDK 0.6.3 builds contracts with exact Rust/Cargo 1.99.1 and
 `-Ctarget-feature=+wide-arithmetic`. This compiler's wide-integer lowering is
 validated against a native-integer semantic regression; emitting an instruction
 alone does not prove correct arithmetic.
@@ -15,7 +15,9 @@ the observed warning once in `target/avm-build-provenance.txt`, along with its
 pinned compiler and existing reproducibility evidence.
 
 Core-WASM V2 enables `i64.add128`, `i64.sub128`, `i64.mul_wide_s` and
-`i64.mul_wide_u`. Imports and previously forbidden proposals stay disabled.
+`i64.mul_wide_u`. Previously forbidden proposals stay disabled, and the only
+admitted import is the optional `avm.precompile` crypto import
+([crypto](crypto.md)).
 The profile file keeps the `.v1` encoding filename while `wasm_profile_id`
 is 2. Use the tools and exact profile from the same bundle. Existing guests
 that use only the inherited instruction subset remain admissible; rebuilding
@@ -81,7 +83,8 @@ avm-local-stand inspect --state demo.state --wasmtime-profile "$PROFILE" \
 ```
 
 ABI inspection reports types, method IDs, fixed input sizes where available,
-init/state roots, events and errors. `--body-file` is raw canonical body bytes.
+init/state roots, events and errors; see [events](events.md) for emitting and
+reading them. `--body-file` is raw canonical body bytes.
 Account inspection returns raw data and its ABI projection without executing a
 message. Opaque state has a null projection; unavailable/invalid metadata or
 invalid typed data is reported in `state_decode_error` alongside raw data.
@@ -127,7 +130,8 @@ Add `--quote-address` to the same `deploy` arguments you intend to submit. It
 returns the deterministic address without funding, execution or state changes.
 Fund that exact address using `fund-user`, then repeat `deploy` without the flag.
 The existing `funding_required` response remains supported. Prefunding an absent
-address creates a funding placeholder, not an active contract. An already active
+address creates an ordinary Uninit account with that balance, not an active
+contract. An already active
 address cannot be deployed again.
 
 Constructor failures now report the returned status; contract success requires
@@ -143,7 +147,9 @@ profile and output paths and leaves the source checkout unchanged.
 
 These helpers use the existing canonical ABI. They do not add WASM imports,
 dynamic libraries, network access, clocks or randomness to contracts. The
-runtime continues to reject imported host functions, including BN254 imports.
+runtime rejects every imported host function other than the optional
+`avm.precompile` crypto import ([crypto](crypto.md)); BN254 imports stay
+rejected.
 Contract code executes within the fixed deterministic core-WASM profile.
 
 Comparing an internal sender with an expected derived address can check its

@@ -18,9 +18,9 @@ EVENT_FIELDS={
 }
 EVENTS={"vault":["created","deposited","claim_pending","claim_settled","claim_failed",
                  "proposed","voted","executed","expired","status","fees_added"],"audit":["audited"],"receiver":[]}
-ERRORS={"vault":list(enumerate(["invalid_args","unauthorized","invalid_state","paused","invalid_value",
+ERRORS={"vault":[(code,name) for code,name in enumerate(["invalid_args","unauthorized","invalid_state","paused","invalid_value",
     "claim_pending","nothing_to_claim","invalid_callback","overflow","insufficient_balance",
-    "invalid_proposal","duplicate_vote","timelock","proposal_expired","quorum_missing"],3000)),
+    "invalid_proposal","duplicate_vote","timelock",None,"quorum_missing"],3000) if name],
     "receiver":[(3100,"unauthorized"),(3101,"invalid_receipt"),(3102,"delivery_rejected")],
     "audit":[(3200,"invalid_args"),(3201,"unauthorized"),(3202,"receipt_replay"),(3203,"overflow")]}
 

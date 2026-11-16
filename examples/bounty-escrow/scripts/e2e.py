@@ -81,6 +81,11 @@ class Stand:
         result = self.command("call", address=address, method=method,
                               args_json=json.dumps("0x"+body.hex()) if body else "null",
                               identity=identity, extra_currencies="", **self.timestamps())
+        if expected_status:
+            # A contract status fails the call: exit status 2 with status_code.
+            assert self.log[-1]["exit_code"] == 2 and result.get("error") == "execution_failed" \
+                and result.get("status_code") == expected_status, {"method": method, "result": result, "expected": expected_status}
+            return result
         assert result["status"] == "ok", result
         raw = bytes.fromhex(result["raw_executor_output"])
         actual_status = int.from_bytes(raw[4:8], "little")

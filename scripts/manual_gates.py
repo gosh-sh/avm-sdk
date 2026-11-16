@@ -267,7 +267,10 @@ def main():
             test(package, [])
         test("avm-effect-materializer", ["--test", "zero_intent_checkpoint"])
         test("avm-contract-sdk", ["--test", "canonical_io"])
-        test("avm-contract-sdk", ["--lib"], ["runtime::tests::" + case for case in "input_view_borrows_live_bytes_and_bounds_at_chunk_boundaries dispatch_preserves_live_input_and_lifo_output_ownership dispatch_failure_capacity_and_overflow_leave_input_owned direct_dispatch_writes_once_without_the_vec_growth_path batch_dispatch_preserves_count_mode_and_failed_index_checks bounded_writer_failures_release_only_the_output_reservation direct_message_sections_and_batch_match_the_public_serializer".split()])
+        test("avm-contract-sdk", ["--lib"], ["output::writer_tests::" + case for case in "direct_message_output_writes_once_without_the_vec_growth_path ten_thousand_wallet_sized_outputs_remove_observed_vec_growth_and_copy batch_output_preserves_count_mode_and_failed_index_checks direct_message_sections_and_batch_match_the_public_serializer".split()])
+        # Safety tests of the SDK input-buffer unsafe exception, run in real WASM.
+        test("avm-contract-build", ["--test", "sdk_input_wasm"], "input_buffer_reads_back_host_bytes_at_every_boundary_size_and_the_maximum a_nested_dispatch_is_refused_before_any_input_read input_view_is_in_place_and_bounded_by_the_live_allocation small_allocations_stay_static_and_larger_ones_take_the_heap dispatch_keeps_the_live_input_and_places_the_output_after_it batch_dispatch_writes_the_public_serializer_bytes direct_output_takes_only_its_reservation_from_the_guest_allocator".split())
+        test("avm-contract-build", ["--test", "sdk_arena_memory"], ["arena_capacity_lifo_and_exact_free_bounds_hold_in_real_wasm"])
         test("avm-contract-build", ["--test", "reproducible_build"])
         for target_name in ("sdk_issue_abi", "sdk_issue_bindings", "sdk_issue_diagnostics", "sdk_issue_dispatch_wasm"):
             test("avm-contract-build", ["--test", target_name])

@@ -1,6 +1,12 @@
 //! Synchronous cryptography provided by the matching AVM runtime.
 //!
 //! These helpers require WASM execution. Native calls fail explicitly.
+//!
+//! Unsafe code: the private `import` module declares the `avm.precompile` host
+//! import and makes its one call. The safe wrappers fix the id, pass borrowed
+//! input and an exclusively borrowed output of the exact fixed width, and the
+//! host checks both ranges before it reads or writes. The invariant, the reason
+//! it holds and the tests that check it are listed in the SDK `docs/unsafe.md`.
 
 /// Computes the ordinary unkeyed 32-byte BLAKE3 hash, including for empty input.
 pub fn blake3(data: &[u8]) -> [u8; 32] {
@@ -65,6 +71,11 @@ use import::invoke;
 #[cfg(target_arch = "wasm32")]
 #[allow(unsafe_code)]
 mod import {
+    // SAFETY: this declaration matches the host import `avm.precompile` of the
+    // crypto precompile ABI (docs/crypto.md): signature
+    // `(i32, i32, i32, i32) -> i32`, and no effect other than reading the input
+    // range and writing the output range it is given. Only `invoke` calls it,
+    // under the conditions stated at that call.
     #[link(wasm_import_module = "avm")]
     unsafe extern "C" {
         #[link_name = "precompile"]
@@ -82,10 +93,16 @@ mod import {
         }
         let length =
             u32::try_from(input.len()).unwrap_or_else(|_| core::arch::wasm32::unreachable());
-        // SAFETY: these live shared/exclusive borrows are disjoint. Only the
-        // fixed output width can be written by the matching synchronous host;
-        // the host checks both complete ranges and never re-enters the guest.
-        // wasm32 guest pointers and the checked length fit the registered ABI.
+        // SAFETY: `input` and `output` are live borrows for the whole call, so
+        // the two ranges are disjoint and `output` is exclusively ours. The id is
+        // 1, 2 or 3 and `output.len()` is its fixed width, checked above, so the
+        // host writes at most `output.len()` bytes into `output` and nothing
+        // else. The matching host (docs/crypto.md, docs/unsafe.md) validates
+        // both complete ranges and
+        // their non-overlap before any read or write, is synchronous, never
+        // re-enters the guest and never grows memory during the call. wasm32
+        // guest pointers and the checked u32 length fit the registered
+        // `(i32, i32, i32, i32) -> i32` signature as unsigned bit patterns.
         let status = unsafe {
             precompile(
                 id,

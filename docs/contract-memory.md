@@ -121,10 +121,15 @@ disposable state because actual VM outcomes and state changes are preserved.
 
 ## Bundled examples
 
-All 18 contracts retain their own measured project file. Run
+The 18 contracts without explicit stack and arena settings retain their own
+measured project file; `signature-verifier` sets both explicitly. Run
 `scripts/tests/measure_example_memory.py --collect-only` with its required tool
 and output arguments, then select resources with `measure_contract_resources.py`.
 Run the full collector again with `--collect-only --deployment` to check the
-original scenario suites on deployment builds. `contract_memory.py` verifies
+original scenario suites on deployment builds. `contract-a-v1` compiles the
+package owner key of its build into the module, and its init input carries that
+module, so its stored arena can differ by a few bytes between measuring runs.
+The measuring build is larger than a deployment build, so the stored arena
+covers a deployment build with any owner key. `contract_memory.py` verifies
 each emitted memory section and resource provenance. The builder itself always
 performs two independent clean compilations and compares their admitted bytes.

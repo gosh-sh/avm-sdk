@@ -14,7 +14,7 @@ avm-contract-build build --manifest-path <Cargo.toml>
 
 The contract directory must contain `avm-contract.toml` and its Cargo workspace
 must have a reviewed `Cargo.lock`. Rust/Cargo 1.99.1 is enforced. Successful output is
-written to `target/avm` below that directory. The SDK 0.6.2 builder enables
+written to `target/avm` below that directory. The SDK 0.6.3 builder enables
 `+wide-arithmetic`; its receipt records the exact guest compiler, Cargo and
 target flags. The native host compiler in the release profile is a separate
 identity, Rust/Cargo 1.98.0.
@@ -79,9 +79,16 @@ Commands and command-specific options:
 - `deprecate`: optional `--selected-code-id`, optional `--deprecated`.
 - `upgrade`: `--address`, `--selected-code-id`,
   `--migration-payload-hex`, `--identity`, and the timestamp/fee options.
-- `delete-account`: optional `--address`.
+- `delete-account`: optional `--address`. This is a control command of the
+  local stand, not a canonical message: it removes an account of the
+  initialized DApp from the stand state.
 - `compact-library`: optional `--package-id`.
-- `inspect`, `events`, `replay`: no command-specific options.
+- `inspect`: optional `--account <dapp_id:account_id>`, which returns that
+  account's raw and ABI-decoded state instead of the whole stand; see
+  [inspect ABI and account state](tooling-preview.md#inspect-abi-and-account-state).
+- `events`, `replay`: no command-specific options. `events` prints every
+  event of the stand; see
+  [read events on the local stand](events.md#read-events-on-the-local-stand).
 
 Timestamp/fee options are `--block-time`, `--created-at`, `--expire-at`, and
 `--fuel-fee-shells`. Identities are `developer`, `package-owner`, or `user`.
@@ -152,19 +159,15 @@ the same bytes to the first producer the answer names. It then reads
 expired message from its queue only when the next message arrives for the
 same thread, so the status can stay `queued` after `expire_at`. The result's `outcome` holds
 `message_hash`, `status`, `error`, `http_status`, the final `url` and the
-number of `posts` and `polls`. `status` is one of:
-
-| `status` | Meaning |
-|---|---|
-| `consumed` | A block of the destination thread consumed the message. That block can still be discarded before it is final |
-| `not_final` | Still queued 10 seconds after `expire_at`: its outcome is not known |
-| `failed` | The message left the queue without being consumed; `error.code` is the node's code, for example `MESSAGE_REJECTED` with `error.message` `AccountKeyNotAllowed` or `NonceReplay` |
-| `refused` | The node refused the message when it was sent; for example `INVALID_MESSAGE` whose `error.message` ends with `ExternalValueNotAllowed` for an external that carries value |
+number of `posts` and `polls`. `status` is `consumed`, `not_final`, `failed`
+or `refused`; [message statuses and common errors](statuses-and-errors.md#network-message-statuses)
+explains each value and what to do.
 
 The command exits with status 0 only for `consumed`, and `network-deploy
 --quote-address` with 0 after building the deploy. `network-status` makes one
 status read with the same fields. Only the node that queued a message knows
-its status, for 10 minutes.
+its status, for 10 minutes. These commands read nothing else from a network;
+see [what you can read from a network](network.md#what-you-can-read-from-a-network-today).
 
 ## Additional tooling
 

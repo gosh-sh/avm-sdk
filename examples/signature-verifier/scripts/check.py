@@ -51,9 +51,8 @@ for i,case in enumerate(vectors['cases']):
     badargs=args.copy();badargs[badargs.index('--args-json')+1]=json.dumps('0x'+bad)
     badargs[badargs.index('--block-time')+1]=1800000011+i*2
     badargs[badargs.index('--created-at')+1]=1800000010+i*2
-    failed=run('call',*badargs)
-    output=bytes.fromhex(failed['raw_executor_output'])
-    assert output[:4]==b'ACMO' and int.from_bytes(output[4:8],'little')==1801,failed
+    failed=run('call',*badargs,exit_code=2)
+    assert failed['error']=='execution_failed' and failed['status_code']==1801,failed
     after=run('inspect','--account',address)
     assert after['raw_state']==owner+vectors['pubkey']+case['blake3']
 before=run('inspect')

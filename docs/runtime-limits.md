@@ -1,6 +1,6 @@
 # Runtime limits, rent and deployment identity
 
-These are the **SDK 0.6.2 local stand** settings. Its FUEL caps are the network
+These are the **SDK 0.6.3 local stand** settings. Its FUEL caps are the network
 execution defaults. All of them are development configuration, not mainnet
 promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the
@@ -89,8 +89,9 @@ chunking does not enlarge contract-visible limits.
 Status **43**, `VM_ABI_OUTPUT_MISSING`, means the guest returned no ABI output.
 It is not a size-limit code. For example, SDK output construction can fail if the
 wrong state mode is returned. Check the required mode and output-construction
-result. Status **45** means oversized WASM output; status **50** denotes the
-state-size boundary; status **51** denotes the message-body boundary. Error
+result. Status **45** means oversized WASM output, including an outbound
+message body or callback result above `max_body_size`; status **50** denotes
+the state-size boundary. Error
 precedence can expose an earlier failure before a later size check.
 
 `max_body_size = 65536` bounds every message body except that of a deploy that
@@ -103,7 +104,7 @@ a code deploy contains the complete deploy message and has its own cap,
 1048576-byte input cap above. Only an external deploy can carry code, and its
 code bytes are paid by the size-based
 [publication fee](fuel-and-fees.md#code-publication-fee). On the network such a
-deploy completes in [two phases](contract-deploy.md#publish-new-code-the-two-phase-deploy).
+deploy completes in [three phases](contract-deploy.md#publish-new-code-the-three-phase-deploy).
 Reusing an already published selection avoids embedding its code again; such a
 deploy keeps the 65536-byte body limit and the init-data limits. Code admission
 also rejects a `br_table` instruction with more than 65520 targets.
@@ -129,9 +130,16 @@ would require a separately defined maintenance procedure.
 
 Execution failure does not make already charged protocol fees free. Transferred
 ECC value and unused prepaid FUEL have separate refund rules; see
-[FUEL and SHELL](fuel-and-fees.md). The local CLI's ordinary `call` command rolls
-back an error, so it does not demonstrate committed failure settlement. Do not
-use that local behavior to infer network fee refunds.
+[FUEL and SHELL](fuel-and-fees.md). On the local stand, as on the network, an
+external `call` that reached WASM execution and failed is committed: its
+nonce is spent, it is charged, the account keeps its previous data, and
+`replay` includes the transaction. The `call` command exits with status 2 and reports `"error":
+"execution_failed"`, the `status_code`, `"state_committed": true` and a
+`receipt` with the `charged_shells`. The `status_code` is a VM status below
+1000 or a status of 1000 and above that your contract returned itself with
+`MessageOutput::failure`; a node classifies both as a failed execution.
+
+See [message statuses and common errors](statuses-and-errors.md#execution-statuses).
 
 Rent metadata belongs to the committed account index, not contract `data`.
 The current guest ABI does not expose a debt/last-paid accessor. Use read-only
