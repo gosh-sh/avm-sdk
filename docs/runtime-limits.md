@@ -1,6 +1,6 @@
 # Runtime limits, rent and deployment identity
 
-These are the **SDK 0.6.3 local stand** settings. Its FUEL caps are the network
+These are the **SDK 0.6.4 local stand** settings. Its FUEL caps are the network
 execution defaults. All of them are development configuration, not mainnet
 promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the
@@ -133,9 +133,10 @@ ECC value and unused prepaid FUEL have separate refund rules; see
 [FUEL and SHELL](fuel-and-fees.md). On the local stand, as on the network, an
 external `call` that reached WASM execution and failed is committed: its
 nonce is spent, it is charged, the account keeps its previous data, and
-`replay` includes the transaction. The `call` command exits with status 2 and reports `"error":
-"execution_failed"`, the `status_code`, `"state_committed": true` and a
-`receipt` with the `charged_shells`. The `status_code` is a VM status below
+`replay` includes the transaction. The `call` command exits with status 2
+and reports `"error": "execution_failed"`, the `status_code`,
+`"state_committed": true` and a `receipt` with the `charged_shells`. The
+`status_code` is a VM status below
 1000 or a status of 1000 and above that your contract returned itself with
 `MessageOutput::failure`; a node classifies both as a failed execution.
 

@@ -48,14 +48,19 @@ struct ArenaState {
     live: [Allocation; 2],
 }
 
-/// `Free` holds no pointer, so the initial arena is zero-initialized memory and
-/// adds no data bytes to the module.
+/// `Free` holds no pointer and is tag 0, so the initial arena is
+/// zero-initialized memory and adds no data bytes to the module. The explicit
+/// tag keeps it so: without it the `Vec` capacity niche would encode `Free`
+/// with non-zero bytes.
+#[repr(u8)]
 enum Allocation {
     Free,
     Static(Range<usize>),
     Heap(Box<[u8]>),
-    /// A heap input buffer that the host writes before the entrypoint reads it.
-    Input(Box<[MaybeUninit<u8>]>),
+    /// A heap input buffer that the host writes before the entrypoint reads it:
+    /// the first `len` bytes of the reserved capacity, never initialized by
+    /// the guest.
+    Input(Vec<u8>, usize),
 }
 
 impl Allocation {
@@ -64,7 +69,7 @@ impl Allocation {
             Self::Free => 0,
             Self::Static(range) => range.len(),
             Self::Heap(bytes) => bytes.len(),
-            Self::Input(bytes) => bytes.len(),
+            Self::Input(_, len) => *len,
         }
     }
 }
@@ -143,8 +148,7 @@ impl<const N: usize> GuestArena<N> {
             if bytes.try_reserve_exact(length).is_err() {
                 return 0;
             }
-            bytes.resize(length, MaybeUninit::uninit());
-            Allocation::Input(bytes.into_boxed_slice())
+            Allocation::Input(bytes, length)
         };
         state.live[slot] = allocation;
         address(state, slot).unwrap_or_else(|| {
@@ -185,7 +189,7 @@ fn address(state: &mut ArenaState, slot: usize) -> Option<u32> {
         Allocation::Free => return None,
         Allocation::Static(range) => state.region.as_mut_ptr() as usize + range.start,
         Allocation::Heap(bytes) => bytes.as_mut_ptr() as usize,
-        Allocation::Input(bytes) => bytes.as_mut_ptr() as usize,
+        Allocation::Input(bytes, _) => bytes.as_mut_ptr() as usize,
     };
     u32::try_from(pointer).ok().filter(|address| *address != 0)
 }
@@ -199,13 +203,13 @@ fn live_range(state: &mut ArenaState, ptr: u32, len: u32) -> Option<&[u8]> {
         let live = state.live[slot].len();
         (live != 0 && end <= live).then_some((slot, offset..end))
     })?;
-    match &state.live[slot] {
+    match &mut state.live[slot] {
         Allocation::Free => None,
         Allocation::Static(region) => {
             state.region.get(region.start + range.start..region.start + range.end)
         }
         Allocation::Heap(bytes) => bytes.get(range),
-        Allocation::Input(bytes) => bytes.get(range).map(host_written),
+        Allocation::Input(bytes, _) => bytes.spare_capacity_mut().get(range).map(host_written),
     }
 }
 

@@ -1,0 +1,19 @@
+[package]
+name = "input-fuel-fixture"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+avm-contract-sdk = { path = "../../../../crates/avm-contract-sdk" }
+
+# A size-optimized build without LTO: the SDK arena is compiled apart from the
+# contract code, so the optimizer cannot delete per-byte work that the SDK
+# source asks for on the input buffer.
+[profile.release]
+opt-level = "s"
+codegen-units = 16

@@ -1,0 +1,37 @@
+[build]
+max_memory_bytes = 4194304
+stack_bytes = 65536
+arena_bytes = 1572864
+
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+# The account data starts with the owner key that authorizes external calls.
+owner_key_offset = 0
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "u32"
+name = "argument"
+
+[[abi.methods]]
+name = "input.fuel"
+input_type_id = 1
+
+[[abi.errors]]
+status_code = 1000
+name = "invalid_argument"
+message = "the argument must contain four bytes"
+
+[[abi.errors]]
+status_code = 1001
+name = "unexpected_input_state"
+message = "the input does not hold the expected account data"
+
+[[abi.errors]]
+status_code = 1002
+name = "probe_needs_patch_mode"
+message = "a probe runs only on data above the full-replace threshold"

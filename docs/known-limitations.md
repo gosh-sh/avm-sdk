@@ -57,7 +57,8 @@ do instead. Each item links to the page with the details.
   finality, so a network deploy completes later; see
   [contract deploy](contract-deploy.md#publish-new-code-the-three-phase-deploy).
 - **Logical time.** The stand numbers transactions with its own logical-time
-  counter, so message hashes on the stand differ from the network's.
+  counter, so the hashes of the messages a contract sends on the stand
+  differ from the network's.
 - **Fixed limits.** The stand CLI offers no override for its limits; see
   [runtime limits](runtime-limits.md).
 

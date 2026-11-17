@@ -333,6 +333,9 @@ def main():
             run("contract-memory-lifecycle", [sys.executable, "-B", str(sdk / "scripts/tests/memory_lifecycle.py"),
                 "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
                 "--profile", str(profile), "--output", str(application_evidence / "contract-memory-lifecycle")], environment=guest)
+            run("guest-input-fuel", [sys.executable, "-B", str(sdk / "scripts/tests/input_fuel.py"),
+                "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
+                "--profile", str(profile), "--output", str(application_evidence / "guest-input-fuel")], environment=guest)
             run("sdk-public-issue-paths", [sys.executable, "-B", str(sdk / "scripts/tests/sdk_issue_public_paths.py"),
                 "--sdk", str(consumer_sdk), "--builder", str(builder), "--stand", str(stand),
                 "--profile", str(profile), "--out", str(application_evidence / "public-issue-paths")], environment=guest)

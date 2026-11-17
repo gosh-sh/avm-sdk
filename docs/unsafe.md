@@ -11,8 +11,8 @@ invariant holds, and the tests that check it.
 - File and function:
   [`crates/avm-contract-sdk/src/runtime.rs`](../crates/avm-contract-sdk/src/runtime.rs),
   `host_written`.
-- What it does: the `avm_guest_alloc` export returns a heap input buffer of
-  type `Box<[MaybeUninit<u8>]>` that is not zero-filled. The exports and the
+- What it does: the `avm_guest_alloc` export returns a heap input buffer, the
+  reserved capacity of a `Vec<u8>`, that is not zero-filled. The exports and the
   input path exist only on WASM, the one path the AVM host runs. When the entrypoint
   runs, `host_written` views the requested range of that buffer as `&[u8]`,
   and the SDK decodes the input in place.
