@@ -21,11 +21,14 @@ ever pushed to a user; money leaves only through `withdraw`.
 
 - **Supply.** `supply` turns idle borrowed asset into *shares*. A share's value is
   `(cash + debt − reserves) / total_shares`, so it rises as borrowers pay interest.
-  `redeem` burns shares for their value as far as the market holds cash.
+  `redeem` burns shares for their value if it fits within the available cash,
+  `max(cash − reserves, 0)`.
 - **Borrow.** `add_collateral` locks collateral. `borrow` lends out up to
   `ltv` of the collateral's value. Debt is stored as `scaled` units; the real debt is
   `ceil(scaled × index / 1e18)`, and one global `index` grows with interest, so
-  accrual is O(1) and happens at the start of every call.
+  the accrual calculation is O(1). Ordinary external calls calculate accrual
+  before applying the requested operation. Only accepted calls persist it.
+  Payout callbacks skip accrual.
 - **Rate.** Annual rate in basis points from utilisation `u = debt / (cash + debt)`:
   `base + slope1 × min(u, kink)/kink + slope2 × max(u − kink, 0)/(1 − kink)`.
   `reserve_factor` of the interest goes to protocol reserves.
@@ -52,7 +55,10 @@ ever pushed to a user; money leaves only through `withdraw`.
   by an accepting receiver. A bounce returns the exact principal into the ledger. One
   payout per recipient may be in flight (at most 8), so the callback source identifies it.
   Settlement trusts the native callback status and checks a bounded history of cause
-  hashes. The echo is a payee fixture assertion.
+  hashes. The echo is a payee fixture assertion. A rejected callback leaves the
+  payout pending, occupying a slot and preventing another payout to the same
+  recipient. The example relies on the runtime to deliver a valid settlement
+  callback and exposes no timeout, cancellation, or recovery method.
 
 **Safety net.** Every call re-validates the whole canonical state (totals equal the
 sums over accounts, index ≥ 1, no empty or duplicate accounts, pending payouts
@@ -150,8 +156,8 @@ and executed logs. Rebuild and remeasure when changing SDK, toolchain or source.
 ## Scope and limits
 
 Unaudited example code, not for real funds. Interest grows the index linearly
-between calls and compounds at each call, the price is a trusted admin feed, and
-there is a single collateral/debt pair. Liquidations are partial by design (50% close
+between accrual updates and compounds when an update is committed. The price
+is a trusted admin feed, and there is a single collateral/debt pair. Liquidations are partial by design (50% close
 factor); a position can be liquidated again in the next call while it stays unhealthy.
 
 The stand journey now requires every call probe to return the expected status at

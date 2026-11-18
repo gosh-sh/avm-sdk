@@ -7,7 +7,9 @@
 - `price`: borrowed units per collateral unit, scaled by 1e18.
 - `value = cash + debt − reserves` is what suppliers collectively own;
   `shares × value / total_shares` is what a supplier can redeem.
-- `available = cash − reserves`: what can be lent or redeemed (reserves stay backed by cash).
+- `available = max(cash − reserves, 0)`: liquidity for new borrowing and redemptions.
+  Accounting reserves can exceed cash. When they do, available liquidity is zero
+  and `collect_reserves` can move at most the cash on hand to the admin's idle balance.
 
 ## Rounding (always against the caller, in favour of the market)
 
@@ -28,7 +30,9 @@ suppliers redeem assets.
 
 ## Interest
 
-At the start of every call, `dt = now − last_accrual`. With `u = debt × 1e4 / (cash + debt)`
+Before applying an ordinary external call, the contract accrues interest when
+`now > last_accrual`, using `dt = now − last_accrual`. Rejected calls do not
+commit the update. Payout callbacks skip accrual. With `u = debt × 1e4 / (cash + debt)`
 the annual rate in bps is `base + slope1·min(u,kink)/kink + slope2·(u−kink)/(1e4−kink)` (the
 last term only above the kink). `index += index × rate × dt / (31_536_000 × 1e4)`. The
 interest added to the debt is split: `reserve_factor` of it to `reserves`, the rest to suppliers
