@@ -1,0 +1,191 @@
+{
+  "date_utc": "2026-11-06",
+  "source_parent": "016689696c6053dba9f0c59e75539c0c51b4a122",
+  "sdk_release": "avm-dev-d103b6ccc759-sdk-21364083b24a",
+  "bundle_sha256": "7476847a764fedc22fae47ba7ec63b607ba445280a7d4bcdb02fda77a85573f6",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "profile_sha256": "6d533f0804924b13bbea811691b4f24dd2922528d2473a3f0541d08d8d2560bf",
+  "native_tests_passed": 58,
+  "abi_ids_checked_against_generated_rust": 27,
+  "artifacts": {
+    "amm": {
+      "contract.acab": {
+        "bytes": 2103,
+        "sha256": "39779337fda16e84ef4f9b290ff981d64ce239cbf53bd6d21205d141af7a159d"
+      },
+      "contract.descriptor": {
+        "bytes": 66,
+        "sha256": "0add77170a20142d136a4ae351cf9bf5c8b02f9bf4bf78b8bd2a815e6e2e7302"
+      },
+      "contract.wasm": {
+        "bytes": 55195,
+        "sha256": "aa480c43cd59ea99b5d468c601f56627099f94cf6c0204040d5d3f532fd97bde"
+      }
+    },
+    "receiver": {
+      "contract.acab": {
+        "bytes": 361,
+        "sha256": "3d11ab1d66e9067018bfca7138e23f38cdafcb58bd93cfbd759a0c5b86cfd222"
+      },
+      "contract.descriptor": {
+        "bytes": 66,
+        "sha256": "c99c1425ec94f66d668812c1b766c342dc232b6e33100f6949aa0e09df7d0dd4"
+      },
+      "contract.wasm": {
+        "bytes": 28450,
+        "sha256": "791d5e0c82f5380e34503bfb3b84e38572f7d0b3636225cfea35ea2df34caeb4"
+      }
+    }
+  },
+  "stand": {
+    "status": "PASS",
+    "call_probes": 32,
+    "fuel_reserve_shells": [
+      [
+        "vault.receiver.bind",
+        1
+      ],
+      [
+        "vault.amm.topup",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.add_liquidity",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.swap_exact_in",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.swap_exact_in",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.receiver.reject",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.receiver.reject",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.receiver.reject",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.withdraw",
+        1
+      ],
+      [
+        "vault.receiver.reject",
+        1
+      ],
+      [
+        "vault.amm.remove_liquidity",
+        1
+      ],
+      [
+        "vault.amm.deposit",
+        1
+      ],
+      [
+        "vault.amm.swap_exact_out",
+        1
+      ],
+      [
+        "vault.amm.swap_exact_out",
+        1
+      ],
+      [
+        "vault.amm.status",
+        1
+      ]
+    ],
+    "inspect": {
+      "account_state_root": "600671a67b27f3e07acf8bf4c6cf848bf403981fb52703e78549a1fde665080c",
+      "registry_root": "ac6624f8c14f05f4b7050c115b41ec63cf686deaa00a5debd6f03f33596c97bf",
+      "cumulative_fee_shells": "8026471",
+      "accepted_input_count": 60
+    },
+    "replay": {
+      "account_state_root": "600671a67b27f3e07acf8bf4c6cf848bf403981fb52703e78549a1fde665080c",
+      "registry_root": "ac6624f8c14f05f4b7050c115b41ec63cf686deaa00a5debd6f03f33596c97bf",
+      "cumulative_fee_shells": "8026471",
+      "accepted_input_count": 60
+    }
+  },
+  "limits": [
+    "Local/fork evidence only; no upstream CI or maintainer approval.",
+    "Native-only edge cases remain outside the existing journey.",
+    "Heap peak, account upgrade/migration, exact FUEL and Mainnet are not qualified."
+  ]
+}
