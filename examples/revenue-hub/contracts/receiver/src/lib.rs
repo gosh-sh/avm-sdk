@@ -26,6 +26,7 @@ fn initialize(input: MessageInput<'_>) -> HubResult<MessageOutput> {
     }
     let body = input.deploy().map_err(|_| E_ARGS)?.init_data();
     if body.len() != 88
+        || body[..32] != [0; 32]
         || body[65..72] != [0; 7]
         || body[64] >= MAX_MEMBERS as u8
         || !input.state.is_empty()
@@ -33,13 +34,11 @@ fn initialize(input: MessageInput<'_>) -> HubResult<MessageOutput> {
     {
         return Err(E_RECEIVER_ARGS);
     }
-    let audit = address_at(body, 0)?;
+    // The audit ledger lives in this receiver's DApp: the init data names it by
+    // account id, after a zero DApp id.
+    let audit = AccountAddress { dapp_id: input.destination.dapp_id, account_id: array(body, 32)? };
     let fuel = u128_at(body, 72)?;
-    if !nonzero_address(audit)
-        || audit == input.destination
-        || audit.dapp_id != input.destination.dapp_id
-        || fuel == 0
-    {
+    if !nonzero_address(audit) || audit == input.destination || fuel == 0 {
         return Err(E_RECEIVER_ARGS);
     }
     let mut b = vec![0; STATE_BYTES];

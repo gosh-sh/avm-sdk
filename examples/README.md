@@ -66,7 +66,9 @@ will not match a new stand's randomly generated owner.
 
 The compatible second version of contract A. It keeps the same state schema and
 ABI while changing the version marker. It also exercises contract-initiated
-deployment by forwarding a canonical deploy body to an internal destination.
+deployment by forwarding a canonical deploy body to an internal destination
+with the forward value, and it keeps the two payouts that `contract-b`'s init
+returns.
 The fixture rejects another code upgrade after version 2.
 
 Use the v1 and v2 pair when validating upgrade authorization, migrated state,
@@ -82,6 +84,11 @@ A message-isolated receiver for internal traffic. It:
 - returns callback result data and can drain retained value;
 - consumes an internal-event read result;
 - supports same-DApp and cross-DApp stand journeys.
+
+The first eight bytes of its state count the deliveries it accepts with the
+forward value (`0:37` and `7:11`). A deploy from a contract must carry that
+value; init counts it as the first delivery and returns two one-unit payouts to
+the deployer. An external deploy starts the count at zero.
 
 Its source contains disabled negative-path hooks selected only by the stand's
 failure-flow build. Normal builds do not enable them. Use this contract with

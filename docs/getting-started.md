@@ -1,6 +1,6 @@
 # Getting Started
 
-These instructions describe SDK 0.6.4 and Core-WASM V2. Use its matching
+These instructions describe SDK 0.6.5 and Core-WASM V2. Use its matching
 builder, local stand and profile bundle. Earlier releases retain their own
 compilers/profiles; follow the documentation inside each installed release.
 A [local bundle](releases.md#install-a-prepared-local-bundle) can also be
@@ -22,25 +22,24 @@ The installer places the selected release under
 export PATH="${HOME}/.local/bin:${PATH}"
 ```
 
-Choose the matching immutable `RELEASE_TAG` from the SDK 0.6.4 release page.
+Choose the matching immutable `RELEASE_TAG` from the SDK 0.6.5 release page.
 An unqualified install command selects the latest published release.
 
 ## Initialize The Stand
 
 Every command uses the same state and Wasmtime profile paths. Command output is
 JSON. `init` generates fresh random developer, package-owner, and user identities
-for this state. The example below uses a single DApp.
+for this state. Each deploy below is an external deploy: it creates the first
+contract of a new DApp, whose DApp id is the account id of the contract.
 
 ```bash
 export AVM_SDK_HOME="${AVM_SDK_HOME:-$HOME/.local/share/avm-sdk}"
 export AVM_STATE="${PWD}/developer.state"
 export AVM_PROFILE="${AVM_SDK_HOME}/current/profiles/wasmtime-release-profile.v1"
-export DAPP_ID="1111111111111111111111111111111111111111111111111111111111111111"
 
 avm-local-stand init \
   --state "$AVM_STATE" \
-  --wasmtime-profile "$AVM_PROFILE" \
-  --dapp-id "$DAPP_ID" > init.json
+  --wasmtime-profile "$AVM_PROFILE" > init.json
 ```
 
 `init.json` returns public identities. The owner-private state file also retains

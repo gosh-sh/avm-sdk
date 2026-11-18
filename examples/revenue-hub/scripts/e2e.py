@@ -6,6 +6,12 @@ SDK wallet example. Members and governance act through their own keyed wallets
 (examples/wallet): each signs an external to its wallet and the wallet sends the
 internal call, with any value, to the keyless vault. Receivers and the audit
 ledger keep their owner key (the deploy owner_id) for their owner's externals.
+
+Each package is published by an external deploy, whose account is the first
+contract of its own DApp. The developer wallet is the first contract of the
+application's DApp: it creates the audit ledger, the receivers and the vault
+there by internal deploys of the published code, and their constructor data
+names those in-DApp peers by account id.
 """
 import argparse
 import json
@@ -14,12 +20,16 @@ import re
 import subprocess
 import tempfile
 
+import blake3
+
 ROOT = Path(__file__).resolve().parents[1]
 WALLET = ROOT.parent / "wallet"
 DAPP = "11" * 32
 BASE_TIME = 1_800_000_000
 # FUEL reserve of every wallet-to-vault internal message.
 INTERNAL_FUEL = 100_000
+# Method id of a deploy message, as on the stand's own deploy messages.
+DEPLOY_METHOD_ID = 0
 IDS = {name: int(value, 16) for name, value in
        re.findall(r"pub const (\w+): u64 = 0x([0-9a-f]+);", (ROOT / "core/src/ids.rs").read_text())}
 VAULT_METHODS = {"hub.vault." + name.lower(): IDS[name] for name in
@@ -41,6 +51,23 @@ def wallet_callback_status(event):
     at = event.index(b"status_code") + len(b"status_code") + 13
     return int.from_bytes((event[at:at+8] + bytes(8))[:8], "little")
 
+def deploy_body(selection, hashes, owner_id, salt, init):
+    """ACDP deploy envelope of published code, laid out as the
+    factory-child-provenance example builds it: a 288-byte header with the
+    selected code id, package id, WASM and descriptor hashes, owner id, BLAKE3
+    of the constructor data and the salt and constructor data lengths, then the
+    salt and the constructor data. It carries no code bytes."""
+    header = bytearray(288)
+    header[:4] = b"ACDP"
+    header[8:40] = bytes.fromhex(selection["selected_code_id"])
+    header[40:72] = bytes.fromhex(selection["package_id"])
+    header[72:136] = hashes
+    header[136:168] = bytes.fromhex(owner_id)
+    header[168:200] = blake3.blake3(init).digest()
+    header[266:268] = len(salt).to_bytes(2, "little")
+    header[268:272] = len(init).to_bytes(4, "little")
+    return bytes(header) + salt + init
+
 class Stand:
     def __init__(self, sdk, work):
         self.binary = str(sdk / "bin/avm-local-stand")
@@ -49,6 +76,7 @@ class Stand:
         self.log = []
         self.time = BASE_TIME
         self.selections = {}
+        self.hashes = {}
         self.wallets = {}
         self.identity = {}
 
@@ -68,7 +96,14 @@ class Stand:
         self.time += 1
         return dict(block_time=self.time, created_at=self.time, expire_at=self.time+3600, fuel_fee_shells=10000)
 
-    def deploy(self, contract, salt, init=None, owner_id=None, extra_currencies=None, shells=10_000_000):
+    def deploy(self, contract, salt, init=None, owner_id=None, extra_currencies=None, shells=10_000_000, deployer=None):
+        """Deploys `contract` and returns its address.
+
+        Without `deployer` the deploy is external: the account is the first
+        contract of its own DApp, and a package's first deploy publishes its
+        code. With `deployer`, that wallet deploys the published code by an
+        internal deploy into the wallet's DApp.
+        """
         artifacts = WALLET / "target/avm" if contract == "wallet" else ROOT / "contracts" / contract / "target/avm"
         init_json = None if contract == "wallet" else "0x"+(b"" if init is None else init).hex()
         options = dict(wasm=artifacts / "contract.wasm", acab=artifacts / "contract.acab",
@@ -85,13 +120,21 @@ class Stand:
         precondition = self.command("deploy", quote_address=True, **options)
         assert precondition.get("quoted") is True, precondition
         address = precondition["address"]
+        if deployer is not None:
+            # The account id does not depend on the DApp.
+            address = self.wallets[deployer].split(":")[0] + ":" + address.split(":")[1]
         funding = dict(address=address, shells=shells)
         if extra_currencies:
             funding["extra_currencies"] = extra_currencies
         funding = self.command("fund-user", **funding)
         assert funding["status"] == "ok", funding
-        result = self.command("deploy", **options)
-        assert result["status"] == "ok", result
+        if deployer is None:
+            result = self.command("deploy", **options)
+            assert result["status"] == "ok", result
+        else:
+            body = deploy_body(self.selections[contract], self.hashes[contract], owner_id, salt.encode(), init)
+            account = self.send(address, DEPLOY_METHOD_ID, body, wallet=deployer)
+            assert account["selected_code_id"] == self.selections[contract]["selected_code_id"], account
         if contract not in self.selections:
             snapshot = self.command("inspect")
             existing = {v["selected_code_id"] for v in self.selections.values()}
@@ -99,6 +142,8 @@ class Stand:
                              if item["key"].startswith("02") and item["value"][:64] not in existing)
             self.selections[contract] = {"selected_code_id": selection["value"][:64],
                                          "package_id": selection["value"][64:128]}
+            self.hashes[contract] = b"".join(blake3.blake3((artifacts / name).read_bytes()).digest()
+                                             for name in ["contract.wasm", "contract.descriptor"])
         return address
 
     def wallet(self, name, identity, key, extra_currencies=None):
@@ -146,14 +191,16 @@ class Stand:
 
 
 def address_bytes(value):return bytes.fromhex(value.replace(":",""))
-def receiver_config(audit,index):return address_bytes(audit)+bytes([index])+bytes(7)+(10000).to_bytes(16,"little")
+# Constructor data names in-DApp peers by account id with a zero DApp id: a
+# receiver's audit ledger and the vault's member receivers.
+def receiver_config(audit,index):return bytes(32)+address_bytes(audit)[32:]+bytes([index])+bytes(7)+(10000).to_bytes(16,"little")
 def vault_config(signers,receivers):
     data=bytearray(2400)
     for i,wallet in enumerate(signers):data[i*64:i*64+64]=address_bytes(wallet)
     data[192:196]=(30).to_bytes(4,"little");data[196:200]=(300).to_bytes(4,"little")
     data[200:216]=(10000).to_bytes(16,"little");data[216]=3
     for i,(receiver,weight) in enumerate(zip(receivers,[5000,3000,2000])):
-        o=224+i*136;data[o:o+64]=address_bytes(signers[i]);data[o+64:o+128]=address_bytes(receiver);data[o+128:o+130]=weight.to_bytes(2,"little")
+        o=224+i*136;data[o:o+64]=address_bytes(signers[i]);data[o+96:o+128]=address_bytes(receiver)[32:];data[o+128:o+130]=weight.to_bytes(2,"little")
     return bytes(data)
 def decoded(result):
     b=bytes.fromhex(result["raw_state"]);assert len(b)==4192
@@ -190,15 +237,19 @@ def run(sdk,output):
             # Receivers and the audit ledger keep the Developer key, their deploy
             # owner_id, at their owner_key_offset.
             owner_key=identities["developer"]
-            audit=stand.deploy("audit","audit",b"\x03",owner_id=owner_key)
+            # Publish each package; the developer wallet deploys the application's accounts.
+            stand.deploy("audit","audit-publication",b"\x03",owner_id=owner_key)
+            audit=stand.deploy("audit","audit",b"\x03",owner_id=owner_key,deployer="developer")
             # The host chooses the mode from the previous *whole* account image.
             audit_account = next(a for a in stand.command("inspect")["accounts"] if a["address"] == audit)
             assert audit_account["canonical_byte_length"] == 65_599, audit_account
             audit_limits = {"data_bytes": 65_540, "canonical_account_bytes": 65_599,
                             "first_post_init_mode": "DataPatchList"}
-            receivers=[stand.deploy("receiver",f"member-{i}",receiver_config(audit,i),owner_id=owner_key) for i in range(3)]
+            stand.deploy("receiver","receiver-publication",receiver_config(audit,0),owner_id=owner_key)
+            receivers=[stand.deploy("receiver",f"member-{i}",receiver_config(audit,i),owner_id=owner_key,deployer="developer") for i in range(3)]
             config=vault_config([stand.wallets[m] for m in members],receivers)
-            vault=stand.deploy("vault","revenue",config)
+            stand.deploy("vault","revenue-publication",config)
+            vault=stand.deploy("vault","revenue",config,owner_id=owner_key,deployer="developer")
             # Read actual fixture owner keys rather than assume them.
             r=stand.call(audit,"hub.audit.status");assert bytes.fromhex(r["raw_executor_output"])[9] == 1
             audit_owner=roles[r["raw_state"][8:72]]
@@ -254,8 +305,11 @@ def run(sdk,output):
                 r=stand.send(vault,"hub.vault.claim",bytes([i]),wallet=wallet)
                 assert decoded(r)["members"][i]["claimable"]==0
             r=stand.send(vault,"hub.vault.status");final=expect(r,received=10010,paid=10010,claimable=0,pending=0,dust=0,claim_attempts=5)
-            # The configuration, governance wallets included, never changed after init.
-            assert bytes.fromhex(r["raw_state"])[:2400]==config
+            # The configuration, governance wallets included, never changed after
+            # init, which placed the member receivers in the vault's DApp.
+            placed=bytearray(config)
+            for i in range(3):placed[288+i*136:320+i*136]=address_bytes(vault)[:32]
+            assert bytes.fromhex(r["raw_state"])[:2400]==placed
             actual_receipts=[]
             for i,address in enumerate(receivers):
                 r=stand.call(address,"hub.receiver.status",identity=receiver_owners[i]);b=bytes.fromhex(r["raw_state"])

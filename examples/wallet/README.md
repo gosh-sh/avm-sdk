@@ -26,7 +26,10 @@ destination DApp id and account id (32 bytes each), the destination method id
 currency id (`u32` LE) and amount (`u128` LE) in strictly ascending id order,
 and the message body. The external call's own `fuel_fee_shells` is paid from
 the wallet's SHELL; the internal message's FUEL reserve and value are debited
-from the wallet balance. With the callback flag set, the destination's status
+from the wallet balance. The body can be as large as the network allows: an
+external body of `max_body_size` (65,536 bytes) forwards 65,442 body bytes
+without extra currencies, and each entry takes 20 of them. With the callback
+flag set, the destination's status
 code and any returned currencies arrive in the `wallet.callback` event (fields
 `extra` and `status_code`), and a failed delivery returns the value.
 
@@ -40,6 +43,7 @@ and `avm-local-stand` on `PATH`, or select them with `AVM_CONTRACT_BUILD`,
 with `fund-user --shells ... --extra-currencies 0:500` and a developer wallet
 over the committed code, then checks that a foreign key and an external with
 value are rejected for free, a send with its callback, a failed delivery that
-returns `0:100` with status `1704`, malformed arguments (`1702`), a send from
+returns `0:100` with status `1704`, a send of a 65,442-byte body (one byte
+more is rejected at ingress), malformed arguments (`1702`), a send from
 an internal caller (`1701`), a key rotation, a keyless wallet and the replay.
 `AVM_WALLET_WORK` optionally retains the journey.

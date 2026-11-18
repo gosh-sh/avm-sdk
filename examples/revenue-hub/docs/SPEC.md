@@ -8,7 +8,10 @@ token denomination or a mapping/conversion of the former unnamed main asset.
 A deposit requires positive principal and may also donate positive SHELL; no
 other ECC is accepted. Membership is fixed on initialization: each of 1–16
 members has a unique wallet address, a unique recipient address, and positive basis-point
-weight. Weights sum to 10,000. All component addresses are in the same DApp.
+weight. Weights sum to 10,000. The vault, its member receivers and the audit
+ledger are in one DApp: constructor data names each in-DApp peer by account id
+with a zero DApp id, and `init` places the account's own DApp id. Member and
+signer wallets keep full addresses and may be in any DApp.
 
 For cumulative deposited principal `R`, member `i` is entitled to
 `E_i(R) = floor(R × weight_i / 10,000)`. Each deposit credits only
@@ -129,10 +132,12 @@ All fields are little-endian; addresses are DApp ID then account ID.
 
 Each member slot contains wallet address (64), destination (64), weight (2),
 padding (6). Unused slots are zero. Init extracts this configuration from the
-admitted ACDP deployment envelope. Deploy is permissionless: the configuration,
+admitted ACDP deployment envelope. There each destination has a zero DApp id;
+init places the vault's own DApp id, so the persisted configuration holds the
+full receiver address. Deploy is permissionless: the configuration,
 governance and member wallets included, is part of `init_data` and so of the
 account address. A redeploy with the same package, `owner_id`, salt and
-configuration is the same address; a different configuration is a different
+configuration is the same account id; a different configuration is a different
 vault. No method changes the configuration after init except the operating
 reserve slot, which governance controls.
 
@@ -167,7 +172,10 @@ The 224-byte receiver state holds its owner key (the deploy `owner_id`, at
 `owner_key_offset` 0; binding, fault controls and status are that owner's
 externals), audit address, once-bound
 vault address, member index, last accepted claim nonce, received total, receipt
-count, audit reserve, and rejection/duplicate fault controls.
+count, audit reserve, and rejection/duplicate fault controls. Its 88-byte
+constructor data is a zero DApp id, the audit ledger's account id (32), member
+index (1), zero padding (7) and audit reserve (16): the audit ledger lives in
+the receiver's DApp.
 
 Receipt body is `index:u8 + claim_nonce:u64 + amount:u128` (25 bytes). A receiver
 accepts only a regular internal transfer from its bound vault with a callback

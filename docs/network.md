@@ -15,7 +15,6 @@ You need:
 - the node's HTTP API base URL, for example `http://10.0.0.1:8600`, and its
   API token file if the node requires one; pass it with
   `--token-file <path>`;
-- the network's DApp id;
 - ed25519 key files: one that signs the deploy, the owner key that will sign
   calls and, to publish new code, a package-owner key. A key file holds the
   32-byte secret seed as 64 hex digits, or JSON
@@ -41,7 +40,7 @@ events; see [Events](events.md#read-events-on-the-local-stand) and
 ```bash
 avm-local-stand network-deploy --endpoint "$AVM_NODE" \
   --wasmtime-profile "$AVM_PROFILE" --key deployer.key \
-  --package-owner-key package-owner.key --dapp-id "$DAPP_ID" \
+  --package-owner-key package-owner.key \
   --wasm target/avm/contract.wasm --acab target/avm/contract.acab \
   --descriptor target/avm/contract.descriptor \
   --salt-hex 01 --init-json null --fuel-fee-shells 100000 --quote-address

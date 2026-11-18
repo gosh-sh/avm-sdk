@@ -1,10 +1,12 @@
 mod support;
+use avm_contract_sdk::AccountAddress;
 use avm_revenue_core::*;
 use avm_revenue_receiver::*;
 use support::*;
 fn initialized() -> Vec<u8> {
     let mut body = vec![0; 88];
-    put_address(&mut body, 0, address(9));
+    // The audit ledger is named by account id, with a zero DApp id.
+    body[32..64].copy_from_slice(&address(9).account_id);
     body[72..88].copy_from_slice(&10000u128.to_le_bytes());
     initialize::<PayoutReceiver>(&Spec {
         destination: address(2),
@@ -12,6 +14,28 @@ fn initialized() -> Vec<u8> {
         body: envelope(&body),
         ..Spec::default()
     })
+}
+fn init_spec(destination: AccountAddress, audit_slot: [[u8; 32]; 2]) -> Spec {
+    let mut body = vec![0; 88];
+    body[..32].copy_from_slice(&audit_slot[0]);
+    body[32..64].copy_from_slice(&audit_slot[1]);
+    body[72..88].copy_from_slice(&10000u128.to_le_bytes());
+    Spec { destination, deploy: true, body: envelope(&body), ..Spec::default() }
+}
+#[test]
+fn audit_is_named_by_account_id_and_lives_in_the_receiver_dapp() {
+    let init =
+        |s: &Spec| <PayoutReceiver as avm_contract_sdk::Contract>::init(input(&frame(&[], s)));
+    // A DApp id in the slot, a zero id and the receiver's own id are refused.
+    for slot in [[[0x22; 32], [9; 32]], [[0; 32], [0; 32]], [[0; 32], address(2).account_id]] {
+        fails(&init(&init_spec(address(2), slot)), E_RECEIVER_ARGS);
+    }
+    // A publication deploy creates a DApp whose id is the receiver's own id;
+    // its audit ledger resolves into that DApp, under the same checks.
+    let first = AccountAddress { dapp_id: [0x44; 32], account_id: [0x44; 32] };
+    let state = initialize::<PayoutReceiver>(&init_spec(first, [[0; 32], [9; 32]]));
+    assert_eq!((&state[32..64], &state[64..96]), (&first.dapp_id[..], &[9; 32][..]));
+    fails(&init(&init_spec(first, [[0; 32], first.account_id])), E_RECEIVER_ARGS);
 }
 fn bound() -> Vec<u8> {
     let s = initialized();

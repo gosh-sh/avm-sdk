@@ -14,7 +14,7 @@ avm-contract-build build --manifest-path <Cargo.toml>
 
 The contract directory must contain `avm-contract.toml` and its Cargo workspace
 must have a reviewed `Cargo.lock`. Rust/Cargo 1.99.1 is enforced. Successful output is
-written to `target/avm` below that directory. The SDK 0.6.4 builder enables
+written to `target/avm` below that directory. The SDK 0.6.5 builder enables
 `+wide-arithmetic`; its receipt records the exact guest compiler, Cargo and
 target flags. The native host compiler in the release profile is a separate
 identity, Rust/Cargo 1.98.0.
@@ -60,7 +60,8 @@ avm-local-stand <command> --state <path> --wasmtime-profile <path> [options]
 
 Commands and command-specific options:
 
-- `init`: `--dapp-id`.
+- `init`: optional `--dapp-id`, the stand's own DApp id, which no deploy uses;
+  without it `init` draws a fresh random one.
 - `fund-user`: `--address`, `--shells`, optional `--extra-currencies`
   (`id:amount` entries separated by commas, in strictly ascending id order,
   without SHELL, currency 2, which `--shells` credits).
@@ -80,8 +81,8 @@ Commands and command-specific options:
 - `upgrade`: `--address`, `--selected-code-id`,
   `--migration-payload-hex`, `--identity`, and the timestamp/fee options.
 - `delete-account`: optional `--address`. This is a control command of the
-  local stand, not a canonical message: it removes an account of the
-  initialized DApp from the stand state.
+  local stand, not a canonical message: it removes an account from the stand
+  state.
 - `compact-library`: optional `--package-id`.
 - `inspect`: optional `--account <dapp_id:account_id>`, which returns that
   account's raw and ABI-decoded state instead of the whole stand; see
@@ -116,7 +117,7 @@ avm-local-stand network-call --endpoint <url> [--token-file <path>]
   [--created-at <s>] [--expire-at <s>]
 avm-local-stand network-deploy --endpoint <url> [--token-file <path>]
   --wasmtime-profile <path> [--network-id <hex>] --key <path>
-  --dapp-id <hex> --wasm <path> --acab <path> --descriptor <path>
+  --wasm <path> --acab <path> --descriptor <path>
   (--package-owner-key <path> | --committed) --salt-hex <hex>
   --init-json <json> [--owner-id <hex>] --fuel-fee-shells <n>
   [--created-at <s>] [--expire-at <s>] [--quote-address]

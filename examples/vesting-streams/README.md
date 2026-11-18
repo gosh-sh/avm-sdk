@@ -27,8 +27,10 @@ callback settles or restores its entitlement. Missing callbacks keep that lane
 pending. Cancellation after end preserves all earned funds. Native callbacks may carry unused FUEL refunds as SHELL; those refunds
 cannot replace or enlarge the principal entitlement.
 
-The local journey deploys one wallet per stand identity, funds grants of
-1,000, 600 and 300 test units, exercises claims from a foreign wallet, externals
+The local journey deploys one wallet per stand identity and publishes the
+receiver and vesting packages; the owner wallet, the first contract of the
+application's DApp, then deploys the receivers and both grant books there by
+internal deploys. It funds grants of 1,000, 600 and 300 test units, exercises claims from a foreign wallet, externals
 under a foreign key or with value, and premature claims, rejects and retries a
 payout and a refund, then checks receiver totals `[[400,600],[400,200],[300,0]]`. It requires final
 claimed=1,100, refunded=800, held=0 and pending=0 for the primary grant book.
@@ -38,7 +40,7 @@ accepted inputs and fees. This is a local correctness fixture,
 not a network, production performance or security audit result.
 
 Use Rust 1.99.1 with rustfmt, Clippy and `wasm32-unknown-unknown`, Python 3.11+
-and a matching installed SDK/tool profile. From this example directory:
+with the `blake3` package and a matching installed SDK/tool profile. From this example directory:
 
 ```bash
 export TMPDIR=/path/to/external/scratch
@@ -57,7 +59,8 @@ compilations. The checksum-pinned Binaryen 133 optimizer runs twice and its
 outputs must match. Generated evidence goes into the external directory
 selected above.
 
-Recipients must be distinct accounts in the same DApp. Receivers are bound
+Recipients must be distinct accounts in the vesting account's DApp; constructor
+data names each by account id. Receivers are bound
 fixtures that retain payments and provide no withdrawal API. Callback checks
 use native VM authenticity and replay protection; they do not promise safety
 against arbitrary forged VM headers. No upgrade or state migration is supplied.

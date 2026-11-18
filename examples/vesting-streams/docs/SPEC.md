@@ -29,7 +29,9 @@ signs an external to its wallet and the wallet sends the internal call, with any
 value, to the vesting account. An external call is admitted only under the owner
 key the destination keeps in its data, and no external carries value. The vesting
 account keeps the owner public key at `owner_key_offset` 0; `init` requires the
-deploy `owner_id` and the external deploy signer to be that key. The owner acts
+deploy `owner_id` to be that key and the deployer to be the owner: an external
+deploy signed with that key or an internal deploy from the configured owner
+wallet. The owner acts
 either by a no-value external signed with that key or from the configured owner
 wallet; funding carries value and so arrives from the owner wallet. The owner must
 authenticate initialization and exact one-time funding. Both are accepted at
@@ -60,6 +62,8 @@ Every payout and refund destination is distinct across all streams, including
 zero-entitlement refund destinations of irrevocable streams. This lets the vault
 identify a failed callback's lane without relying on a success body. All destinations
 belong to the vesting account's DApp and differ from the vesting account itself.
+Constructor data names each destination by account id with a zero DApp id;
+`init` places the vesting account's own DApp id.
 Success echoes the 26-byte receipt: index `u8`, lane `u8`, nonce `u64`, amount `u128`.
 
 Callbacks must be native internal messages from the bound lane destination to
@@ -94,8 +98,8 @@ start at 120:
 | Row offset | Length | Meaning |
 | --- | ---: | --- |
 | 0 | 64 | Beneficiary wallet address |
-| 64 | 64 | Payout address |
-| 128 | 64 | Refund address |
+| 64 | 64 | Payout address (constructor data: zero DApp id, account id) |
+| 128 | 64 | Refund address (constructor data: zero DApp id, account id) |
 | 192 | 16 | Total principal |
 | 208 / 212 / 216 / 220 | 4 each | Start / cliff / end offsets and step duration |
 | 224 | 1 | Revocable flag |

@@ -210,7 +210,7 @@ def decode_state(data):
     assert number() == 0, "all prefunded fixture accounts must have deployed"
     contents.update(accounts={}, account_leaves={})
     count = number()
-    assert count == 2, "these journeys have exactly two complete accounts"
+    assert count in (2, 5, 7), "these journeys have two, five or seven complete accounts"
     for _ in range(count):
         address, claimed = take(64), take(32)
         lt, paid, due, unpaid = number(8), number(), number(16), number(1)
@@ -256,12 +256,19 @@ def batch_reserve_shells(current, operation_prices=True):
 def expected_journey(bundle, label, identities, transcript, times, current):
     """Construct the complete expected leaves from public fixture inputs.
 
-    Only the two signed deploy inputs supply their signature bytes for event
+    Only the signed deploy inputs supply their signature bytes for event
     message identities. Their complete unsigned headers/bodies are checked
     here; the public stand admission/replay checks signatures. No account,
     registry, event bytes, metadata or claimed root are used as an expectation.
     All times, transfers, rent sizes and transaction LTs below are fixed by the
     six journeys, not learned from a candidate or a saved successful run.
+
+    Each external deploy creates its own DApp at dapp_id == account_id
+    (avm-contracts.md "Deploy Address And dapp_id"). The five application
+    journeys also publish the wallet, the first contract of their DApp, which
+    creates the sender there by an internal deploy. The four contract-b
+    journeys also publish contract-a-v2; the wallet deploys it, and it deploys
+    contract-b with the value of one forward, as designed.
     """
     labels = {"version-upgrade", "contract-b", "contract-batch-patch",
               "trap", "out-of-fuel", "invalid-event"}
@@ -272,87 +279,109 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     batch_reserve = batch_reserve_shells(current, operation_prices)
     failure = label in {"trap", "out-of-fuel", "invalid-event"}
     second = "contract-a-v2" if version else "contract-b-failure" if failure else label
-    names = ["contract-a-v1", second]
+    if version:
+        names = ["contract-a-v1", second]
+    else:
+        names = ["contract-a-v1"] + ([] if batch else ["contract-a-v2"]) + [second, "wallet"]
+    receiver_index = names.index(second)
     artifacts = [{key: (bundle / "examples" / name / "target/avm" / ("contract." + key)).read_bytes()
                   for key in ("wasm", "acab", "descriptor")} for name in names]
     # A patch message to message-isolated code (descriptor byte 0 is the
     # execution mode) in the sender's DApp takes the local-free route: it
     # carries no FUEL fee and the sender's reserve is not debited.
-    if batch and artifacts[1]["descriptor"][0] == 0:
+    if batch and artifacts[receiver_index]["descriptor"][0] == 0:
         batch_reserve = 0
     codes = [h(item["wasm"]) for item in artifacts]
     descriptors = [h(item["descriptor"]) for item in artifacts]
     abis = [h(b"AVM_ABI" + item["acab"]) for item in artifacts]
-    package = h(b"AVM_CODE_PACKAGE" + codes[0])
+    # The wallet creates its own package; every other code is in the package
+    # that contract-a-v1 creates.
+    creators = {"contract-a-v1", "wallet"}
+    packages = [h(b"AVM_CODE_PACKAGE" + (code if name == "wallet" else codes[0])) for name, code in zip(names, codes)]
     selections = [h(b"AVM_CODE_SELECTION" + package + code + descriptor)
-                  for code, descriptor in zip(codes, descriptors)]
+                  for package, code, descriptor in zip(packages, codes, descriptors)]
     user = bytes.fromhex(identities["user"])
     owner = bytes.fromhex(identities["package_owner"])
     developer = bytes.fromhex(identities["developer"])
     # The version journey deploys contract-a-v1 with the package owner as owner_id.
-    owner_ids = [owner if version else user, user]
-    addresses = [b"\x11" * 32 + h(b"AVM_ACCOUNT_ID\0\0" + package + owner_id
-                 + le(len(name), 2) + name.encode() + h(b"")) for name, owner_id in zip(names, owner_ids)]
-    first, second_address = addresses
+    owner_ids = [owner if version else user] + [user] * (len(names) - 1)
+    # An ordinary external deploy creates its DApp originator: dapp_id ==
+    # account_id (avm-contracts.md "Deploy Address And dapp_id").
+    account_ids = [h(b"AVM_ACCOUNT_ID\0\0" + package + owner_id + le(len(name), 2) + name.encode() + h(b""))
+                   for name, package, owner_id in zip(names, packages, owner_ids)]
+    addresses = [account_id + account_id for account_id in account_ids]
     expected = {"accounts": {}, "account_leaves": {}, "registry": {},
                 "code": dict(zip(codes, [a["wasm"] for a in artifacts])),
                 "abi": dict(zip(abis, [a["acab"] for a in artifacts])), "events": [], "rings": {}}
     registry = expected["registry"]
-    registry[b"\x01" + package] = package + codes[0] + b"\x01" + owner + selections[0]
-    for index, (selection, code, descriptor, abi, artifact) in enumerate(zip(selections, codes, descriptors, abis, artifacts)):
-        count = (0 if index == 0 else 2) if version and current else 1
+    for index, (name, selection, package, code, descriptor, abi, artifact) in enumerate(
+            zip(names, selections, packages, codes, descriptors, abis, artifacts)):
+        if name in creators:
+            registry[b"\x01" + package] = package + code + b"\x01" + owner + selection
+        # In an application each code has its published account and the account made from it.
+        count = (0 if index == 0 else 2) if version and current else 1 if version or name == "wallet" else 2
         registry[b"\x02" + selection] = selection + package + code + descriptor + artifact["descriptor"] + b"\0"
         registry[b"\x03" + selection] = selection + le(count, 8)
         registry[b"\x04" + code] = code + le(count, 8)
         registry[b"\x05" + selection] = selection + abi
 
     start = 1_800_000_000
+    deploys = len(names)
     # Admission rejects a call under a key other than the owner key: the
     # user's upgrade and the external to the keyless batch receiver are no input.
-    offsets = [1, 2, 4, 6, 7, 8] if version else [1, 2, 3, 3] if batch else [1, 2, 3, 3, 3]
+    # An application block holds the external deploy, the two wallet sends with
+    # their deploy and callback, contract-a-v2's deploy of contract-b with the
+    # two payouts, and the forward with its delivery and callback.
+    offsets = [1, 2, 4, 6, 7, 8] if version else (
+        list(range(1, deploys + 1)) + [deploys + 1] * 3 + [deploys + 2] * 3
+        + ([deploys + 3] * 2 if batch else [deploys + 3] * 4 + [deploys + 4] * 3))
     assert times == [start + offset for offset in offsets] and len(transcript) == len(offsets)
 
-    def external(wire, index, pubkey, nonce, at, method, body, deploy=False, extras=()):
+    def external(wire, destination, pubkey, nonce, at, method, body, deploy=False, extras=()):
         prefix = struct.pack("<BBHIQ", 1, 3 if deploy else 1, len(extras), len(body), method)
         prefix += le(1, 16) + le(nonce, 8) + le(at, 4) + le(at + 3600, 4)
-        prefix += addresses[index] + pubkey + le(64, 2) + bytes(46)
+        prefix += destination + pubkey + le(64, 2) + bytes(46)
         prefix += b"".join(le(key, 4) + le(value, 16) for key, value in extras) + body
         assert wire[:-64] == prefix and len(wire) == len(prefix) + 64, "public external fixture input differs"
         assert wire[-64:] != bytes(64)
 
-    for index, transcript_index in enumerate((0, 2 if version else 1)):
+    def init_event(index, address, message_id, lt, at):
+        fields = [("account", "address", address), ("init_data_hash", "data", h(b"")),
+                  ("owner", "data", owner_ids[index]), ("package", "data", packages[index]),
+                  ("salt", "data", names[index].encode()), ("selected_code", "data", selections[index]),
+                  ("ui_name", "data", b"")]
+        expected["events"].append(event_bytes(address, message_id, lt, at, 0, 0,
+            int.from_bytes(h(b"avm.account.init")[:8], "little"), "avm.account.init", [], fields))
+
+    for index, transcript_index in enumerate((0, 2) if version else range(deploys)):
         artifact, name, address = artifacts[index], names[index], addresses[index]
-        body = b"ACDP" + le(0x17 if index == 0 else 2, 2) + bytes(2)
-        body += selections[index] + package + codes[index] + descriptors[index] + owner_ids[index] + h(b"")
-        body += (owner if index == 0 else bytes(32)) + abis[index]
+        creator = name in creators
+        body = b"ACDP" + le(0x17 if creator else 2, 2) + bytes(2)
+        body += selections[index] + packages[index] + codes[index] + descriptors[index] + owner_ids[index] + h(b"")
+        body += (owner if creator else bytes(32)) + abis[index]
         body += bytes(2) + le(len(name), 2) + bytes(4)
         functions = function_count(artifact["wasm"]) if current else 0
         body += le(len(artifact["wasm"]), 4) + le(len(artifact["descriptor"]), 4) + le(len(artifact["acab"]), 4)
         body += bytes(2) + le(functions, 2)
         body += name.encode() + artifact["wasm"] + artifact["descriptor"] + artifact["acab"]
         wire = transcript[transcript_index]
-        external(wire, index, developer if index == 0 else owner, 1, times[transcript_index], 0, body, deploy=True)
+        external(wire, address, developer if creator else owner, 1, times[transcript_index], 0, body, deploy=True)
         if current:
             stamp = le(transcript_index + 1, 4) + b"\x71" * 34
             registry[b"\x09" + selections[index]] = selections[index] + stamp
-            if index == 0:
-                registry[b"\x08" + package] = package + stamp
-        fields = [("account", "address", address), ("init_data_hash", "data", h(b"")),
-                  ("owner", "data", owner_ids[index]), ("package", "data", package),
-                  ("salt", "data", name.encode()), ("selected_code", "data", selections[index]),
-                  ("ui_name", "data", b"")]
-        lt = 2 if index == 0 else 5 if version else 4
-        expected["events"].append(event_bytes(address, h(b"AVM_EXTERNAL_MESSAGE_ID" + wire),
-            lt, times[transcript_index], 0, 0, int.from_bytes(h(b"avm.account.init")[:8], "little"),
-            "avm.account.init", [], fields))
+            if creator:
+                registry[b"\x08" + packages[index]] = packages[index] + stamp
+        # An external deploy takes two logical times; its init event has the second.
+        init_event(index, address, h(b"AVM_EXTERNAL_MESSAGE_ID" + wire), 5 if version and index else 2 * index + 2,
+                   times[transcript_index])
 
-    def account(index, selection, ecc0, shells, extra, data, lt, paid):
+    def account(address, selection, ecc0, shells, extra, data, lt, paid):
         currencies = {2: shells, **extra}
         if ecc0:
             currencies[0] = ecc0
         image = account_image(selection, currencies, data)
-        expected["accounts"][addresses[index]] = image
-        expected["account_leaves"][addresses[index]] = account_leaf(addresses[index], image, lt, start + paid)
+        expected["accounts"][address] = image
+        expected["account_leaves"][address] = account_leaf(address, image, lt, start + paid)
 
     # Config prices: publication=1000 per started unit of code, init=10, external
     # delivery=1, requested FUEL=1, callback=1, rent=canonical_image_bytes*elapsed_seconds.
@@ -360,13 +389,13 @@ def expected_journey(bundle, label, identities, transcript, times, current):
                             if current else 1000) + 10 + 1 + 1) for item in artifacts]
     if version:
         version_method = int.from_bytes(h(b"causal.a.version")[:8], "little")
-        external(transcript[1], 0, owner, 1, start + 2, version_method, b"")
+        external(transcript[1], addresses[0], owner, 1, start + 2, version_method, b"")
         migration = b"avm-a-v2-migrate-state!!"
         for pos, pubkey, nonce, payload in ((3, owner, 2, b"avm-a-v2-migrate-state!?"),
                                           (4, owner, 3, migration)):
             body = b"ACUG" + selections[1] + codes[1] + le(len(payload), 4) + payload
-            external(transcript[pos], 0, pubkey, nonce, times[pos], 0xc2c6c51bc610249d, body)
-        external(transcript[5], 0, owner, 4, start + 8, version_method, b"")
+            external(transcript[pos], addresses[0], pubkey, nonce, times[pos], 0xc2c6c51bc610249d, body)
+        external(transcript[5], addresses[0], owner, 4, start + 8, version_method, b"")
         state = bytearray(72)
         if current:
             state[16:20] = b"V1MG"
@@ -374,54 +403,136 @@ def expected_journey(bundle, label, identities, transcript, times, current):
             state[24:48] = migration
             state[48:72] = migration
         state[16] = 2 if current else 1
-        account(0, selections[1] if current else selections[0], 0,
+        account(addresses[0], selections[1] if current else selections[0], 0,
                 funded[0] - 4 * 2 - (39 + 20 + 104) * 7, {}, bytes(state) + owner, 8, 8)
-        account(1, selections[1], 0, funded[1], {}, bytes(72) + user, 5, 4)
+        account(addresses[1], selections[1], 0, funded[1], {}, bytes(72) + user, 5, 4)
         return expected
+
+    # The internal deploys create the accounts in the wallet's DApp; their
+    # account ids do not depend on the DApp.
+    wallet = addresses[-1]
+    first = wallet[:32] + account_ids[0]
+    second_address = wallet[:32] + account_ids[receiver_index]
+    deployer = None if batch else wallet[:32] + account_ids[1]
+    value = [(0, 37), (7, 11)]
+
+    def message(flags, method, fuel, lt, at, source, destination, header=b"", extra=(), body=b""):
+        """A VM-produced internal message: header, callback (request) header, currencies, body."""
+        return (struct.pack("<BBHI", 0, flags, len(extra), len(body)) + method + le(fuel, 16) + le(lt, 8)
+                + le(at, 4) + bytes(4) + source + destination + header
+                + b"".join(le(key, 4) + le(amount, 16) for key, amount in extra) + body)
+
+    def deploy_body(index):
+        """The deploy of a published selection: no code bytes, the user as owner_id."""
+        name = names[index].encode()
+        return (b"ACDP" + bytes(4) + selections[index] + packages[index] + codes[index] + descriptors[index]
+                + user + h(b"") + bytes(66) + le(len(name), 2) + bytes(20) + name)
+
+    ring = []
+
+    def causal_events(tx_hash, lt, at, count, seq):
+        """contract-b's two events of one valued delivery; the internal one enters its ring."""
+        for kind, event_class, name, topics, fields in (
+            (0, 0x71228a3dc1799631, "causal.a.forwarded", [second_address[32:]],
+             [("count", "u64", count), ("destination", "address", second_address), ("value_ecc0", "u128", 37)]),
+            (1, 0x127e58f93e9d40f8, "causal.a.state", [le(count, 8)],
+             [("count", "u64", count), ("state", "data", le(count, 8) + bytes(64))]),
+        ):
+            event = event_bytes(second_address, tx_hash, lt, at, seq + kind, kind, event_class, name, topics, fields)
+            expected["events"].append(event)
+            if kind == 1:
+                ring.append(event)
+                key = h(b"AVM_INTERNAL_EVENT_RING_KEY" + second_address + le(event_class, 8))
+                expected["rings"][key] = (b"AIER" + le(len(ring), 1) + bytes(3)
+                                          + b"".join(le(len(item), 4) + item for item in ring))
+
+    # The user signs one wallet.send per deploy: destination, method id 0, no
+    # FUEL reserve on the local-free route, a callback request, no currencies
+    # and the deploy. The deploy callback runs the wallet's handler, which
+    # reports it in a wallet.callback event.
+    send = int.from_bytes(h(b"wallet.send")[:8], "little")
+    on_callback = h(b"wallet.callback")[:8]
+    for nonce, index, target in ((1, 0, first), (2, receiver_index if batch else 1, second_address if batch else deployer)):
+        wire, lt = deploys + 3 * nonce - 3, 2 * deploys + 5 * nonce - 3
+        at, body = times[wire], deploy_body(index)
+        args = target + bytes(24) + b"\x01\x00" + body
+        external(transcript[wire], wallet, user, nonce, at, send, le(len(args), 4) + args)
+        deploy = message(6, bytes(8), 0, lt, at, wallet, target, on_callback, (), body)
+        assert transcript[wire + 1] == deploy, "complete VM-produced deploy differs"
+        init_event(index, target, h(deploy), lt + 1, at)
+        callback = message(1, on_callback, 1, lt + 2, at, target, wallet, h(deploy) + wallet + le(0, 4))
+        assert transcript[wire + 2] == callback, "complete VM-produced deploy callback differs"
+        expected["events"].append(event_bytes(wallet, h(callback), lt + 3, at, 0, 0,
+            int.from_bytes(on_callback, "little"), "wallet.callback", [h(deploy)],
+            [("extra", "data", b""), ("status_code", "u64", 0)]))
+    if not batch:
+        # As designed, contract-a-v2's causal.a.deploy (destination, method id
+        # 0, no callback, the deploy) sends the deploy with the value of one
+        # forward. contract-b's init counts that delivery and pays 1 of ECC 0
+        # twice back; contract-a-v2's causal.a.version keeps each payout.
+        wire, lt = deploys + 6, 2 * deploys + 12
+        at, body = times[wire], deploy_body(receiver_index)
+        args = second_address + bytes(16) + body
+        external(transcript[wire], deployer, user, 1, at, int.from_bytes(h(b"causal.a.deploy")[:8], "little"),
+                 le(len(args), 4) + args)
+        deploy = message(2, bytes(8), 0, lt, at, deployer, second_address, b"", value, body)
+        assert transcript[wire + 1] == deploy, "complete VM-produced deploy differs"
+        init_event(receiver_index, second_address, h(deploy), lt + 1, at)
+        causal_events(h(deploy), lt + 1, at, 1, 1)
+        payouts = [message(0, h(b"causal.a.version")[:8], 0, lt + 2 + i, at, second_address, deployer, extra=[(0, 1)])
+                   for i in (0, 1)]
+        assert transcript[wire + 2:wire + 4] == payouts, "complete VM-produced payouts differ"
+        # The deploy call pays one second of rent, delivery and requested FUEL.
+        account(deployer, selections[1], 2, 1_000_000 - 10 - (39 + 3 * 20 + 104) - 2, {7: 0},
+                le(1, 8) + bytes(64) + user, lt + 5, deploys + 3)
+    published = {"contract-a-v1": bytes(72) + user, "contract-a-v2": bytes(72) + user,
+                 "contract-batch-patch": le(65536, 4) + bytes(65536)}
+    for index, name in enumerate(names[:-1]):
+        account(addresses[index], selections[index], 0, funded[index], {}, published.get(name, bytes(128)),
+                2 * index + 2, index + 1)
+    # Each wallet.send pays one second of rent, delivery, requested FUEL and
+    # the deploy callback.
+    account(wallet, selections[-1], 0, funded[-1] - 2 * (39 + 20 + 32 + 3), {}, user, 2 * deploys + 10, deploys + 2)
 
     method_name = "causal.batch.patch" if batch else "causal.b.drain" if label in {"trap", "out-of-fuel"} else "causal.b.receive"
     method = h(method_name.encode())[:8]
     handler = bytes(8) if batch else h(b"causal.a.callback")[:8] if not failure else (
         h(b"causal.a.version")[:8] if label == "out-of-fuel" else le(0xc2c6c51bc610249d, 8))
     forward = second_address + method + handler
-    external(transcript[2], 0, user, 1, start + 3,
-             int.from_bytes(h(b"causal.a.forward")[:8], "little"), forward)
+    pos, lt = (deploys + 6, 2 * deploys + 10) if batch else (deploys + 10, 2 * deploys + 17)
+    at = times[pos]
+    external(transcript[pos], first, user, 1, at, int.from_bytes(h(b"causal.a.forward")[:8], "little"), forward)
     delivered = struct.pack("<BBHI", 0, 0 if batch else 4, 2, 16) + method
-    delivered += le(batch_reserve if batch else 0, 16) + le(6, 8) + le(start + 3, 4) + bytes(4)
+    delivered += le(batch_reserve if batch else 0, 16) + le(lt + 2, 8) + le(at, 4) + bytes(4)
     delivered += first + second_address + (b"" if batch else handler) + le(0, 4) + le(37, 16) + le(7, 4) + le(11, 16) + b"\x42" * 16
-    assert transcript[3] == delivered, "complete VM-produced message differs"
+    assert transcript[pos + 1] == delivered, "complete VM-produced message differs"
     sender = bytearray(le(1, 8) + bytes(64))
-    # The sender is prefunded with ECC 0 and currency 7 next to its SHELL.
-    sender_shells = funded[0] - (39 + 3 * 20 + 104) * 2 - 2 - (batch_reserve if batch else 1)
+    # The sender is prefunded with ECC 0 and currency 7 next to its SHELL,
+    # pays the init fee of its deploy and rent from its deploy to the forward.
+    sender_shells = 1_000_000 - 10 - (39 + 3 * 20 + 104) * (2 if batch else 3) - 2 - (batch_reserve if batch else 1)
     if batch:
         receiver = le(65536, 4) + le(1, 8) + bytes(65528)
-        account(0, selections[0], 63, sender_shells, {7: 29}, bytes(sender) + user, 5, 3)
-        account(1, selections[1], 37, funded[1] - (39 + 20 + 65540), {7: 11}, receiver, 7, 3)
+        account(first, selections[0], 63, sender_shells, {7: 29}, bytes(sender) + user, lt + 1, deploys + 3)
+        account(second_address, selections[receiver_index], 37, 1_000_000 - 10 - (39 + 20 + 65540), {7: 11},
+                receiver, lt + 3, deploys + 3)
     else:
         status = {"trap": 30, "out-of-fuel": 31, "invalid-event": 44}.get(label, 0)
         callback = struct.pack("<BBHI", 0, 1, 2 if failure else 0, 0 if failure else 16) + handler
-        callback += le(1, 16) + le(8, 8) + le(start + 3, 4) + bytes(4)
+        callback += le(1, 16) + le(lt + 4, 8) + le(at, 4) + bytes(4)
         callback += second_address + first + h(delivered) + first + le(status, 4)
         callback += le(0, 4) + le(37, 16) + le(7, 4) + le(11, 16) if failure else b"\x99" * 16
-        assert transcript[4] == callback, "complete VM-produced callback differs"
+        assert transcript[pos + 2] == callback, "complete VM-produced callback differs"
         if failure:
-            receiver = bytes(128)
+            # The failed delivery leaves the state of the receiver's init.
+            receiver = le(1, 8) + bytes(120)
         else:
             sender[8:16], sender[20:24], sender[24:40], sender[40:72] = le(1, 8), le(16, 4), b"\x99" * 16, h(delivered)
-            receiver = le(1, 8) + first + le(37, 16) + le(1, 4) + le(7, 4) + le(11, 16) + method + le(16, 4) + b"\x42" * 4
-            for seq, kind, event_class, name, topics, fields in (
-                (0, 0, 0x71228a3dc1799631, "causal.a.forwarded", [second_address[32:]],
-                 [("count", "u64", 1), ("destination", "address", second_address), ("value_ecc0", "u128", 37)]),
-                (1, 1, 0x127e58f93e9d40f8, "causal.a.state", [le(1, 8)],
-                 [("count", "u64", 1), ("state", "data", le(1, 8) + bytes(64))]),
-            ):
-                event = event_bytes(second_address, h(delivered), 7, start + 3, seq, kind, event_class, name, topics, fields)
-                expected["events"].append(event)
-                if kind == 1:
-                    key = h(b"AVM_INTERNAL_EVENT_RING_KEY" + second_address + le(event_class, 8))
-                    expected["rings"][key] = b"AIER\x01\0\0\0" + le(len(event), 4) + event
-        account(0, selections[0], 100 if failure else 63, sender_shells,
-                {7: 40 if failure else 29}, bytes(sender) + user, 9, 3)
-        account(1, selections[1], 0 if failure else 37, funded[1] - (39 + 20 + 128),
-                {} if failure else {7: 11}, receiver, 7, 3)
+            receiver = le(2, 8) + first + le(37, 16) + le(1, 4) + le(7, 4) + le(11, 16) + method + le(16, 4) + b"\x42" * 4
+            causal_events(h(delivered), lt + 3, at, 2, 0)
+        account(first, selections[0], 100 if failure else 63, sender_shells,
+                {7: 40 if failure else 29}, bytes(sender) + user, lt + 5, deploys + 4)
+        # The receiver keeps the value of its deploy less the two payouts and
+        # pays rent from its deploy to the forward.
+        account(second_address, selections[receiver_index], 35 if failure else 72,
+                1_000_000 - 10 - (39 + 3 * 20 + 128), {7: 11 if failure else 22}, receiver, lt + 3, deploys + 4)
     return expected

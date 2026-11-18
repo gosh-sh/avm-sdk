@@ -23,7 +23,7 @@ fn sixteen_beneficiaries_can_hold_and_settle_full_u128_revenue_concurrently() {
             weight: 625,
         };
     }
-    let spec = Spec { deploy: true, body: envelope(&c.encode()), ..Spec::default() };
+    let spec = Spec { deploy: true, body: envelope(&init_data(&c)), ..Spec::default() };
     let state = initialize::<RevenueVault>(&spec);
     let mut v = Vault { state, time: 10, lt: 10 };
     v.deposit(u128::MAX);
@@ -41,10 +41,33 @@ fn sixteen_beneficiaries_can_hold_and_settle_full_u128_revenue_concurrently() {
 
 #[test]
 fn initialization_rejects_an_untested_cross_dapp_destination() {
-    let mut c = config();
-    c.members[0].destination.dapp_id = [0x22; 32];
-    let spec = Spec { deploy: true, body: envelope(&c.encode()), ..Spec::default() };
+    // Member receivers are named by account id: a DApp id in the slot is refused.
+    let mut data = init_data(&config());
+    data[MEMBERS_BASE + 64..MEMBERS_BASE + 96].copy_from_slice(&[0x22; 32]);
+    let spec = Spec { deploy: true, body: envelope(&data), ..Spec::default() };
     let bytes = frame(&[], &spec);
+    fails(&<RevenueVault as avm_contract_sdk::Contract>::init(input(&bytes)), E_ARGS);
+}
+#[test]
+fn publication_deploy_places_member_receivers_in_its_own_dapp() {
+    // A publication deploy creates a DApp whose id is the vault's own id.
+    let first = AccountAddress { dapp_id: [0x44; 32], account_id: [0x44; 32] };
+    let spec = Spec {
+        deploy: true,
+        destination: first,
+        body: envelope(&init_data(&config())),
+        ..Spec::default()
+    };
+    let state = initialize::<RevenueVault>(&spec);
+    let placed = Config::decode(&state[..CONFIG_BYTES]).unwrap();
+    for (member, named) in placed.members.iter().zip(config().members).take(3) {
+        let a = member.destination;
+        assert_eq!((a.dapp_id, a.account_id), (first.dapp_id, named.destination.account_id));
+    }
+    // The same checks apply: its own account id is refused.
+    let mut c = config();
+    c.members[0].destination = first;
+    let bytes = frame(&[], &Spec { body: envelope(&init_data(&c)), ..spec });
     fails(&<RevenueVault as avm_contract_sdk::Contract>::init(input(&bytes)), E_ARGS);
 }
 #[test]
@@ -197,7 +220,7 @@ fn init_is_permissionless_and_the_config_is_fixed() {
         time: 0,
         actor: STRANGER,
         deploy: true,
-        body: envelope(&config().encode()),
+        body: envelope(&init_data(&config())),
         ..Spec::default()
     };
     let b = frame(&[], &s);

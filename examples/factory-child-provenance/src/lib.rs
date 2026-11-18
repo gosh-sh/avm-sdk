@@ -13,9 +13,9 @@
 //!
 //! `prove.sh` runs the cases on a local stand. Address derivation proves the
 //! package, owner, salt and constructor data of a sender, not the code version
-//! it runs, and the owner field is not bound to the deployer, so the factory
-//! cannot tell its own children from a child of another version of the same
-//! package deployed by someone else.
+//! it runs. Only a contract in the factory's DApp can deploy at that address,
+//! and here only the factory does, with its own code version, so `accept`
+//! counts only the factory's own children.
 
 use avm_contract_sdk::set_owner_key;
 use avm_contract_sdk::AccountAddress;

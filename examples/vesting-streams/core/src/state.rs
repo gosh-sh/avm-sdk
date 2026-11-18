@@ -105,6 +105,16 @@ impl Config {
         b
     }
     pub fn decode(b: &[u8]) -> ResultCode<Self> {
+        Self::decode_in(b, None)
+    }
+    /// Decodes deploy init data. Payout and refund receivers live in the
+    /// deployed account's DApp, so the init data names each one by account id:
+    /// the DApp id half of its address is zero, and `dapp_id`, the DApp of the
+    /// deployed account, is placed there.
+    pub fn decode_init(b: &[u8], dapp_id: [u8; 32]) -> ResultCode<Self> {
+        Self::decode_in(b, Some(dapp_id))
+    }
+    fn decode_in(b: &[u8], dapp_id: Option<[u8; 32]>) -> ResultCode<Self> {
         if b.len() != CONFIG_BYTES || b[113..HEADER_BYTES] != [0; 7] {
             return Err(E_ARGS);
         }
@@ -131,6 +141,16 @@ impl Config {
                 step: u32_at(b, o + 220)?,
                 revocable: b[o + 224] == 1,
             };
+        }
+        if let Some(dapp_id) = dapp_id {
+            for s in &mut c.streams[..usize::from(c.count).min(MAX_STREAMS)] {
+                for a in [&mut s.payout, &mut s.refund] {
+                    if a.dapp_id != [0; 32] {
+                        return Err(E_ARGS);
+                    }
+                    a.dapp_id = dapp_id;
+                }
+            }
         }
         c.validate()?;
         Ok(c)

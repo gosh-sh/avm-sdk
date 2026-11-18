@@ -18,12 +18,14 @@ impl Contract for RevenueVault {
 
 fn initialize(input: MessageInput<'_>) -> HubResult<MessageOutput> {
     // Deploy is permissionless: the configuration, governance wallets included,
-    // is part of init_data and so of the account address.
-    let config = Config::decode(input.deploy().map_err(|_| E_ARGS)?.init_data())?;
+    // is part of init_data and so of the account address. Member receivers are
+    // named by account id and live in this vault's DApp.
+    let init_data = input.deploy().map_err(|_| E_ARGS)?.init_data();
+    let config = Config::decode_init(init_data, input.destination.dapp_id)?;
     if !input.state.is_empty()
-        || config.members[..usize::from(config.count)].iter().any(|m| {
-            m.destination == input.destination || m.destination.dapp_id != input.destination.dapp_id
-        })
+        || config.members[..usize::from(config.count)]
+            .iter()
+            .any(|m| m.destination == input.destination)
     {
         return Err(E_ARGS);
     }

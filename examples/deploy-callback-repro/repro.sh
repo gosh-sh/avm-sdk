@@ -135,8 +135,12 @@ package_id="$(jq -r '.registry_entries[] | select(.key | startswith("01")) | .ke
 capture="${work}/capture.state"
 cp "$base" "$capture"
 cli_deploy "$capture" 6368696c64 --package-id "$package_id" --selected-code-id "$selected_code_id"
-child="$deployed"
-read_state "$capture" "$child"
+# That external deploy makes the capture account the first contract of its own
+# DApp. The parent's internal deploys of the same body stay in the parent's
+# DApp: the same account id with the parent's DApp id.
+external_child="$deployed"
+child="${parent%%:*}:${deployed#*:}"
+read_state "$capture" "$external_child"
 captured="$hex"
 init_method_le="$(slice "$captured" 40 48)"
 body_len=$((16#$(slice "$captured" 48 52 | fold -w2 | tac | tr -d '\n')))
@@ -144,10 +148,10 @@ body_len=$((16#$(slice "$captured" 48 52 | fold -w2 | tac | tr -d '\n')))
 deploy_body="$(slice "$captured" 64 $((64 + body_len)))"
 [[ "$deploy_body" == 41434450* ]] || fail "captured init body is not ACDP"
 
-# Positive control: ordinary call to the existing child with a callback request.
+# Positive control: ordinary call to the existing capture account with a callback request.
 control="${work}/control.state"
 cp "$capture" "$control"
-call "$control" "$parent" repro.forward "$(forward_args "$child" "$ping_method_le" 01 "")" \
+call "$control" "$parent" repro.forward "$(forward_args "$external_child" "$ping_method_le" 01 "")" \
   "${work}/control.json"
 read_state "$control" "$parent"
 control_parent="$hex"
@@ -155,6 +159,23 @@ control_parent="$hex"
 [[ "$(slice "$control_parent" 3 4)" == 01 ]] || fail "control callback count"
 echo "ordinary call, callback request 01: parent phase $(slice "$control_parent" 0 1)," \
   "callback status $(slice "$control_parent" 4 8)"
+
+# The parent forwards the largest body the network allows, with a callback
+# request: the external body is max_body_size (65,536 bytes), 77 of them the
+# length prefix and the forward header. One byte more is rejected at ingress.
+largest="${work}/largest-body.state"
+cp "$capture" "$largest"
+largest_args="$(forward_args "$external_child" "$ping_method_le" 01 "$(printf "%0$((2 * 65459))d" 0)")"
+call "$largest" "$parent" repro.forward "$largest_args" "${work}/largest-body.json"
+read_state "$largest" "$parent"
+[[ "$(slice "$hex" 0 1)" == 02 && "$(slice "$hex" 3 4)" == 01 ]] || fail "largest body callback"
+[[ "$(slice "$hex" 4 8)" == 00000000 ]] || fail "largest body delivery status"
+tick
+run "$largest" call --address "$parent" --method repro.forward --args-json "${largest_args%\"}00\"" \
+  --identity user --extra-currencies '' "${timestamps[@]}" >"${work}/oversized-body.json" 2>/dev/null || true
+jq -r .error "${work}/oversized-body.json" | grep -q "exceeds the configured canonical byte limit" ||
+  fail "a body one byte over max_body_size was not rejected at ingress"
+echo "largest body: 65459 bytes forwarded and delivered with a callback, one byte more rejected at ingress"
 
 # Same parent forwards the captured deploy body, with and without a callback request.
 for request_callback in 00 01; do
@@ -196,12 +217,13 @@ for failure in active malformed wrong-address; do
     target="$child"
     body="$deploy_body"
     if [[ "$failure" == active ]]; then
-      cp "$capture" "$rejected"
+      # The deploy without a callback request above left the child active.
+      cp "${work}/deploy-00.state" "$rejected"
     else
       cp "$base" "$rejected"
       if [[ "$failure" == malformed ]]; then body=41434450; fi
       if [[ "$failure" == wrong-address ]]; then
-        target="${dapp_id}:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        target="${parent%%:*}:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
       fi
       run "$rejected" fund-user --address "$target" --shells 10000000 >/dev/null
     fi
@@ -239,15 +261,16 @@ echo "PASS: deploy precheck failures deliver requested status 63 callbacks or no
 # Ordinary calls in the same DApp and across DApps, to a receiver that succeeds
 # or rejects with status 1505, with and without a callback request. A requested
 # callback returns the unused part of the 1000 SHELL cross-DApp reserve
-# (docs/fuel-and-fees.md). The remote child lives in DApp 22..22 and is created
-# by an internal deploy from the parent.
-remote="2222222222222222222222222222222222222222222222222222222222222222:${child#*:}"
+# (docs/fuel-and-fees.md). The same-DApp child is created by an internal deploy
+# from the parent; the remote one is the externally deployed capture account,
+# the first contract of its own DApp.
+remote="$external_child"
 routes="${work}/routes.state"
 cp "$capture" "$routes"
-run "$routes" fund-user --address "$remote" --shells 10000000 >/dev/null
+run "$routes" fund-user --address "$child" --shells 10000000 >/dev/null
 call "$routes" "$parent" repro.forward \
-  "$(forward_args "$remote" "$init_method_le" 01 "$deploy_body")" "${work}/remote-deploy.json"
-has_account "$routes" "$remote" || fail "remote child was not created"
+  "$(forward_args "$child" "$init_method_le" 01 "$deploy_body")" "${work}/child-deploy.json"
+has_account "$routes" "$child" || fail "same-DApp child was not created"
 for destination in "$child" "$remote"; do
   route=same-dapp
   [[ "$destination" == "$child" ]] || route=cross-dapp

@@ -5,7 +5,8 @@ use avm_stream_vesting::Vesting;
 use support::*;
 
 fn deployed(time: u32) -> Book {
-    let spec = Spec { deploy: true, body: envelope(&config().encode()), time, ..Spec::default() };
+    let spec =
+        Spec { deploy: true, body: envelope(&init_data(&config())), time, ..Spec::default() };
     Book { state: initialize::<Vesting>(&spec), time, lt: 10 }
 }
 
@@ -30,8 +31,12 @@ fn relative_first_claim_after_terminal_cliff_releases_all() {
     for origin in [0, 100, 1_800_000_000, u32::MAX - 300] {
         let mut cfg = config();
         cfg.streams[0].cliff = cfg.streams[0].end;
-        let spec =
-            Spec { deploy: true, body: envelope(&cfg.encode()), time: origin, ..Spec::default() };
+        let spec = Spec {
+            deploy: true,
+            body: envelope(&init_data(&cfg)),
+            time: origin,
+            ..Spec::default()
+        };
         let mut book = Book { state: initialize::<Vesting>(&spec), time: origin, lt: 10 };
         assert_eq!(book.call(OWNER, ids::FUND, vec![], 2000, origin).status_code, 0);
         fails(book.claim(0, origin + 199), E_EMPTY);
@@ -54,7 +59,7 @@ fn relative_cancellation_after_end_preserves_all_earned_funds() {
 #[test]
 fn relative_init_uses_execution_context_not_message_creation_time() {
     let spec =
-        Spec { deploy: true, body: envelope(&config().encode()), time: 1000, ..Spec::default() };
+        Spec { deploy: true, body: envelope(&init_data(&config())), time: 1000, ..Spec::default() };
     let mut bytes = frame(&[], &spec);
     bytes[12..16].copy_from_slice(&5u32.to_le_bytes());
     let output = Vesting::init(input(&bytes));
@@ -69,7 +74,7 @@ fn relative_init_uses_execution_context_not_message_creation_time() {
 #[test]
 fn relative_address_preimage_is_the_actual_contract_init_config() {
     let cfg = config();
-    let expected = cfg.encode();
+    let expected = init_data(&cfg);
     for origin in [0, 1_800_000_000, u32::MAX] {
         let spec =
             Spec { deploy: true, body: envelope(&expected), time: origin, ..Spec::default() };
@@ -79,9 +84,12 @@ fn relative_address_preimage_is_the_actual_contract_init_config() {
         let output = Vesting::init(message);
         assert_eq!(output.status_code, 0);
         let state = apply(&[], output.state_update.as_ref().unwrap());
-        assert_eq!(&state[..avm_stream_core::state::CONFIG_BYTES], expected);
+        // The state keeps the init config, with the receivers placed in the
+        // account's own DApp.
+        assert_eq!(&state[..avm_stream_core::state::CONFIG_BYTES], cfg.encode());
         let actual = avm_stream_core::state::Config::decode(&state[..expected.len()]).unwrap();
         assert_eq!(actual, cfg);
+        assert_eq!(init_data(&actual), expected);
     }
 }
 #[test]
@@ -91,8 +99,12 @@ fn relative_zero_offset_starts_accrual_on_the_first_execution() {
     cfg.streams[0].cliff = 0;
     cfg.streams[0].end = 100;
     for origin in [0, 1_800_000_000] {
-        let spec =
-            Spec { deploy: true, body: envelope(&cfg.encode()), time: origin, ..Spec::default() };
+        let spec = Spec {
+            deploy: true,
+            body: envelope(&init_data(&cfg)),
+            time: origin,
+            ..Spec::default()
+        };
         let mut book = Book { state: initialize::<Vesting>(&spec), time: origin, lt: 10 };
         assert_eq!(book.call(OWNER, ids::FUND, vec![], 2000, origin).status_code, 0);
         fails(book.claim(0, origin), E_EMPTY);

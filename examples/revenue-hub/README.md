@@ -25,7 +25,8 @@ not estimate all fees.
 
 ## Run checks
 
-Use Rust 1.99.1, rustfmt, Clippy, `wasm32-unknown-unknown` and Python 3.
+Use Rust 1.99.1, rustfmt, Clippy, `wasm32-unknown-unknown` and Python 3 with
+the `blake3` package.
 Contracts have no external Rust dependencies. The guest ABI checks reuse pinned
 Wasmtime 48.0.8 as a host-only test dependency, outside the guest WASM graph.
 Binaryen 133 is a build tool: its existing
@@ -44,13 +45,16 @@ Explicit tools can replace `--sdk` with `--builder`, `--stand` and `--profile`.
 Use writable output outside the source tree. Current guests require the ECC-only
 SDK/runtime ABI; the historical SDK 0.2.0 distribution is incompatible.
 
-This one entry point checks native formatting/Clippy and all 79 vault/receiver/
+This one entry point checks native formatting/Clippy and all 81 vault/receiver/
 audit regressions, the separate compact audit's 10 differential regressions,
 all guests, official two-build reproducibility, two independent pinned optimizer
 outputs, canonical IDs, exports/zero host imports, and 12 native/WASM ABI vectors.
 It runs actual legacy and compact local-stand journeys, rejected deliveries and
 retry, governance negatives, canonical state-mode boundaries, copied-state restart,
-rent deltas, legacy upgrade rejection and journal replay.
+rent deltas, legacy upgrade rejection and journal replay. Each journey publishes
+the packages by external deploys; the developer wallet, the first contract of
+the application's DApp, then deploys the audit ledger, receivers and vault there
+by internal deploys.
 
 Both journeys require `10010 = 5005 + 3003 + 2002` paid, zero pending/claimable/
 dust, matching audit totals/counts, and an empty queue. Replay must match roots,

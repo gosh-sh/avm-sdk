@@ -33,6 +33,16 @@ pub struct Config {
 }
 impl Config {
     pub fn decode(b: &[u8]) -> HubResult<Self> {
+        Self::decode_in(b, None)
+    }
+    /// Decodes deploy init data. Member receivers live in the deployed vault's
+    /// DApp, so the init data names each one by account id: the DApp id half of
+    /// its destination is zero, and `dapp_id`, the DApp of the deployed vault,
+    /// is placed there.
+    pub fn decode_init(b: &[u8], dapp_id: [u8; 32]) -> HubResult<Self> {
+        Self::decode_in(b, Some(dapp_id))
+    }
+    fn decode_in(b: &[u8], dapp_id: Option<[u8; 32]>) -> HubResult<Self> {
         if b.len() != CONFIG_BYTES || b[217..MEMBERS_BASE] != [0; 7] {
             return Err(E_ARGS);
         }
@@ -51,6 +61,14 @@ impl Config {
                 destination: address_at(b, o + 64)?,
                 weight: u16::from_le_bytes(array(b, o + 128)?),
             };
+        }
+        if let Some(dapp_id) = dapp_id {
+            for m in &mut members[..usize::from(b[216]).min(MAX_MEMBERS)] {
+                if m.destination.dapp_id != [0; 32] {
+                    return Err(E_ARGS);
+                }
+                m.destination.dapp_id = dapp_id;
+            }
         }
         let c = Self {
             signers,

@@ -154,9 +154,9 @@ fn invalid_schedules_in_config_are_rejected() {
 }
 #[test]
 fn deploy_envelope_bounds_are_checked() {
-    let b = envelope(&config().encode());
+    let b = envelope(&init_data(&config()));
     let s = Spec { deploy: true, body: b.clone(), ..Spec::default() };
-    assert_eq!(deploy_data(input(&frame(&[], &s))).unwrap(), config().encode());
+    assert_eq!(deploy_data(input(&frame(&[], &s))).unwrap(), init_data(&config()));
     for n in 0..b.len() {
         let truncated = Spec { body: b[..n].to_vec(), ..s.clone() };
         assert!(deploy_data(input(&frame(&[], &truncated))).is_err())
@@ -169,7 +169,7 @@ fn deploy_envelope_bounds_are_checked() {
 fn init_failure(mut s: Spec, code: u32) {
     s.deploy = true;
     if s.body.is_empty() {
-        s.body = envelope(&config().encode())
+        s.body = envelope(&init_data(&config()))
     }
     let b = frame(&[], &s);
     fails(<Vesting as avm_contract_sdk::Contract>::init(input(&b)), code)
@@ -180,7 +180,7 @@ fn init_requires_configured_owner() {
 }
 #[test]
 fn init_requires_deploy_owner_id_to_be_the_owner_key() {
-    let body = envelope_for(STRANGER, &config().encode());
+    let body = envelope_for(STRANGER, &init_data(&config()));
     init_failure(Spec { body, ..Spec::default() }, E_AUTH)
 }
 #[test]
@@ -219,24 +219,67 @@ fn init_refuses_attached_principal_and_extras() {
 fn init_accepts_any_time_and_refuses_repeat() {
     initialize::<Vesting>(&Spec {
         deploy: true,
-        body: envelope(&config().encode()),
+        body: envelope(&init_data(&config())),
         time: 100,
         ..Spec::default()
     });
     let v = Book::new();
-    let s = Spec { deploy: true, body: envelope(&config().encode()), ..Spec::default() };
+    let s = Spec { deploy: true, body: envelope(&init_data(&config())), ..Spec::default() };
     let b = frame(&v.state, &s);
     fails(<Vesting as avm_contract_sdk::Contract>::init(input(&b)), E_ARGS)
 }
 #[test]
 fn init_refuses_cross_dapp_and_self_recipient() {
-    for a in
-        [address(1), avm_contract_sdk::AccountAddress { dapp_id: [0x22; 32], account_id: [9; 32] }]
-    {
-        let mut c = config();
-        c.streams[0].payout = a;
-        init_failure(Spec { body: envelope(&c.encode()), ..Spec::default() }, E_ARGS)
+    // Recipients are named by account id: a DApp id in the slot, the vesting
+    // account's own id, a duplicate and a zero id are refused.
+    let payout = HEADER_BYTES + 64;
+    let mut other_dapp = init_data(&config());
+    other_dapp[payout..payout + 32].copy_from_slice(&[0x22; 32]);
+    let mut own = config();
+    own.streams[0].payout = address(1);
+    let mut duplicate = config();
+    duplicate.streams[0].payout = duplicate.streams[1].refund;
+    let mut zero = config();
+    zero.streams[0].payout.account_id = [0; 32];
+    for data in [other_dapp, init_data(&own), init_data(&duplicate), init_data(&zero)] {
+        init_failure(Spec { body: envelope(&data), ..Spec::default() }, E_ARGS)
     }
+}
+#[test]
+fn init_accepts_a_deploy_from_the_owner_wallet_only() {
+    // Inside the application's DApp the owner wallet deploys the vesting account.
+    let s = Spec {
+        deploy: true,
+        source: Some(wallet(OWNER)),
+        body: envelope(&init_data(&config())),
+        ..Spec::default()
+    };
+    assert_eq!(State::decode(&initialize::<Vesting>(&s)).unwrap().config, config());
+    for source in [wallet(STRANGER), wallet(BENEFICIARIES[0])] {
+        init_failure(Spec { source: Some(source), ..s.clone() }, E_AUTH)
+    }
+    init_failure(Spec { body: envelope_for(STRANGER, &init_data(&config())), ..s }, E_AUTH)
+}
+#[test]
+fn publication_deploy_places_recipients_in_its_own_dapp() {
+    // A publication deploy creates a DApp whose id is the account's own id.
+    let first = avm_contract_sdk::AccountAddress { dapp_id: [0x44; 32], account_id: [0x44; 32] };
+    let s = Spec {
+        deploy: true,
+        destination: first,
+        body: envelope(&init_data(&config())),
+        ..Spec::default()
+    };
+    let placed = State::decode(&initialize::<Vesting>(&s)).unwrap().config;
+    for (stream, named) in placed.streams.iter().zip(config().streams).take(3) {
+        for (a, id) in [(stream.payout, named.payout), (stream.refund, named.refund)] {
+            assert_eq!((a.dapp_id, a.account_id), (first.dapp_id, id.account_id));
+        }
+    }
+    // The same checks apply: its own account id is refused.
+    let mut c = config();
+    c.streams[0].payout = first;
+    init_failure(Spec { body: envelope(&init_data(&c)), ..s }, E_ARGS)
 }
 #[test]
 fn funding_is_exact_and_once() {

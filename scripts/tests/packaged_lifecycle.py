@@ -231,6 +231,73 @@ class Journey:
                         extra_currencies=extra.pop("extra_currencies", ""),
                         **self.timing(), **extra)
 
+    def internal_deploy(self, creator, method, example, funding_extra=""):
+        """Deploys the published code of `example` from `creator`; returns the address.
+
+        An internal deploy creates the account in the deploying contract's
+        DApp, and the account id does not depend on the DApp
+        (avm-contracts.md "Deploy Address And dapp_id"): the address is the
+        creator's DApp id and the account id of the deploy. The deploy refers
+        to the published selection, without code bytes. The user, the owner of
+        the creator, signs `method`: `wallet.send` sends the deploy and
+        requests its callback; contract-a-v2's `causal.a.deploy` sends it with
+        the value of one forward and no callback.
+        """
+        def code(name):
+            artifacts = self.bundle / "examples" / name / "target/avm"
+            return [blake3((artifacts / f"contract.{kind}").read_bytes()) for kind in ("wasm", "descriptor")]
+        package = blake3(b"AVM_CODE_PACKAGE" + code("contract-a-v1")[0])
+        wasm, descriptor = code(example)
+        selection = blake3(b"AVM_CODE_SELECTION" + package + wasm + descriptor)
+        owner, salt = bytes.fromhex(self.identities["user"]), example.encode()
+        account = blake3(b"AVM_ACCOUNT_ID\0\0" + package + owner + struct.pack("<H", len(salt)) + salt + blake3(b""))
+        address = creator.split(":")[0] + ":" + account.hex()
+        funding = {"extra_currencies": funding_extra} if funding_extra else {}
+        self.run("fund-user", address=address, shells=1000000, **funding)
+        header = bytearray(288)
+        header[:4] = b"ACDP"
+        header[8:136] = selection + package + wasm + descriptor
+        header[136:200] = owner + blake3(b"")
+        header[266:268] = struct.pack("<H", len(salt))
+        # wallet.send: destination | method id 0 | no FUEL reserve on this
+        # local-free route | callback requested | no currencies | deploy body.
+        # causal.a.deploy: destination | method id 0 | no callback | deploy body.
+        arguments = bytes(16) + b"\x01\x00" if method == "wallet.send" else bytes(8)
+        args = bytes.fromhex(address.replace(":", "")) + bytes(8) + arguments + bytes(header) + salt
+        self.call(creator, method, "0x" + args.hex())
+        assert read_accounts(self.state)[0][address]["selected_code_id"] == selection.hex()
+        return address
+
+    def application(self, receiver):
+        """Publishes the codes and lets the wallet create the application in
+        its DApp; returns the sender and the receiver.
+
+        Each external deploy is the first contract of its own DApp
+        (avm-contracts.md "Deploy Address And dapp_id"): the publication
+        deploys put the codes into the Code Library, and the wallet, the first
+        contract of the application's DApp, deploys the sender there, so the
+        forward to the receiver stays a same-DApp route. As designed,
+        contract-a-v2 deploys contract-b: the wallet deploys contract-a-v2,
+        whose `causal.a.deploy` sends the value of one forward with the
+        deploy, and whose `causal.a.version` keeps the two payouts of
+        contract-b's init. contract-batch-patch takes no value; the wallet
+        deploys it.
+        """
+        batch = receiver == "contract-batch-patch"
+        self.deploy("contract-a-v1")
+        if not batch:
+            self.deploy("contract-a-v2", command="publish-version")
+        self.deploy(receiver, command="publish-version")
+        wallet = self.deploy("wallet")
+        sender = self.internal_deploy(wallet, "wallet.send", "contract-a-v1", funding_extra="0:100,7:40")
+        if batch:
+            return sender, self.internal_deploy(wallet, "wallet.send", receiver)
+        deployer = self.internal_deploy(wallet, "wallet.send", "contract-a-v2", funding_extra="0:37,7:11")
+        address = self.internal_deploy(deployer, "causal.a.deploy", receiver)
+        # contract-b counts each delivery with value; its deploy is the first.
+        assert int.from_bytes(read_accounts(self.state)[0][address]["data"][:8], "little") == 1
+        return sender, address
+
     def replay(self):
         from fixture_oracle import decode_state, expected_journey, verify_contents
 
@@ -326,7 +393,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
             assert b"AVM_EXAMPLE_PACKAGE_OWNER_PUBKEY must be 64 lowercase hex digits" in result.stderr
             assert not (negative / "target/avm/contract.wasm").exists()
     artifacts, admission = {}, {}
-    for example in ("contract-a-v1", "contract-a-v2", "contract-b", "contract-batch-patch"):
+    for example in ("contract-a-v1", "contract-a-v2", "contract-b", "contract-batch-patch", "wallet"):
         root = bundle / "examples" / example
         env = os.environ.copy()
         if current and example == "contract-a-v1":
@@ -350,7 +417,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
         assert values["contract.wasm"][:8] == b"\0asm\1\0\0\0"
         assert values["contract.acab"][:4] == b"ACAB"
         # A trailing u32 owner_key_offset follows the 66 fixed descriptor bytes.
-        assert len(values["contract.descriptor"]) == (70 if example.startswith("contract-a") else 66)
+        assert len(values["contract.descriptor"]) == (70 if example.startswith("contract-a") or example == "wallet" else 66)
         artifacts[example] = {name: sha(data) for name, data in values.items()}
         maximum = fixture_memory_maximum(root, source and not deployment)
         # Byte 0 of the descriptor is the execution mode; AccountBatch (1) code
@@ -421,8 +488,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
     for destination_example, callback in [("contract-b", True), ("contract-batch-patch", False)]:
         journey = Journey(bundle, evidence, destination_example, source)
         journey.run("init", dapp_id="11" * 32)
-        sender = journey.deploy("contract-a-v1", funding_extra="0:100,7:40")
-        receiver = journey.deploy(destination_example, command="publish-version")
+        sender, receiver = journey.application(destination_example)
         ring_before = read_accounts(journey.state)[1]
         events_before = journey.run("events")["events"]
         method = "causal.b.receive" if callback else "causal.batch.patch"
@@ -432,7 +498,8 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
         accounts, ring = read_accounts(journey.state)
         state = accounts[receiver]["data"]
         if callback:
-            assert int.from_bytes(state[:8], "little") == 1
+            # The deploy from contract-a-v2 was the first delivery with value; the forward is the second.
+            assert int.from_bytes(state[:8], "little") == 2
             sender_state = accounts[sender]["data"]
             assert int.from_bytes(sender_state[8:16], "little") == 1, "requested callback was not delivered"
             assert u32(sender_state, 16) == 0 and u32(sender_state, 20) == 16
@@ -475,8 +542,7 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
     ]:
         journey = Journey(bundle, evidence, label, source)
         journey.run("init", dapp_id="11" * 32)
-        sender = journey.deploy("contract-a-v1", funding_extra="0:100,7:40")
-        receiver = journey.deploy("contract-b-failure", command="publish-version")
+        sender, receiver = journey.application("contract-b-failure")
         before_accounts, before_ring, before_wires = read_state(journey.state)
         before_events = journey.run("events")["events"]
         body = bytes.fromhex(receiver.replace(":", "")) + blake3(method.encode())[:8] + handler

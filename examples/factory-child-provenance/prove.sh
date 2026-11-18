@@ -129,7 +129,7 @@ account_hash() {
 
 # Hash of the Uninit image of address $1 funded once with $2 SHELL. Sets $uninit_hash.
 uninit_reference() {
-  local reference="${work}/uninit-reference-$2.state"
+  local reference="${work}/uninit-reference-${1#*:}-$2.state"
   "$stand" init --state "$reference" --wasmtime-profile "$profile" --dapp-id "$dapp_id" >/dev/null
   "$stand" fund-user --state "$reference" --wasmtime-profile "$profile" --address "$1" \
     --shells "$2" >/dev/null
@@ -180,13 +180,41 @@ selection_v1="$(jq -r '.prepared_selection_ids[0]' "${work}/inspect.json")"
 cli_create deploy --package-id "$package_id" --selected-code-id "$selection_v1" \
   --salt-hex 72656c61792d31 --init-json "$(role_init 03 "$zero_address")"
 relay_v1="$deployed"
-child_init="$(role_init 02 "${factory/:/}")"
 
-# Address the stand derives for a child of the factory with this salt and
-# selection. Sets $quoted.
+# Address of a child of factory $3 (default: the factory) with salt $1 and
+# selection $2: the named factory's DApp and the account id the stand derives,
+# which does not depend on the DApp. Sets $quoted.
 child_address() {
-  quote deploy --package-id "$package_id" --selected-code-id "$2" --owner-id "${factory#*:}" \
-    --salt-hex "$1" --init-json "$child_init"
+  local named="${3:-$factory}"
+  quote deploy --package-id "$package_id" --selected-code-id "$2" --owner-id "${named#*:}" \
+    --salt-hex "$1" --init-json "$(role_init 02 "${named/:/}")"
+  quoted="${named%%:*}:${quoted#*:}"
+}
+
+# Relay $1 forges the deploy of a child of factory $2 with salt $3, to the
+# prefunded address $4. Sets $forge_ok to yes when no child is committed, the
+# target funding paid exactly $5 SHELL and the relay call stayed valid with its
+# state unchanged.
+forge() {
+  local relay="$1" named="$2" salt="$3" target="$4" fee="$5" before after
+  read_state "$relay"
+  before="$hex"
+  uninit_reference "$target" 10000000
+  [[ "$(account_hash "$state" "$target")" == "$uninit_hash" ]] || fail "forged child funding precondition"
+  tick
+  run call --address "$relay" --method relay.forge --args-json "\"0x${named/:/}${salt}\"" \
+    --identity user --extra-currencies '' "${timestamps[@]}" >"${work}/forge.json"
+  after="$(account_hash "$state" "$target")"
+  if [[ "$fee" != 0 ]]; then
+    uninit_reference "$target" $((10000000 - fee))
+  fi
+  forge_ok=no
+  if ! has_account "$target" && [[ "$after" == "$uninit_hash" ]] &&
+    jq -e --arg before "$before" \
+      '.raw_executor_output[0:16] == "41434d4f00000000" and .raw_state == $before and .queue.after == 0' \
+      "${work}/forge.json" >/dev/null; then
+    forge_ok=yes
+  fi
 }
 
 # Reports the factory accepted. Sets $reports and $hex.
@@ -227,29 +255,29 @@ case_3() {
 }
 expect_ok "3 spoof: a report from an address that does not derive is rejected" case_3
 
-# 4. A relay of the same version deploys a child named after the factory.
+# 4. A relay of the same version deploys a child named after the factory. The
+#    relay is the first contract of its own DApp, so the node refuses this
+#    internal deploy into the factory's DApp before init: no child and no init
+#    fee. The relay call remains valid.
 salt_4=0000000000000004
 child_address "$salt_4" "$selection_v1"
 child_4="$quoted"
 fund "$child_4"
-# The child's init fails without committing a child; the existing target
-# funding pays the fixed 10 SHELL init fee once. The relay call remains valid.
-read_state "$relay_v1"
-relay_state_before="$hex"
-uninit_reference "$child_4" 10000000
-[[ "$(account_hash "$state" "$child_4")" == "$uninit_hash" ]] || fail "child 4 funding precondition"
-tick
-run call --address "$relay_v1" --method relay.forge --args-json "\"0x${factory/:/}${salt_4}\"" \
-  --identity user --extra-currencies '' "${timestamps[@]}" >"${work}/failed-init.json"
-funding_after="$(account_hash "$state" "$child_4")"
-uninit_reference "$child_4" $((10000000 - 10))
+forge "$relay_v1" "$factory" "$salt_4" "$child_4" 0
 case_4() {
-  ! has_account "$child_4" && [[ "$funding_after" == "$uninit_hash" ]] &&
-    jq -e --arg before "$relay_state_before" \
-      '.raw_executor_output[0:16] == "41434d4f00000000" and .raw_state == $before and .queue.after == 0' \
-      "${work}/failed-init.json" >/dev/null
+  [[ "$forge_ok" == yes ]]
 }
-expect_ok "4 forged deploy, same version: the child refuses a deployer other than its factory" case_4
+expect_ok "4 forged deploy, same version: the DApp boundary refuses it outside the relay's DApp" case_4
+# In the relay's own DApp the forged deploy of a child named after the
+# factory's account id reaches the child's init, which refuses a deployer other
+# than the factory it names. No child is committed; the existing target funding
+# pays the fixed 10 SHELL init fee once. The relay call remains valid.
+named_4="${relay_v1%%:*}:${factory#*:}"
+child_address "$salt_4" "$selection_v1" "$named_4"
+child_4_relay="$quoted"
+fund "$child_4_relay"
+forge "$relay_v1" "$named_4" "$salt_4" "$child_4_relay" 10
+expect_ok "4 forged deploy in the relay's DApp: the child refuses a deployer other than its factory" case_4
 
 # 5. Version 2 of the package, whose child accepts any deployer, is published
 #    as a relay. That relay deploys a child named after the factory, from the
@@ -269,21 +297,29 @@ child_5="$quoted"
 [[ "$child_5" == "$child_5_v1" ]] || fail "current address identity must not bind the code version"
 result NOTE "5 the stand quotes the same child address for both code selections"
 fund "$child_5"
-tick
-run call --address "$relay_v2" --method relay.forge --args-json "\"0x${factory/:/}${salt_5}\"" \
-  --identity user --extra-currencies '' "${timestamps[@]}" >"${work}/different-version-deploy.json"
 count_reports
 reports_before="$reports"
+forge "$relay_v2" "$factory" "$salt_5" "$child_5" 0
+case_5() {
+  count_reports
+  [[ "$forge_ok" == yes && "$reports" == "$reports_before" ]]
+}
+expect_ok "5 forged deploy, another version: the DApp boundary refuses it outside the relay's DApp" case_5
+# The permissive version still runs in the relay's own DApp: there its child
+# takes the relay as its deployer.
+named_5="${relay_v2%%:*}:${factory#*:}"
+child_address "$salt_5" "$selection_v2" "$named_5"
+child_5_relay="$quoted"
+fund "$child_5_relay"
+tick
+run call --address "$relay_v2" --method relay.forge --args-json "\"0x${named_5/:/}${salt_5}\"" \
+  --identity user --extra-currencies '' "${timestamps[@]}" >"${work}/different-version-deploy.json"
 forged=no
-if has_account "$child_5"; then
-  read_state "$child_5"
+if has_account "$child_5_relay"; then
+  read_state "$child_5_relay"
   [[ "$(slice "$hex" 176 240)" == "${relay_v2/:/}" ]] && forged=yes
 fi
 [[ "$forged" == yes ]] || fail "same-package permissive child was not exercised"
-report "$relay_v2" "$child_5"
-count_reports
-[[ "$reports" == $((reports_before + 1)) && "$(slice "$hex" 116 180)" == "${child_5/:/}" ]] || fail "documented derived-address limitation changed"
-result LIMITATION "5 derived address accepts another code version's child; it does not prove current code or deployer"
 
 # 6. The factory's child cannot be moved to version 2.
 tick
@@ -302,6 +338,22 @@ call "$factory" factory.accept "\"0x${salt_1}\""
 count_reports
 [[ "$reports" == "$reports_before" ]] || fail "external report changed factory state"
 result OK "7 external report rejected without state effects"
+
+# 8. A relay forwards the largest body the network allows to the factory's
+# ping: the external body is max_body_size (65,536 bytes), 76 of them the
+# length prefix and the send header. One byte more is rejected at ingress.
+ping_method_le="7a3f34f925f077ca" # ping 0xca77f025f9343f7a, little-endian
+largest="\"0x${factory/:/}${ping_method_le}$(printf "%0$((2 * 65460))d" 0)\""
+call "$relay_v1" relay.send "$largest"
+largest_status="$status"
+tick
+run call --address "$relay_v1" --method relay.send --args-json "${largest%\"}00\"" --identity user \
+  --extra-currencies '' "${timestamps[@]}" >"${work}/oversized-body.json" 2>/dev/null || true
+case_8() {
+  [[ "$largest_status" == 00000000 ]] &&
+    jq -r .error "${work}/oversized-body.json" | grep -q "exceeds the configured canonical byte limit"
+}
+expect_ok "8 largest body: a relay forwards 65,460 bytes; one byte more is rejected at ingress" case_8
 
 state_hash() { python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$state"; }
 before_replay="$(state_hash)"

@@ -43,6 +43,16 @@ pub fn envelope(data: &[u8]) -> Vec<u8> {
     b.extend_from_slice(data);
     b
 }
+/// Deploy init data of `c`: member receivers live in the vault's DApp and are
+/// named by account id, with a zero DApp id.
+pub fn init_data(c: &Config) -> Vec<u8> {
+    let mut b = c.encode();
+    for i in 0..usize::from(c.count) {
+        let o = MEMBERS_BASE + i * MEMBER_BYTES + 64;
+        b[o..o + 32].fill(0);
+    }
+    b
+}
 
 #[derive(Clone)]
 pub struct Spec {
@@ -215,8 +225,12 @@ pub struct Vault {
 }
 impl Vault {
     pub fn new() -> Self {
-        let s =
-            Spec { time: 0, deploy: true, body: envelope(&config().encode()), ..Spec::default() };
+        let s = Spec {
+            time: 0,
+            deploy: true,
+            body: envelope(&init_data(&config())),
+            ..Spec::default()
+        };
         let state = initialize::<RevenueVault>(&s);
         Self { state, time: 10, lt: 10 }
     }

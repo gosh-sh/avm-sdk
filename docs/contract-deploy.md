@@ -64,7 +64,7 @@ example from a wallet, and then send the deploy:
 ```bash
 avm-local-stand network-deploy --endpoint "$AVM_NODE" \
   --wasmtime-profile "$AVM_PROFILE" --key deployer.key \
-  --package-owner-key package-owner.key --dapp-id "$DAPP_ID" \
+  --package-owner-key package-owner.key \
   --wasm target/avm/contract.wasm --acab target/avm/contract.acab \
   --descriptor target/avm/contract.descriptor \
   --salt-hex 01 --init-json null --fuel-fee-shells 100000 --quote-address

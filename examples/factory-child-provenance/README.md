@@ -23,13 +23,20 @@ external calls. A child's `owner_id` is its factory's account id, which is no
 signing key, so a child takes no external call; the script sends its report
 through a relay.
 
-The address commits package identity, owner, salt and constructor hash. It does
-not commit the selected code version or prove who deployed that account. A
-package owner can publish another code version whose child accepts any internal
-deployer. Its report passes the factory's derived-address policy. This result
-is an expected **limitation**, not a successful security guarantee or a fixed VM
-bug. An application relying on this policy must trust all executable versions
-that its package owner can authorize. The SDK supplies no sender-code proof.
+The address commits package identity, owner, salt and constructor hash, not
+the selected code version: the stand quotes the same child address for both
+versions of the package. Only a contract in the factory's DApp can deploy an
+account there: an external deploy creates the first contract of a new DApp,
+and an internal deploy stays in the sender's DApp. In this example only the
+factory deploys in its DApp, with the code version it runs, and no version of
+the package upgrades, so a sender that passes the factory's check is one of its
+own children. A relay of another version, whose child accepts any internal
+deployer, can create that child only in the relay's own DApp, and the factory
+refuses a sender outside its DApp. The check proves that a contract in the
+factory's DApp deployed the sender, not which code version the sender runs: an
+application whose DApp holds a contract that can deploy other code versions
+must trust every version that contract can deploy. The SDK supplies no
+sender-code proof.
 
 The constructor uses borrowed `input.deploy()?.init_data()` and `.salt()`.
 The example still constructs its own reference-only ACDP envelope and bounded
@@ -59,14 +66,19 @@ The script builds strict and permissive versions, then checks actual WASM:
    and the child records the factory as its actual init caller.
 2. The factory accepts that child's report.
 3. An unrelated relay's report leaves the factory count unchanged.
-4. A same-version relay deploy fails the child's init check, creates no child,
+4. A same-version relay's child deploy into the factory's DApp is refused at
+   the DApp boundary before init: no child and no init fee. In the relay's own
+   DApp the same forged deploy fails the child's init check, creates no child,
    and retains exactly the existing 10 SHELL init fee from prefunded target
-   balance. It does not roll back the valid relay transaction.
-5. A permissive version in the same package has the same quoted child address;
-   the factory accepts its report. The script requires this documented
-   limitation, rather than treating an unrelated failure as a security fix.
+   balance. Neither rolls back the valid relay transaction.
+5. A permissive version in the same package has the same quoted child address,
+   but its relay's deploy into the factory's DApp is refused the same way and
+   the factory count is unchanged. In the relay's own DApp the permissive child
+   is created with the relay as its deployer.
 6. A child without an upgrade path rejects upgrade.
 7. An external report is rejected without factory state effects.
+8. A relay forwards the largest body the network allows, 65,460 bytes, to the
+   factory's `ping`; one byte more is rejected at ingress.
 Native tests independently reject changed package, owner, salt and DApp without
 effects. The script also requires replay to agree without changing persisted
 state. A real multi-package deployment is not part of this script. Claims are limited to the

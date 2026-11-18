@@ -3,6 +3,9 @@
 This example uses one contract as both parent and child. The parent forwards an
 ordinary message or deploy envelope and records the VM-generated callback. The
 child records the caller kind and the incoming callback-request flag in `init`.
+The parent's internal deploys stay in its own DApp; the externally deployed
+capture account, the first contract of its own DApp, is the cross-DApp
+destination.
 It uses only the SDK and the deterministic WASM interface.
 
 Use matching builder, stand and profile files from one distribution or source
@@ -25,7 +28,9 @@ checkout or installed source bundle unchanged. Remove that output when its
 results are no longer needed.
 
 The assertions cover ordinary callback delivery in the same DApp and across
-DApps, with a successful or rejecting receiver, deploy without a request,
+DApps, with a successful or rejecting receiver, a forward of the largest body
+the network allows (65,459 bytes; one byte more is rejected at ingress),
+deploy without a request,
 exactly one requested successful-deploy callback, an empty queue and replay.
 They also cover active-target, malformed and wrong-address pre-init rejections,
 with and without callbacks: status 63 when requested, unchanged target/registry

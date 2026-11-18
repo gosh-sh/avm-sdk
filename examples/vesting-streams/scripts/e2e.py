@@ -7,6 +7,12 @@ participant signs an external to its wallet and the wallet sends the internal
 call, with any value, to the application. The owner key is also kept by the
 vesting and receiver accounts at owner_key_offset 0 for their owner's
 no-value externals.
+
+Each package is published by an external deploy, whose account is the first
+contract of its own DApp. The owner wallet is the first contract of the
+application's DApp: it creates the receivers and the vesting accounts there by
+internal deploys of the published code, and the vesting constructor data names
+those receivers by account id.
 """
 import argparse
 import json
@@ -16,12 +22,16 @@ import re
 import subprocess
 import tempfile
 
+import blake3
+
 ROOT = Path(__file__).resolve().parents[1]
 WALLET = ROOT.parent / "wallet"
 DAPP = "11" * 32
 BASE_TIME = 1_800_000_000
 # FUEL reserve of every wallet-to-application internal message.
 INTERNAL_FUEL = 100_000
+# Method id of a deploy message, as on the stand's own deploy messages.
+DEPLOY_METHOD_ID = 0
 
 def method_ids():
     text = (ROOT / "core/src/ids.rs").read_text()
@@ -47,6 +57,23 @@ def wallet_callback_status(event):
     at = event.index(b"status_code") + len(b"status_code") + 13
     return int.from_bytes((event[at:at+8] + bytes(8))[:8], "little")
 
+def deploy_body(selection, hashes, owner_id, salt, init):
+    """ACDP deploy envelope of published code, laid out as the
+    factory-child-provenance example builds it: a 288-byte header with the
+    selected code id, package id, WASM and descriptor hashes, owner id, BLAKE3
+    of the constructor data and the salt and constructor data lengths, then the
+    salt and the constructor data. It carries no code bytes."""
+    header = bytearray(288)
+    header[:4] = b"ACDP"
+    header[8:40] = bytes.fromhex(selection["selected_code_id"])
+    header[40:72] = bytes.fromhex(selection["package_id"])
+    header[72:136] = hashes
+    header[136:168] = bytes.fromhex(owner_id)
+    header[168:200] = blake3.blake3(init).digest()
+    header[266:268] = len(salt).to_bytes(2, "little")
+    header[268:272] = len(init).to_bytes(4, "little")
+    return bytes(header) + salt + init
+
 class Stand:
     def __init__(self, sdk, work):
         self.binary = os.environ.get("AVM_LOCAL_STAND", str(sdk / "bin/avm-local-stand"))
@@ -55,6 +82,7 @@ class Stand:
         self.log = []
         self.time = BASE_TIME
         self.selections = {}
+        self.hashes = {}
         self.wallets = {}
         self.keys = {}
 
@@ -87,7 +115,14 @@ class Stand:
         self.time += 1
         return dict(block_time=self.time, created_at=self.time, expire_at=self.time+3600, fuel_fee_shells=10000)
 
-    def deploy(self, contract, salt, init=None, owner_id=None, extra_currencies=None, artifacts=None, shells=10_000_000):
+    def deploy(self, contract, salt, init=None, owner_id=None, extra_currencies=None, artifacts=None, shells=10_000_000, deployer=None):
+        """Deploys `contract` and returns its address.
+
+        Without `deployer` the deploy is external: the account is the first
+        contract of its own DApp, and a package's first deploy publishes its
+        code. With `deployer`, the wallet of that identity deploys the
+        published code by an internal deploy into the wallet's DApp.
+        """
         artifacts = artifacts or ROOT / "contracts" / contract / "target/avm"
         options = dict(wasm=artifacts / "contract.wasm", acab=artifacts / "contract.acab",
                        descriptor=artifacts / "contract.descriptor", salt_hex=salt.encode().hex(),
@@ -106,13 +141,21 @@ class Stand:
         if contract == "vesting":
             later = dict(options, block_time=self.time + 100_000, created_at=self.time + 100_000, expire_at=self.time + 103_600)
             assert self.command("deploy", quote_address=True, **later)["address"] == address
+        if deployer is not None:
+            # The account id does not depend on the DApp.
+            address = self.wallets[deployer].split(":")[0] + ":" + address.split(":")[1]
         funding = dict(address=address, shells=shells)
         if extra_currencies:
             funding["extra_currencies"] = extra_currencies
         funding = self.command("fund-user", **funding)
         assert funding["status"] == "ok", funding
-        result = self.command("deploy", **options)
-        assert result["status"] == "ok", result
+        if deployer is None:
+            result = self.command("deploy", **options)
+            assert result["status"] == "ok", result
+        else:
+            body = deploy_body(self.selections[contract], self.hashes[contract], owner_id, salt.encode(), init)
+            account = self.send(address, DEPLOY_METHOD_ID, body, identity=deployer)
+            assert account["selected_code_id"] == self.selections[contract]["selected_code_id"], account
         if contract not in self.selections:
             snapshot = self.command("inspect")
             existing = {v["selected_code_id"] for v in self.selections.values()}
@@ -120,6 +163,8 @@ class Stand:
                              if item["key"].startswith("02") and item["value"][:64] not in existing)
             self.selections[contract] = {"selected_code_id": selection["value"][:64],
                                          "package_id": selection["value"][64:128]}
+            self.hashes[contract] = b"".join(blake3.blake3((artifacts / name).read_bytes()).digest()
+                                             for name in ["contract.wasm", "contract.descriptor"])
         return address
 
     def wallet(self, identity, key, extra_currencies=None):
@@ -155,7 +200,7 @@ class Stand:
         # ECC0 is this example's explicit synthetic test principal; SHELL is separate.
         currencies = sorted(([(0, value)] if value else []) + list(extra))
         before = self.command("events")["count"]
-        self.call(self.wallets[identity], "wallet.send", bytes.fromhex(send_args(address, METHOD_IDS[method], currencies, body)[2:]), identity=identity)
+        self.call(self.wallets[identity], "wallet.send", bytes.fromhex(send_args(address, METHOD_IDS.get(method, method), currencies, body)[2:]), identity=identity)
         events = [bytes.fromhex(e) for e in self.command("events")["events"][before:]]
         statuses = [s for s in map(wallet_callback_status, events) if s is not None]
         assert statuses == [expected_status], {"method": method, "contract_status": statuses, "expected": expected_status}
@@ -163,10 +208,12 @@ class Stand:
         account["events"] = [e.hex() for e in events]
         return account
 
+# Constructor data names the payout and refund receivers by account id with a
+# zero DApp id: they live in the vesting account's DApp.
 def config(owner, owner_wallet, wallets, recipients):
     b=bytearray(1976);b[:32]=bytes.fromhex(owner);b[32:96]=address_bytes(owner_wallet);b[96:112]=(10000).to_bytes(16,'little');b[112]=3
     for i,(amount,cliff,end,step,revocable) in enumerate([(1000,200,500,0,1),(600,100,400,100,1),(300,200,400,0,0)]):
-        o=120+i*232;b[o:o+64]=address_bytes(wallets[i]);b[o+64:o+128]=address_bytes(recipients[i][0]);b[o+128:o+192]=address_bytes(recipients[i][1]);b[o+192:o+208]=amount.to_bytes(16,'little')
+        o=120+i*232;b[o:o+64]=address_bytes(wallets[i]);b[o+96:o+128]=address_bytes(recipients[i][0])[32:];b[o+160:o+192]=address_bytes(recipients[i][1])[32:];b[o+192:o+208]=amount.to_bytes(16,'little')
         for off,value in [(208,100),(212,cliff),(216,end),(220,step)]:b[o+off:o+off+4]=value.to_bytes(4,'little')
         b[o+224]=revocable
     return bytes(b)
@@ -191,7 +238,9 @@ def run(sdk,output):
             claim_roles=['developer','package-owner','user']
             # The owner wallet holds the 1,900 ECC0 principal it funds the grants with.
             wallets=[stand.wallet(role,identities[role.replace('-','_')],extra_currencies='0:1900' if role==owner_role else None) for role in claim_roles]
-            recipients=[[stand.deploy('receiver',f'receiver-{i}-{k}',bytes([k,i]),owner_id=owner_key) for k in range(2)] for i in range(3)]
+            # Publish each package; the owner wallet deploys the application's accounts.
+            stand.deploy('receiver','receiver-publication',bytes([0,0]),owner_id=owner_key)
+            recipients=[[stand.deploy('receiver',f'receiver-{i}-{k}',bytes([k,i]),owner_id=owner_key,deployer=owner_role) for k in range(2)] for i in range(3)]
             receiver_owners=[]
             for pair in recipients:
                 owners=[]
@@ -200,7 +249,8 @@ def run(sdk,output):
                     assert r['raw_state'][:64] == owner_key, 'receiver owner key must equal the deploy owner_id'
                     owners.append(owner_role)
                 receiver_owners.append(owners)
-            vault=stand.deploy('vesting','vesting',config(owner_key,stand.wallets[owner_role],wallets,recipients),owner_id=owner_key)
+            stand.deploy('vesting','vesting-publication',config(owner_key,stand.wallets[owner_role],wallets,recipients),owner_id=owner_key)
+            vault=stand.deploy('vesting','vesting',config(owner_key,stand.wallets[owner_role],wallets,recipients),owner_id=owner_key,deployer=owner_role)
             origin_time = stand.time
             for i,pair in enumerate(recipients):
                 for k,address in enumerate(pair):stand.call(address,'stream.receiver.bind',address_bytes(vault),identity=receiver_owners[i][k])
@@ -247,7 +297,7 @@ def run(sdk,output):
                 for k,address in enumerate(pair):
                     r=stand.call(address,'stream.receiver.status',identity=receiver_owners[i][k]);b=bytes.fromhex(r['raw_state']);o=104+i*32;actual[i].append(int.from_bytes(b[o+8:o+24],'little'))
             assert actual==[[400,600],[400,200],[300,0]],actual
-            late_vault = stand.deploy('vesting', 'late-funded-vesting', config(owner_key, stand.wallets[owner_role], wallets, recipients), owner_id=owner_key)
+            late_vault = stand.deploy('vesting', 'late-funded-vesting', config(owner_key, stand.wallets[owner_role], wallets, recipients), owner_id=owner_key, deployer=owner_role)
             stand.command('fund-user', address=stand.wallets[owner_role], shells=10_000_000, extra_currencies='0:1900')
             stand.time += 1000
             late = stand.send(late_vault, 'stream.vesting.fund', value=1900, identity=owner_role)

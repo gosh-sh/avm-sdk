@@ -6,7 +6,7 @@ fn vault_at(origin: u32, delay: u32) -> Vault {
     let mut cfg = config();
     cfg.delay = delay;
     let spec =
-        Spec { deploy: true, body: envelope(&cfg.encode()), time: origin, ..Spec::default() };
+        Spec { deploy: true, body: envelope(&init_data(&cfg)), time: origin, ..Spec::default() };
     Vault { state: initialize::<RevenueVault>(&spec), time: origin, lt: 10 }
 }
 fn proposal() -> Vec<u8> {

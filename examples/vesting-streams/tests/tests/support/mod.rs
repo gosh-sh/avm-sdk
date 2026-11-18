@@ -43,6 +43,17 @@ pub fn envelope_for(owner_id: [u8; 32], data: &[u8]) -> Vec<u8> {
     b.extend_from_slice(data);
     b
 }
+/// Deploy init data of `c`: the payout and refund receivers live in the
+/// vesting account's DApp and are named by account id, with a zero DApp id.
+pub fn init_data(c: &Config) -> Vec<u8> {
+    let mut b = c.encode();
+    for i in 0..usize::from(c.count) {
+        let o = HEADER_BYTES + i * ROW_BYTES;
+        b[o + 64..o + 96].fill(0);
+        b[o + 128..o + 160].fill(0);
+    }
+    b
+}
 #[derive(Clone)]
 pub struct Spec {
     pub actor: [u8; 32],
@@ -101,7 +112,9 @@ pub fn message(s: &Spec) -> Vec<u8> {
     let mut b = vec![0; if s.source.is_some() { 176 } else { 192 }];
     b[0] = u8::from(s.source.is_none());
     b[1] = if s.source.is_some() {
-        u8::from(s.callback.is_some()) | if s.request { 4 } else { 0 }
+        u8::from(s.callback.is_some())
+            | if s.deploy { 2 } else { 0 }
+            | if s.request { 4 } else { 0 }
     } else {
         1 | if s.deploy { 2 } else { 0 }
     };
@@ -225,7 +238,7 @@ impl Book {
             actor: c.owner,
             time: 0,
             deploy: true,
-            body: envelope_for(c.owner, &c.encode()),
+            body: envelope_for(c.owner, &init_data(&c)),
             ..Spec::default()
         };
         Self { state: initialize::<Vesting>(&s), time: 10, lt: 10 }

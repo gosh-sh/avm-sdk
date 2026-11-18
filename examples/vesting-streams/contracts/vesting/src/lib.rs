@@ -22,11 +22,17 @@ fn zero_value(input: &MessageInput<'_>) -> ResultCode<()> {
     }
 }
 fn initialize(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
-    let config = Config::decode(deploy_data(input)?)?;
+    // Payout and refund receivers are named by account id and live in this
+    // account's DApp.
+    let config = Config::decode_init(deploy_data(input)?, input.destination.dapp_id)?;
     // The owner key sits at owner_key_offset 0 and must be the deploy owner_id,
-    // which the account address commits to.
+    // which the account address commits to. The owner deploys by an external
+    // signed with that key or, inside the DApp, from the owner wallet.
     let owner_id = input.deploy().map_err(|_| E_ARGS)?.owner_id();
-    if input.caller != Caller::External(config.owner) || owner_id != config.owner {
+    if (input.caller != Caller::External(config.owner)
+        && input.caller != Caller::Internal(config.owner_wallet))
+        || owner_id != config.owner
+    {
         return Err(E_AUTH);
     }
     zero_value(&input)?;
@@ -34,7 +40,7 @@ fn initialize(input: MessageInput<'_>) -> ResultCode<MessageOutput> {
         || config.streams[..usize::from(config.count)]
             .iter()
             .flat_map(|s| [s.payout, s.refund])
-            .any(|a| a == input.destination || a.dapp_id != input.destination.dapp_id)
+            .any(|a| a == input.destination)
     {
         return Err(E_ARGS);
     }

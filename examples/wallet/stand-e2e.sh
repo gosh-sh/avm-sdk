@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds the wallet example, deploys two wallets on a fresh local stand and
 # checks the owner key rule, the no-value rule for externals, value sends with
-# their callback event, the internal-caller rejection, key rotation and replay.
+# their callback event, a send of the largest body the network allows, the
+# internal-caller rejection, key rotation and replay.
 set -euo pipefail
 
 example_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -146,6 +147,17 @@ expect_raw_state "$wallet_a" "$user"
 call "$wallet_a" wallet.send "$(send_args "$wallet_b" "$unknown" 1000 01 0:100)" user >"${work}/send-failed.json"
 expect_status "${work}/send-failed.json" 0
 expect_callback "${work}/send-failed.json" 1704 0:100
+
+# A send forwards the largest body the network allows: the external body is
+# max_body_size (65,536 bytes), 94 of them the length prefix and the send
+# header. One byte more is rejected at ingress.
+large="$(send_args "$wallet_b" "$receive" 1000 01)"
+call "$wallet_a" wallet.send "${large%\"}$(printf "%0$((2 * 65442))d" 0)\"" user >"${work}/send-max-body.json"
+expect_status "${work}/send-max-body.json" 0
+expect_callback "${work}/send-max-body.json" 0
+call "$wallet_a" wallet.send "${large%\"}$(printf "%0$((2 * 65443))d" 0)\"" user \
+  >"${work}/send-oversized.json" 2>/dev/null || true
+expect_rejected "${work}/send-oversized.json" "exceeds the configured canonical byte limit"
 
 # Malformed args fail the send itself; send and set_owner_key need an external caller.
 rc=0

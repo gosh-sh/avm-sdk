@@ -1,6 +1,6 @@
 # Runtime limits, rent and deployment identity
 
-These are the **SDK 0.6.4 local stand** settings. Its FUEL caps are the network
+These are the **SDK 0.6.5 local stand** settings. Its FUEL caps are the network
 execution defaults. All of them are development configuration, not mainnet
 promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the
@@ -161,6 +161,9 @@ address = dapp_id[32] || account_id[32]
 ```
 
 `dapp_id` is a routing namespace and is absent from the account-ID preimage.
+An external deploy creates the first contract of a new DApp, so its `dapp_id`
+is its `account_id`; an internal deploy creates the account in the sender's
+DApp. A deploy to any other `dapp_id` is refused.
 `owner_id` is an opaque 32-byte identity; authorization is a separate check.
 The package identity derives from its first code:
 `package_id = blake3(b"AVM_CODE_PACKAGE" || blake3(first_wasm_bytes))`.
