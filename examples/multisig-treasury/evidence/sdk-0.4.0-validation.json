@@ -1,0 +1,415 @@
+{
+  "date_utc": "2026-11-06",
+  "source_parent": "747448c2ebbbc3ad91bf6c7022b02354109e6234",
+  "sdk_release": "avm-dev-d103b6ccc759-sdk-21364083b24a",
+  "bundle_sha256": "7476847a764fedc22fae47ba7ec63b607ba445280a7d4bcdb02fda77a85573f6",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "profile_sha256": "6d533f0804924b13bbea811691b4f24dd2922528d2473a3f0541d08d8d2560bf",
+  "native_tests_passed": 49,
+  "abi_ids_checked_against_generated_rust": 28,
+  "artifacts": {
+    "payee": {
+      "contract.acab": {
+        "bytes": 355,
+        "sha256": "880d86dabf5bdc514385fb408b40294fdaec0603b03a9e4ae2b5d357dc311c80"
+      },
+      "contract.descriptor": {
+        "bytes": 66,
+        "sha256": "d8930674a507de296595a436c22819fc380df7f93144f8f68d0122197d5ca2f7"
+      },
+      "contract.wasm": {
+        "bytes": 28430,
+        "sha256": "b503c109689f612b56580f3970476e7149d1f2d504cb6ef959264af952abe265"
+      }
+    },
+    "treasury": {
+      "contract.acab": {
+        "bytes": 2427,
+        "sha256": "faeac9e774a45afd1c4cce2ceb77673f6c32aa764f6832027a79018ca5c3871f"
+      },
+      "contract.descriptor": {
+        "bytes": 66,
+        "sha256": "b56702e47a043b78f250864d16cf139e10832e552aee3182236b62844887dc4d"
+      },
+      "contract.wasm": {
+        "bytes": 56166,
+        "sha256": "ffd2de0fde3a0e39d95cd77711f9498864eb98e4127c2ef9c2f88e91a14e4bc3"
+      }
+    }
+  },
+  "stand": {
+    "status": "PASS",
+    "call_probes": 88,
+    "fuel_reserve_shells": [
+      [
+        "treasury.payee.bind",
+        1
+      ],
+      [
+        "treasury.deposit",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.revoke",
+        1
+      ],
+      [
+        "treasury.revoke",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.cancel",
+        1
+      ],
+      [
+        "treasury.payee.reject",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.payee.reject",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.payee.reject",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.payee.reject",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.freeze",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.propose",
+        1
+      ],
+      [
+        "treasury.approve",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ],
+      [
+        "treasury.execute",
+        1
+      ]
+    ],
+    "inspect": {
+      "account_state_root": "b5cbf09d3cf1e9147a5020a7b61c55982832e8198e35568d5cb8009e55db31f6",
+      "registry_root": "a26989de657c93010b28f66867ecc92773d1351735489a3fbbe8d98d49e7b086",
+      "cumulative_fee_shells": "14738545",
+      "accepted_input_count": 114
+    },
+    "replay": {
+      "account_state_root": "b5cbf09d3cf1e9147a5020a7b61c55982832e8198e35568d5cb8009e55db31f6",
+      "registry_root": "a26989de657c93010b28f66867ecc92773d1351735489a3fbbe8d98d49e7b086",
+      "cumulative_fee_shells": "14738545",
+      "accepted_input_count": 114
+    }
+  },
+  "limits": [
+    "Local/fork evidence only; no upstream CI or maintainer approval.",
+    "Native-only edge cases remain outside the existing journey.",
+    "Heap peak, account upgrade/migration, exact FUEL and Mainnet are not qualified."
+  ]
+}

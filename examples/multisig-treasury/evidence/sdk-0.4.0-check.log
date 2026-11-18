@@ -1,0 +1,208 @@
+identifier rule reproduces 18/18 official identifiers: PASS
+manifests and ids.rs match the ABI description: PASS
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+    Checking avm-contract-sdk v0.1.1 (/workspace/scratch/ab2464b21643/multisig-treasury/crates/avm-contract-sdk)
+warning: unstable feature specified for `-Ctarget-feature`: `wide-arithmetic`
+  |
+  = note: this feature is not stably supported; its behavior can change in the future
+
+warning: `avm-contract-sdk` (lib) generated 1 warning
+    Checking avm-treasury-payee v0.1.0 (/workspace/scratch/ab2464b21643/multisig-treasury/examples/multisig-treasury/contracts/payee)
+    Checking avm-multisig-treasury v0.1.0 (/workspace/scratch/ab2464b21643/multisig-treasury/examples/multisig-treasury/contracts/treasury)
+warning: `avm-treasury-payee` (lib) generated 1 warning (1 duplicate)
+warning: `avm-multisig-treasury` (lib) generated 1 warning (1 duplicate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.52s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/avm_multisig_tests-fc2e984b4a7637ed)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fuzz.rs (target/debug/deps/fuzz-41717e81f932263c)
+
+running 2 tests
+test the_fuzzer_reaches_governance_and_freeze_paths ... ok
+test randomized_operation_sequences_preserve_every_invariant ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.59s
+
+     Running tests/integration.rs (target/debug/deps/integration-41a060bc5423f449)
+
+running 5 tests
+test a_payee_that_echoes_the_wrong_receipt_cannot_settle_the_transfer ... ok
+test the_payee_enforces_who_may_call_it_and_what_it_accepts ... ok
+test a_transfer_is_delivered_echoed_and_settled_end_to_end ... ok
+test a_rejecting_payee_bounces_the_value_back_into_the_treasury ... ok
+test successive_transfers_use_distinct_receipts_and_replays_are_refused ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/treasury.rs (target/debug/deps/treasury-8a7748ffff0048c8)
+
+running 42 tests
+test a_one_of_one_treasury_queues_on_proposal ... ok
+test a_proposal_queues_when_it_reaches_the_threshold_and_waits_out_the_delay ... ok
+test a_stale_owner_proposal_is_rechecked_when_it_executes ... ok
+test a_bounced_transfer_gives_its_allowance_back ... ok
+test a_single_owner_can_freeze_but_only_the_owners_together_can_unfreeze ... ok
+test an_underfunded_treasury_refuses_to_operate ... ok
+test a_transfer_debits_first_and_pays_through_an_acknowledged_message ... ok
+test a_bounced_transfer_returns_the_funds_and_can_be_retried ... ok
+test an_executing_proposal_cannot_be_revoked_cancelled_or_approved_again ... ok
+test a_bounce_after_the_window_rolled_over_does_not_touch_the_new_window ... ok
+test deposits_need_value_and_respect_capacity ... ok
+test changing_the_threshold_demotes_and_promotes_pending_proposals ... ok
+test deadlines_apply_to_approving_and_executing ... ok
+test every_proposal_kind_validates_its_payload ... ok
+test anyone_can_deposit_and_the_ledger_tracks_each_currency ... ok
+test extra_approvals_on_a_queued_proposal_are_kept_and_expire_with_it ... ok
+test init_creates_an_empty_treasury_and_emits_created ... ok
+test overcommitted_balance_reservations_are_invalid_state ... ok
+test init_rejects_every_malformed_configuration ... ok
+test callbacks_settle_while_frozen ... ok
+test execution_checks_balances_fuel_recipients_and_capacity ... ok
+test every_declared_event_is_emitted_with_valid_fields ... ok
+test only_owners_may_act_and_governance_calls_carry_no_value ... ok
+test callbacks_are_checked_against_the_pending_payout ... ok
+test owners_are_added_through_a_proposal_and_can_then_act ... ok
+test proposals_cannot_be_forged_into_the_state ... ok
+test owner_removal_cannot_go_below_the_threshold ... ok
+test revoking_reopens_a_queued_proposal_and_requeueing_restarts_the_clock ... ok
+test removing_an_owner_strips_their_approvals_and_reopens_what_depended_on_them ... ok
+test one_payout_per_recipient_and_a_bounded_number_in_flight ... ok
+test pending_refunds_keep_their_balance_slots_while_frozen ... ok
+test the_delay_can_be_changed_and_applies_to_later_proposals ... ok
+test the_manifest_matches_the_code ... ok
+test successful_delivery_releases_only_the_pending_currency_reservation ... ok
+test the_decoder_rejects_tested_non_canonical_states ... ok
+test policies_can_be_replaced_removed_and_are_bounded ... ok
+test the_fast_lane_skips_the_delay_for_small_transfers_only ... ok
+test the_owner_set_is_capped_at_eight ... ok
+test shared_pending_currencies_and_existing_balances_share_one_reservation ... ok
+test the_proposal_table_is_bounded ... ok
+test oversized_table_counts_are_rejected_even_when_the_table_is_full ... ok
+test the_window_limit_caps_outflow_and_rolls_over ... ok
+
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/debug/deps/avm_multisig_treasury-d7494bb57bb223e7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/avm_treasury_payee-3908f2125e59b76d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests avm_multisig_tests
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests avm_multisig_treasury
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests avm_treasury_payee
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

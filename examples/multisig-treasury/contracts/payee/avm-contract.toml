@@ -1,0 +1,57 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "93ba83f944969c2a6f040a09e2c88fcc703df64dbc5592c860a974b15e437d76"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "state"
+len = 144
+
+[[abi.types]]
+id = 2
+kind = "fixed_bytes"
+name = "address_bytes"
+len = 64
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+name = "reject_flag"
+len = 1
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "payout_receipt"
+len = 32
+
+[[abi.methods]]
+name = "treasury.payee.bind"
+input_type_id = 2
+
+[[abi.methods]]
+name = "treasury.payee.reject"
+input_type_id = 3
+
+[[abi.methods]]
+name = "treasury.payee.receive"
+input_type_id = 4
+
+[[abi.errors]]
+status_code = 2200
+name = "unauthorized"
+message = "unauthorized"
+
+[[abi.errors]]
+status_code = 2201
+name = "invalid_args"
+message = "invalid args"
+
+[[abi.errors]]
+status_code = 2202
+name = "payee_rejected"
+message = "payee rejected"
