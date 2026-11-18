@@ -1,0 +1,286 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "a05b80d9e90621ebf0f2d2ee401fb103ee3b0d8ab9a475dfaef389e8ae82d3f5"
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "state"
+len = 4528
+
+[[abi.types]]
+id = 2
+kind = "u128"
+name = "amount"
+
+[[abi.types]]
+id = 3
+kind = "fixed_bytes"
+name = "liquidate_args"
+len = 48
+
+[[abi.types]]
+id = 4
+kind = "fixed_bytes"
+name = "withdraw_args"
+len = 84
+
+[[abi.types]]
+id = 5
+kind = "fixed_bytes"
+name = "params_args"
+len = 23
+
+[[abi.types]]
+id = 6
+kind = "fixed_bytes"
+name = "borrower_key"
+len = 32
+
+[[abi.types]]
+id = 7
+kind = "fixed_bytes"
+name = "payout_receipt"
+len = 32
+
+[[abi.types]]
+id = 8
+kind = "u64"
+name = "counter"
+
+[[abi.methods]]
+name = "lend.deposit"
+
+[[abi.methods]]
+name = "lend.supply"
+input_type_id = 2
+
+[[abi.methods]]
+name = "lend.redeem"
+input_type_id = 2
+
+[[abi.methods]]
+name = "lend.add_collateral"
+input_type_id = 2
+
+[[abi.methods]]
+name = "lend.remove_collateral"
+input_type_id = 2
+
+[[abi.methods]]
+name = "lend.borrow"
+input_type_id = 2
+
+[[abi.methods]]
+name = "lend.repay"
+input_type_id = 2
+
+[[abi.methods]]
+name = "lend.liquidate"
+input_type_id = 3
+
+[[abi.methods]]
+name = "lend.write_off"
+input_type_id = 6
+
+[[abi.methods]]
+name = "lend.withdraw"
+input_type_id = 4
+
+[[abi.methods]]
+name = "lend.set_price"
+input_type_id = 2
+
+[[abi.methods]]
+name = "lend.set_params"
+input_type_id = 5
+
+[[abi.methods]]
+name = "lend.collect_reserves"
+
+[[abi.methods]]
+name = "lend.topup"
+
+[[abi.methods]]
+name = "lend.callback"
+input_type_id = 7
+
+[[abi.events]]
+name = "lend.created"
+
+[[abi.events.fields]]
+id = 1
+type_id = 6
+name = "admin"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "collateral"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "debt"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "liq"
+
+[[abi.events.fields]]
+id = 5
+type_id = 8
+name = "ltv"
+
+[[abi.events]]
+name = "lend.action"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "action"
+
+[[abi.events.fields]]
+id = 2
+type_id = 2
+name = "amount"
+
+[[abi.events.fields]]
+id = 3
+type_id = 2
+name = "aux"
+
+[[abi.events.fields]]
+id = 4
+type_id = 6
+name = "holder"
+
+[[abi.events.fields]]
+id = 5
+type_id = 6
+name = "other"
+
+[[abi.events]]
+name = "lend.price"
+
+[[abi.events.fields]]
+id = 1
+type_id = 2
+name = "price"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "ts"
+
+[[abi.events]]
+name = "lend.params"
+
+[[abi.events.fields]]
+id = 1
+type_id = 8
+name = "kink"
+
+[[abi.events.fields]]
+id = 2
+type_id = 8
+name = "liq"
+
+[[abi.events.fields]]
+id = 3
+type_id = 8
+name = "ltv"
+
+[[abi.events.fields]]
+id = 4
+type_id = 8
+name = "paused"
+
+[[abi.errors]]
+status_code = 5000
+name = "invalid_args"
+message = "invalid or non-canonical arguments"
+
+[[abi.errors]]
+status_code = 5001
+name = "unauthorized"
+message = "caller is not allowed to do this"
+
+[[abi.errors]]
+status_code = 5002
+name = "invalid_state"
+message = "state is corrupt or the action is not valid now"
+
+[[abi.errors]]
+status_code = 5003
+name = "paused"
+message = "the market is paused"
+
+[[abi.errors]]
+status_code = 5004
+name = "invalid_value"
+message = "attached value is missing or not allowed"
+
+[[abi.errors]]
+status_code = 5005
+name = "insufficient_balance"
+message = "ledger balance, collateral or shares too low"
+
+[[abi.errors]]
+status_code = 5006
+name = "no_liquidity"
+message = "the market does not hold enough cash"
+
+[[abi.errors]]
+status_code = 5007
+name = "unhealthy"
+message = "the position would exceed its loan-to-value limit"
+
+[[abi.errors]]
+status_code = 5008
+name = "healthy"
+message = "nothing to liquidate or write off"
+
+[[abi.errors]]
+status_code = 5009
+name = "stale_price"
+message = "the price is unset or too old"
+
+[[abi.errors]]
+status_code = 5010
+name = "price_move"
+message = "price update exceeds the allowed move"
+
+[[abi.errors]]
+status_code = 5011
+name = "capacity"
+message = "table is full"
+
+[[abi.errors]]
+status_code = 5012
+name = "recipient_busy"
+message = "a payout to this recipient is already in flight"
+
+[[abi.errors]]
+status_code = 5013
+name = "invalid_callback"
+message = "invalid, stale or mismatched callback"
+
+[[abi.errors]]
+status_code = 5014
+name = "insolvent"
+message = "market balance or SHELL reserve insufficient"
+
+[[abi.errors]]
+status_code = 5015
+name = "overflow"
+message = "arithmetic overflow"
+
+[[abi.errors]]
+status_code = 5016
+name = "zero_amount"
+message = "the amount rounds to zero"
