@@ -37,6 +37,7 @@ LENDING_TYPES = [
     ("borrower_key", "fixed_bytes", 32),
     ("payout_receipt", "fixed_bytes", 32),
     ("counter", "u64", None),
+    ("market_config", "fixed_bytes", 80),
 ]
 
 LENDING_METHODS = [
@@ -112,7 +113,7 @@ def ident(name: str) -> int:
 def toml_text(schema: str, types, init_type, methods, events, errors) -> str:
     ids = {name: index + 1 for index, (name, _, _) in enumerate(types)}
     out = ["[descriptor]", 'execution_mode = "message_isolated"',
-           f'state_schema_id = "{blake3.blake3(schema.encode()).hexdigest()}"', "",
+           f'state_schema_id = "{blake3.blake3(schema.encode()).hexdigest()}"', "owner_key_offset = 0", "",
            "[abi]", "state_root_type_id = 1"]
     if init_type:
         out.append(f"init_input_type_id = {ids[init_type]}")
@@ -171,7 +172,7 @@ def ids_rs() -> str:
 
 OUTPUTS = {
     "contracts/lending/avm-contract.toml": lambda: toml_text(
-        "lending-market.state.v1", LENDING_TYPES, None, LENDING_METHODS, EVENTS,
+        "lending-market.state.v1", LENDING_TYPES, "market_config", LENDING_METHODS, EVENTS,
         LENDING_ERRORS),
     "contracts/payee/avm-contract.toml": lambda: toml_text(
         "lending-payee.state.v1", PAYEE_TYPES, None, PAYEE_METHODS, [], PAYEE_ERRORS),

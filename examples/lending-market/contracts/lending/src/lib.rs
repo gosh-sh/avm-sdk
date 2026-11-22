@@ -1,5 +1,5 @@
 #![cfg_attr(not(target_arch = "wasm32"), forbid(unsafe_code))]
-#![cfg_attr(target_arch = "wasm32", deny(unsafe_code), no_std)]
+#![cfg_attr(target_arch = "wasm32", deny(unsafe_code))]
 
 //! Over-collateralised lending market for one collateral asset and one
 //! borrowed asset, with a utilisation-based interest curve.
@@ -29,9 +29,6 @@ use avm_contract_sdk::{
 
 pub mod ids;
 pub mod math;
-#[cfg(all(target_arch = "wasm32", feature = "guest"))]
-#[allow(unsafe_code)]
-mod rt;
 pub mod state;
 
 use math::{mul_div_ceil, mul_div_floor, ONE};
@@ -318,8 +315,18 @@ fn process(input: MessageInput<'_>) -> Result<MessageOutput> {
     if input.message.is_callback() {
         return callback(&input, state);
     }
-    let Caller::External(actor) = input.caller else {
-        return Err(ERR_AUTH);
+    let actor = match input.caller {
+        Caller::External(actor) => actor,
+        #[cfg(target_arch = "wasm32")]
+        Caller::Internal(address) => {
+            // Use the full wallet address without widening the benchmark ledger.
+            let mut identity = [0; 64];
+            identity[..32].copy_from_slice(&address.dapp_id);
+            identity[32..].copy_from_slice(&address.account_id);
+            avm_contract_sdk::crypto::sha256(&identity)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        Caller::Internal(_) => return Err(ERR_AUTH),
     };
     check_solvency(&state, input.extra)?;
     let now = input.context.block_time;
@@ -739,4 +746,4 @@ fn callback(input: &MessageInput<'_>, mut state: State) -> Result<MessageOutput>
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "guest"))]
-avm_contract_sdk::export_message_contract!(Lending, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(Lending);

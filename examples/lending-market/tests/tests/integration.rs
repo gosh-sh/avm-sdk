@@ -330,3 +330,90 @@ fn the_payee_enforces_who_may_call_it_and_what_it_accepts() {
     accepted(&sim.settle(dest.address, Settle::Delivered(reply.callback_result_body)));
     assert_eq!(received_count(&dest.state), Some(1));
 }
+
+#[test]
+fn pending_withdrawals_settle_in_reverse_order_for_the_right_holders() {
+    let mut sim = funded();
+    accepted(&sim.deposit(ALICE, &[(DEBT, 900)]));
+    let mut rejecting = Dest::deploy(30);
+    let mut accepting = Dest::deploy(31);
+    accepted(&rejecting.bind(addr(POOL)));
+    accepted(&accepting.bind(addr(POOL)));
+    accepted(&rejecting.set_reject(true));
+    let collateral_before = sim.balance(COL);
+    let debt_before = sim.balance(DEBT);
+
+    let first = dispatch_from(&mut sim, BOB, rejecting.address, COL, 4_000);
+    let second = dispatch_from(&mut sim, ALICE, accepting.address, DEBT, 900);
+    let pending = sim.state().pending;
+    assert_eq!(pending.len(), 2);
+    assert_eq!(
+        (pending[0].recipient, pending[0].holder, pending[0].currency, pending[0].amount),
+        (rejecting.address, BOB, COL, 4_000)
+    );
+    assert_eq!(
+        (pending[1].recipient, pending[1].holder, pending[1].currency, pending[1].amount),
+        (accepting.address, ALICE, DEBT, 900)
+    );
+    assert_ne!(pending[0].id, pending[1].id);
+    assert_eq!(sim.account(BOB).balance[0], 496_000);
+    assert_eq!(sim.account(ALICE).balance[1], 0);
+    sim.assert_accounting();
+
+    let reply = accepting.receive(addr(POOL), &second);
+    accepted(&reply);
+    assert_eq!(received_count(&accepting.state), Some(1));
+    assert_eq!(last_receipt(&accepting.state).unwrap().as_slice(), second.body.as_slice());
+    accepted(&sim.settle(accepting.address, Settle::Delivered(reply.callback_result_body)));
+    assert_eq!(sim.state().pending, pending[..1]);
+    assert_eq!(sim.account(BOB).balance[0], 496_000);
+    assert_eq!(sim.account(ALICE).balance[1], 0);
+    assert_eq!(sim.outbox.len(), 1);
+    sim.assert_accounting();
+
+    failure(&rejecting.receive(addr(POOL), &first), ERR_REJECT);
+    assert_eq!(received_count(&rejecting.state), Some(0));
+    accepted(&sim.settle(rejecting.address, Settle::Bounced(first.extra)));
+    assert!(sim.state().pending.is_empty() && sim.outbox.is_empty());
+    assert_eq!(sim.account(BOB).balance[0], 500_000);
+    assert_eq!(sim.account(ALICE).balance[1], 0);
+    assert_eq!(sim.balance(COL), collateral_before);
+    assert_eq!(sim.balance(DEBT), debt_before - 900);
+    sim.assert_accounting();
+}
+
+#[test]
+fn the_same_recipient_accepts_a_new_request_only_after_settlement() {
+    let mut sim = funded();
+    accepted(&sim.deposit(ALICE, &[(DEBT, 900)]));
+    let mut dest = Dest::deploy(32);
+    accepted(&dest.bind(addr(POOL)));
+
+    let first = dispatch_from(&mut sim, BOB, dest.address, COL, 4_000);
+    let state = sim.state.clone();
+    let vault = sim.vault.clone();
+    failure(
+        &sim.withdraw(ALICE, DEBT, 900, dest.address),
+        avm_lending_market::ERR_PENDING,
+    );
+    assert_eq!(sim.state, state);
+    assert_eq!(sim.vault, vault);
+    assert_eq!(sim.outbox.len(), 1);
+    assert_eq!(sim.outbox[0].body, first.body);
+
+    let response = dest.receive(addr(POOL), &first);
+    accepted(&response);
+    accepted(&sim.settle(dest.address, Settle::Delivered(response.callback_result_body)));
+    assert!(sim.state().pending.is_empty());
+
+    let second = dispatch_from(&mut sim, ALICE, dest.address, DEBT, 900);
+    assert_ne!(first.body, second.body);
+    let response = dest.receive(addr(POOL), &second);
+    accepted(&response);
+    accepted(&sim.settle(dest.address, Settle::Delivered(response.callback_result_body)));
+    assert!(sim.state().pending.is_empty() && sim.outbox.is_empty());
+    assert_eq!(received_count(&dest.state), Some(2));
+    assert_eq!(sim.account(BOB).balance[0], 496_000);
+    assert_eq!(sim.account(ALICE).balance[1], 0);
+    sim.assert_accounting();
+}

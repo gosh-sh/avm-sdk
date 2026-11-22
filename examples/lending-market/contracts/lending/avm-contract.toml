@@ -1,9 +1,11 @@
 [descriptor]
 execution_mode = "message_isolated"
 state_schema_id = "a05b80d9e90621ebf0f2d2ee401fb103ee3b0d8ab9a475dfaef389e8ae82d3f5"
+owner_key_offset = 0
 
 [abi]
 state_root_type_id = 1
+init_input_type_id = 9
 
 [[abi.types]]
 id = 1
@@ -50,6 +52,12 @@ len = 32
 id = 8
 kind = "u64"
 name = "counter"
+
+[[abi.types]]
+id = 9
+kind = "fixed_bytes"
+name = "market_config"
+len = 80
 
 [[abi.methods]]
 name = "lend.deposit"

@@ -1,5 +1,5 @@
 #![cfg_attr(not(target_arch = "wasm32"), forbid(unsafe_code))]
-#![cfg_attr(target_arch = "wasm32", deny(unsafe_code), no_std)]
+#![cfg_attr(target_arch = "wasm32", deny(unsafe_code))]
 
 //! Companion fixture: a payout destination bound to one lending. It accepts a
 //! transfer, records the receipt and echoes it in its callback, or it
@@ -145,9 +145,4 @@ pub fn last_receipt(state: &[u8]) -> Option<[u8; 32]> {
 }
 
 #[cfg(target_arch = "wasm32")]
-#[allow(unsafe_code)]
-#[path = "../../lending/src/rt.rs"]
-mod rt;
-
-#[cfg(target_arch = "wasm32")]
-avm_contract_sdk::export_message_contract!(Payee, arena_bytes = 262_144);
+avm_contract_sdk::export_message_contract!(Payee);
