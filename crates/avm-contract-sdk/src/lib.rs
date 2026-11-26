@@ -25,12 +25,23 @@ pub use input::{
     ExternalMessage, InternalEventReadRequest, InternalEventReadRequestIter,
     InternalEventReadRequests, InternalMessage, MessageInput,
 };
+#[cfg(feature = "event-rings")]
+pub use input::{
+    decode_event_fields, decode_internal_event_results, InternalEventReadResult, ReadableEvent,
+};
+#[cfg(feature = "system-mint")]
+pub use output::encode_mint_output;
+#[cfg(feature = "event-rings")]
+pub use output::EventReadEntry;
 pub use output::{
     encode_batch_output, encode_event_fields, encode_message_output, BatchOutput, CallbackIntent,
     CodeUpgradeIntent, EncodeError, EventField, EventIntent, EventKind, EventValue, MessageOutput,
     OutboundIntent, StatePatch, StateUpdate,
 };
 pub use owner_key::{owner_key, set_owner_key, OWNER_KEY_BYTES};
+#[cfg(all(target_arch = "wasm32", feature = "system-mint"))]
+#[doc(hidden)]
+pub use runtime::dispatch_mint_message;
 #[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
 pub use runtime::{dispatch_batch, dispatch_init, dispatch_message, GuestArena};
@@ -108,6 +119,42 @@ pub trait BatchContract: Contract {
     fn process_batch(input: BatchInput<'_>) -> BatchOutput;
 }
 
+/// A system minter: `process_message` also returns
+/// the currencies it mints, which the host accepts only from an account and
+/// code that the network config designates. `init` never mints. The exported
+/// `process_message` of [`export_mint_contract`] calls `process_mint_message`.
+/// The SDK feature `system-mint` compiles it; an ordinary contract leaves the
+/// feature off and builds without the mint surface.
+#[cfg(feature = "system-mint")]
+pub trait MintContract: Contract {
+    fn process_mint_message(
+        input: MessageInput<'_>,
+    ) -> (MessageOutput, alloc::vec::Vec<CurrencyAmount>);
+}
+
+/// Exports the AVM guest surface of a [`MintContract`]: the surface of
+/// [`export_message_contract`] whose `process_message` may return a mint
+/// intent.
+#[cfg(feature = "system-mint")]
+#[macro_export]
+macro_rules! export_mint_contract {
+    ($contract:ty) => {
+        $crate::export_mint_contract!($contract, arena_bytes = $crate::DEFAULT_GUEST_ARENA_BYTES);
+    };
+    ($contract:ty, arena_bytes = $arena_bytes:expr) => {
+        $crate::export_message_contract!(@exports $contract, $arena_bytes, dispatch_mint_message);
+
+        // The exports exist only on WASM; native builds keep the entrypoints in use.
+        #[cfg(not(target_arch = "wasm32"))]
+        const _: for<'a> fn($crate::MessageInput<'a>) -> $crate::MessageOutput =
+            <$contract as $crate::Contract>::init;
+        #[cfg(not(target_arch = "wasm32"))]
+        const _: fn() = || {
+            let _ = <$contract as $crate::MintContract>::process_mint_message;
+        };
+    };
+}
+
 /// Exports the exact MessageIsolated AVM guest surface.
 ///
 /// The optional `arena_bytes = ...` form selects the bounded input/output arena
@@ -122,6 +169,16 @@ macro_rules! export_message_contract {
         );
     };
     ($contract:ty, arena_bytes = $arena_bytes:expr) => {
+        $crate::export_message_contract!(@exports $contract, $arena_bytes, dispatch_message);
+
+        // The exports exist only on WASM; native builds keep the entrypoints in use.
+        #[cfg(not(target_arch = "wasm32"))]
+        const _: [for<'a> fn($crate::MessageInput<'a>) -> $crate::MessageOutput; 2] =
+            [<$contract as $crate::Contract>::init, <$contract as $crate::Contract>::process_message];
+    };
+    // The guest exports. `process_message` calls `$dispatch`: `dispatch_message`,
+    // or `dispatch_mint_message` for `export_mint_contract!`.
+    (@exports $contract:ty, $arena_bytes:expr, $dispatch:ident) => {
         #[cfg(target_arch = "wasm32")]
         const _: () = assert!($arena_bytes > 0 && $arena_bytes <= u32::MAX as usize,
             "arena capacity is missing; measure contract tests, set build.arena_bytes or the macro arena_bytes parameter");
@@ -156,17 +213,12 @@ macro_rules! export_message_contract {
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn process_message(input_ptr: u32, input_len: u32) -> u64 {
-            $crate::dispatch_message::<$contract, { $arena_bytes }>(
+            $crate::$dispatch::<$contract, { $arena_bytes }>(
                 &__AVM_GUEST_ARENA,
                 input_ptr,
                 input_len,
             )
         }
-
-        // The exports exist only on WASM; native builds keep the entrypoints in use.
-        #[cfg(not(target_arch = "wasm32"))]
-        const _: [for<'a> fn($crate::MessageInput<'a>) -> $crate::MessageOutput; 2] =
-            [<$contract as $crate::Contract>::init, <$contract as $crate::Contract>::process_message];
     };
 }
 

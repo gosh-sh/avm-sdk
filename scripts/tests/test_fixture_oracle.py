@@ -1,6 +1,6 @@
 """Independent byte assertions for the bounded packaged-lifecycle oracle.
 
-Preimages are written out here from canonical-encoding.md, not obtained from
+Preimages are written out here from the canonical encoding, not obtained from
 the stand or the oracle implementation. The event vector is the immutable
 EXTERNAL_EVENT_HEX in accepted avm-event-capnp-codec build_event_log_vectors.rs.
 """

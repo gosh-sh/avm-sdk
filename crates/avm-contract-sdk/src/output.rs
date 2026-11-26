@@ -1,3 +1,5 @@
+#[cfg(feature = "event-rings")]
+use crate::InternalEventReadRequest;
 use alloc::{string::String, vec::Vec};
 
 use crate::{
@@ -7,6 +9,13 @@ use crate::{
 
 const FLAG_HAS_STATE_UPDATE: u8 = 1;
 const FLAG_HAS_UPGRADE_INTENT: u8 = 1 << 1;
+#[cfg(feature = "event-rings")]
+const FLAG_HAS_OUTBOUND_EVENT_READS: u8 = 1 << 3;
+/// `BatchOutput.flags` bit 0: the batch output declares outbound event reads.
+#[cfg(feature = "event-rings")]
+const BATCH_FLAG_HAS_OUTBOUND_EVENT_READS: u8 = 1;
+#[cfg(feature = "system-mint")]
+const FLAG_HAS_MINT_INTENT: u8 = 1 << 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EncodeError {
@@ -22,6 +31,7 @@ pub enum EncodeError {
     InvalidEvent,
     UpgradeForbidden,
     UpgradeRequired,
+    InvalidEventReads,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -56,6 +66,18 @@ pub struct OutboundIntent {
     pub body: Vec<u8>,
 }
 
+/// The exact internal-event reads that the internal message of the outbound
+/// intent `outbound_index` declares.
+/// `reads` is not empty and strictly ascending by source DApp id, source
+/// account id and `event_class`; the receiver gets one result for each read,
+/// in this order.
+#[cfg(feature = "event-rings")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EventReadEntry {
+    pub outbound_index: u32,
+    pub reads: Vec<InternalEventReadRequest>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CallbackIntent {
     pub outbound_index: u32,
@@ -66,6 +88,9 @@ pub struct CallbackIntent {
 #[repr(u8)]
 pub enum EventKind {
     External = 0,
+    /// Enters the internal-event ring of its emitter; only with the feature
+    /// `event-rings`.
+    #[cfg(feature = "event-rings")]
     Internal = 1,
 }
 
@@ -94,6 +119,10 @@ pub struct MessageOutput {
     pub callback_intents: Vec<CallbackIntent>,
     pub event_intents: Vec<EventIntent>,
     pub code_upgrade_intent: Option<CodeUpgradeIntent>,
+    /// Entries in strictly ascending `outbound_index` order; only with the
+    /// feature `event-rings`.
+    #[cfg(feature = "event-rings")]
+    pub outbound_event_reads: Vec<EventReadEntry>,
 }
 
 impl MessageOutput {
@@ -106,6 +135,8 @@ impl MessageOutput {
             callback_intents: Vec::new(),
             event_intents: Vec::new(),
             code_upgrade_intent: None,
+            #[cfg(feature = "event-rings")]
+            outbound_event_reads: Vec::new(),
         }
     }
 
@@ -118,6 +149,8 @@ impl MessageOutput {
             callback_intents: Vec::new(),
             event_intents: Vec::new(),
             code_upgrade_intent: None,
+            #[cfg(feature = "event-rings")]
+            outbound_event_reads: Vec::new(),
         }
     }
 }
@@ -128,6 +161,10 @@ pub struct BatchOutput {
     pub status_codes: Vec<u32>,
     pub outbound_intents: Vec<OutboundIntent>,
     pub event_intents: Vec<EventIntent>,
+    /// Entries in strictly ascending `outbound_index` order; only with the
+    /// feature `event-rings`.
+    #[cfg(feature = "event-rings")]
+    pub outbound_event_reads: Vec<EventReadEntry>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -236,9 +273,13 @@ pub(crate) fn write_message_output(
     if output.code_upgrade_intent.is_some() {
         flags |= FLAG_HAS_UPGRADE_INTENT;
     }
+    #[cfg(feature = "event-rings")]
+    if !output.outbound_event_reads.is_empty() {
+        flags |= FLAG_HAS_OUTBOUND_EVENT_READS;
+    }
     bytes.write(&[flags])?;
     if let Some(state_update) = &output.state_update {
-        encode_state_update(bytes, state_update)?;
+        encode_state_update(bytes, state_update, 0)?;
     }
     push_length_prefixed_u32(bytes, &output.callback_result_body)?;
     encode_outbound_intents(bytes, &output.outbound_intents)?;
@@ -252,6 +293,87 @@ pub(crate) fn write_message_output(
         bytes.write(&upgrade.target_selected_code_id)?;
         bytes.write(&upgrade.expected_code_hash)?;
     }
+    #[cfg(feature = "event-rings")]
+    encode_event_reads(bytes, &output.outbound_event_reads)?;
+    Ok(())
+}
+
+/// Encodes the output of a system minter: the
+/// ordinary encoding with the `has_mint_intent` flag, then `mint_count` and
+/// `mints` in the `MessageOutput` layout. Empty `mints` encode the
+/// ordinary output. The host checks the count limit and the designation.
+#[cfg(feature = "system-mint")]
+pub fn encode_mint_output(
+    output: &MessageOutput,
+    mints: &[CurrencyAmount],
+) -> Result<Vec<u8>, EncodeError> {
+    validate_message_shape(output, None)?;
+    validate_mints(output, mints)?;
+    let mut bytes = Vec::new();
+    write_mint_output(&mut bytes, output, mints)?;
+    Ok(bytes)
+}
+
+#[cfg(feature = "system-mint")]
+#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
+pub(crate) fn mint_output_len_for(
+    input: &MessageInput<'_>,
+    output: &MessageOutput,
+    mints: &[CurrencyAmount],
+) -> Result<usize, EncodeError> {
+    let len = message_output_len_for(input, false, output)?;
+    if mints.is_empty() {
+        return Ok(len);
+    }
+    validate_mints(output, mints)?;
+    checked_len(&[len, 2, repeated_len(mints.len(), 20)?])
+}
+
+/// A mint intent belongs to a successful output; its amounts are non-zero
+/// and its currency ids strictly ascending.
+#[cfg(feature = "system-mint")]
+fn validate_mints(output: &MessageOutput, mints: &[CurrencyAmount]) -> Result<(), EncodeError> {
+    if mints.is_empty() {
+        return Ok(());
+    }
+    if output.status_code != 0 {
+        return Err(EncodeError::EffectsOnFailure);
+    }
+    len_u16(mints.len())?;
+    if mints.iter().any(|mint| mint.amount == 0)
+        || mints.windows(2).any(|pair| pair[0].currency_id >= pair[1].currency_id)
+    {
+        return Err(EncodeError::InvalidExtraCurrencies);
+    }
+    Ok(())
+}
+
+#[cfg(feature = "system-mint")]
+pub(crate) fn write_mint_output(
+    bytes: &mut impl OutputWriter,
+    output: &MessageOutput,
+    mints: &[CurrencyAmount],
+) -> Result<(), EncodeError> {
+    if mints.is_empty() {
+        return write_message_output(bytes, output);
+    }
+    // The flags byte follows the 4-byte magic and the 4-byte status code.
+    let mut encoded = Vec::new();
+    write_message_output(&mut encoded, output)?;
+    encoded[8] |= FLAG_HAS_MINT_INTENT;
+    // The mint intent precedes the trailing `OutboundEventReads`.
+    #[cfg(feature = "event-rings")]
+    let reads_at = encoded.len() - event_reads_len(&output.outbound_event_reads)?;
+    #[cfg(not(feature = "event-rings"))]
+    let reads_at = encoded.len();
+    bytes.write(&encoded[..reads_at])?;
+    bytes.write(&len_u16(mints.len())?.to_le_bytes())?;
+    for mint in mints {
+        bytes.write(&mint.currency_id.to_le_bytes())?;
+        bytes.write(&mint.amount.to_le_bytes())?;
+    }
+    #[cfg(feature = "event-rings")]
+    bytes.write(&encoded[reads_at..])?;
     Ok(())
 }
 
@@ -270,13 +392,23 @@ pub(crate) fn write_batch_output(
     output: &BatchOutput,
 ) -> Result<(), EncodeError> {
     bytes.write(b"ACBO")?;
-    encode_state_update(bytes, &output.state_update)?;
+    #[cfg(feature = "event-rings")]
+    let flags = if output.outbound_event_reads.is_empty() {
+        0
+    } else {
+        BATCH_FLAG_HAS_OUTBOUND_EVENT_READS
+    };
+    #[cfg(not(feature = "event-rings"))]
+    let flags = 0;
+    encode_state_update(bytes, &output.state_update, flags)?;
     bytes.write(&len_u32(output.status_codes.len())?.to_le_bytes())?;
     for status_code in &output.status_codes {
         bytes.write(&status_code.to_le_bytes())?;
     }
     encode_outbound_intents(bytes, &output.outbound_intents)?;
     encode_event_intents(bytes, &output.event_intents)?;
+    #[cfg(feature = "event-rings")]
+    encode_event_reads(bytes, &output.outbound_event_reads)?;
     Ok(())
 }
 
@@ -316,6 +448,16 @@ fn event_intents_len(intents: &[EventIntent]) -> Result<usize, EncodeError> {
     })
 }
 
+#[cfg(feature = "event-rings")]
+fn event_reads_len(entries: &[EventReadEntry]) -> Result<usize, EncodeError> {
+    if entries.is_empty() {
+        return Ok(0);
+    }
+    entries
+        .iter()
+        .try_fold(4, |total, entry| checked_len(&[total, 8, repeated_len(entry.reads.len(), 72)?]))
+}
+
 fn message_output_len(output: &MessageOutput) -> Result<usize, EncodeError> {
     checked_len(&[
         9,
@@ -327,6 +469,8 @@ fn message_output_len(output: &MessageOutput) -> Result<usize, EncodeError> {
         repeated_len(output.callback_intents.len(), 12)?,
         event_intents_len(&output.event_intents)?,
         if output.code_upgrade_intent.is_some() { 64 } else { 0 },
+        #[cfg(feature = "event-rings")]
+        event_reads_len(&output.outbound_event_reads)?,
     ])
 }
 
@@ -338,6 +482,8 @@ fn batch_output_len(output: &BatchOutput) -> Result<usize, EncodeError> {
         repeated_len(output.status_codes.len(), 4)?,
         outbound_intents_len(&output.outbound_intents)?,
         event_intents_len(&output.event_intents)?,
+        #[cfg(feature = "event-rings")]
+        event_reads_len(&output.outbound_event_reads)?,
     ])
 }
 
@@ -357,6 +503,7 @@ fn validate_message_shape(
         || !output.callback_intents.is_empty()
         || !output.event_intents.is_empty()
         || output.code_upgrade_intent.is_some()
+        || has_event_reads(output)
     {
         return Err(EncodeError::EffectsOnFailure);
     }
@@ -364,6 +511,8 @@ fn validate_message_shape(
     validate_state_update(output.state_update.as_ref())?;
     validate_outbound_intents(&output.outbound_intents)?;
     validate_event_intents(&output.event_intents)?;
+    #[cfg(feature = "event-rings")]
+    validate_event_reads(&output.outbound_event_reads, output.outbound_intents.len())?;
     let mut seen = Vec::new();
     for callback in &output.callback_intents {
         if callback.handler_method_id == 0
@@ -396,7 +545,10 @@ fn validate_batch_shape(
         validate_status_code(*status_code)?;
     }
     validate_outbound_intents(&output.outbound_intents)?;
-    validate_event_intents(&output.event_intents)
+    validate_event_intents(&output.event_intents)?;
+    #[cfg(feature = "event-rings")]
+    validate_event_reads(&output.outbound_event_reads, output.outbound_intents.len())?;
+    Ok(())
 }
 
 fn validate_message_context(
@@ -488,6 +640,48 @@ fn validate_outbound_intents(intents: &[OutboundIntent]) -> Result<(), EncodeErr
     Ok(())
 }
 
+/// Each entry names an outbound intent of the output, after the outbound
+/// intent of the previous entry, with reads strictly ascending by source
+/// DApp id, source account id and `event_class`. The host checks the count
+/// limit of the network.
+#[cfg(feature = "event-rings")]
+fn validate_event_reads(
+    entries: &[EventReadEntry],
+    outbound_count: usize,
+) -> Result<(), EncodeError> {
+    len_u32(entries.len())?;
+    let mut first_free_index = 0;
+    for entry in entries {
+        let index =
+            usize::try_from(entry.outbound_index).map_err(|_| EncodeError::InvalidEventReads)?;
+        if index < first_free_index
+            || index >= outbound_count
+            || entry.reads.is_empty()
+            || entry.reads.windows(2).any(|pair| read_key(&pair[0]) >= read_key(&pair[1]))
+        {
+            return Err(EncodeError::InvalidEventReads);
+        }
+        len_u16(entry.reads.len())?;
+        first_free_index = index + 1;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "event-rings")]
+fn read_key(read: &InternalEventReadRequest) -> (&[u8; 32], &[u8; 32], u64) {
+    (&read.source.dapp_id, &read.source.account_id, read.event_class)
+}
+
+#[cfg(feature = "event-rings")]
+fn has_event_reads(output: &MessageOutput) -> bool {
+    !output.outbound_event_reads.is_empty()
+}
+
+#[cfg(not(feature = "event-rings"))]
+fn has_event_reads(_: &MessageOutput) -> bool {
+    false
+}
+
 fn validate_extra(extra: &[CurrencyAmount]) -> Result<(), EncodeError> {
     u16::try_from(extra.len()).map_err(|_| EncodeError::LengthOverflow)?;
     if extra.windows(2).any(|pair| pair[0].currency_id >= pair[1].currency_id) {
@@ -510,12 +704,14 @@ fn validate_event_intents(intents: &[EventIntent]) -> Result<(), EncodeError> {
     Ok(())
 }
 
+/// Writes the state update. `flags` is the byte after its kind: zero in a
+/// `MessageOutput`, `BatchOutput.flags` in a `BatchOutput`.
 fn encode_state_update(
     bytes: &mut impl OutputWriter,
     update: &StateUpdate,
+    flags: u8,
 ) -> Result<(), EncodeError> {
-    bytes.write(&[update.mode() as u8])?;
-    bytes.write(&[0; 3])?;
+    bytes.write(&[update.mode() as u8, flags, 0, 0])?;
     match update {
         StateUpdate::FullReplace(state) => push_length_prefixed_u32(bytes, state),
         StateUpdate::DataPatchList(patches) => {
@@ -570,6 +766,29 @@ fn encode_event_intents(
             bytes.write(topic)?;
         }
         push_length_prefixed_u32(bytes, &intent.fields_binary)?;
+    }
+    Ok(())
+}
+
+/// Writes `OutboundEventReads`; an output without entries has no section.
+#[cfg(feature = "event-rings")]
+fn encode_event_reads(
+    bytes: &mut impl OutputWriter,
+    entries: &[EventReadEntry],
+) -> Result<(), EncodeError> {
+    if entries.is_empty() {
+        return Ok(());
+    }
+    bytes.write(&len_u32(entries.len())?.to_le_bytes())?;
+    for entry in entries {
+        bytes.write(&entry.outbound_index.to_le_bytes())?;
+        bytes.write(&len_u16(entry.reads.len())?.to_le_bytes())?;
+        bytes.write(&0u16.to_le_bytes())?;
+        for read in &entry.reads {
+            bytes.write(&read.source.dapp_id)?;
+            bytes.write(&read.source.account_id)?;
+            bytes.write(&read.event_class.to_le_bytes())?;
+        }
     }
     Ok(())
 }
@@ -830,6 +1049,22 @@ mod writer_tests {
         assert_eq!(work::take(), (0, 0, expected.len()));
     }
 
+    /// A minter output as the mint dispatch writes it: its computed length,
+    /// then one direct write, equal to `encode_mint_output`.
+    #[cfg(feature = "system-mint")]
+    #[test]
+    fn direct_mint_output_fills_its_computed_length() {
+        let bytes = input();
+        let message = decode_message_input(&bytes).unwrap();
+        let output = Echo::process_message(message);
+        let mint = [CurrencyAmount { currency_id: 2, amount: u128::MAX }];
+        for mints in [&[][..], &mint[..]] {
+            let len = mint_output_len_for(&message, &output, mints).unwrap();
+            let written = direct(len, |writer| write_mint_output(writer, &output, mints));
+            assert_eq!(written, crate::encode_mint_output(&output, mints).unwrap());
+        }
+    }
+
     #[test]
     fn ten_thousand_wallet_sized_outputs_remove_observed_vec_growth_and_copy() {
         // A work-count fixture, not a replacement for the registered Wallet benchmark.
@@ -882,6 +1117,8 @@ mod writer_tests {
                     status_codes: vec![0, 1000],
                     outbound_intents: Vec::new(),
                     event_intents: Vec::new(),
+                    #[cfg(feature = "event-rings")]
+                    outbound_event_reads: Vec::new(),
                 }
             }
         }
@@ -920,6 +1157,46 @@ mod writer_tests {
         assert_eq!(batch_output_len_for(&input, &output), Err(EncodeError::InvalidIndex));
     }
 
+    #[cfg(feature = "event-rings")]
+    #[test]
+    fn direct_outbound_event_reads_match_the_public_serializer() {
+        use crate::{AccountAddress, BatchOutput, EventReadEntry, InternalEventReadRequest};
+        let bytes = input();
+        let input = decode_message_input(&bytes).unwrap();
+        let mut output = MessageOutput::success(StateUpdate::FullReplace(vec![1]));
+        output.outbound_intents.push(crate::OutboundIntent {
+            input_index: 0,
+            destination: input.destination,
+            fuel_fee_shells: 2,
+            extra: Vec::new(),
+            method_id: 3,
+            body: vec![4; 5],
+        });
+        let read = |event_class| InternalEventReadRequest {
+            source: AccountAddress { dapp_id: [6; 32], account_id: [7; 32] },
+            event_class,
+        };
+        output.outbound_event_reads =
+            vec![EventReadEntry { outbound_index: 0, reads: vec![read(8), read(9)] }];
+        let expected = crate::encode_message_output(&output).unwrap();
+        let len = message_output_len_for(&input, false, &output).unwrap();
+        assert_eq!(len, expected.len());
+        assert_eq!(direct(len, |writer| write_message_output(writer, &output)), expected);
+
+        let batch = BatchOutput {
+            state_update: StateUpdate::FullReplace(vec![1]),
+            status_codes: vec![0],
+            outbound_intents: output.outbound_intents,
+            event_intents: Vec::new(),
+            outbound_event_reads: output.outbound_event_reads,
+        };
+        let expected = crate::encode_batch_output(&batch).unwrap();
+        let len = batch_output_len(&batch).unwrap();
+        assert_eq!(len, expected.len());
+        assert_eq!(direct(len, |writer| write_batch_output(writer, &batch)), expected);
+    }
+
+    #[cfg(feature = "event-rings")]
     #[test]
     fn direct_message_sections_and_batch_match_the_public_serializer() {
         use crate::{
@@ -979,6 +1256,7 @@ mod writer_tests {
                 status_codes: vec![0, 1000],
                 outbound_intents: output.outbound_intents,
                 event_intents: output.event_intents,
+                outbound_event_reads: output.outbound_event_reads,
             };
             let expected = crate::encode_batch_output(&batch).unwrap();
             assert_eq!(

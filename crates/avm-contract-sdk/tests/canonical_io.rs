@@ -1,10 +1,12 @@
+#[cfg(feature = "event-rings")]
+use avm_contract_sdk::Caller;
 use avm_contract_sdk::{
     decode_batch_input, decode_message_input, encode_batch_output, encode_event_fields,
-    encode_message_output, AccountAddress, BatchOutput, CallbackIntent, Caller, CurrencyAmount,
-    EventField, EventIntent, EventKind, EventValue, MessageOutput, OutboundIntent, StatePatch,
-    StateUpdate,
+    encode_message_output, AccountAddress, BatchOutput, CallbackIntent, CurrencyAmount, EventField,
+    EventIntent, EventKind, EventValue, MessageOutput, OutboundIntent, StatePatch, StateUpdate,
 };
 
+#[cfg(feature = "event-rings")]
 #[test]
 fn acmi_decode_and_acmo_encode_cover_all_effect_sections() {
     let destination = address(0x30, 0x31);
@@ -75,6 +77,7 @@ fn acmi_decode_and_acmo_encode_cover_all_effect_sections() {
             fields_binary: fields,
         }],
         code_upgrade_intent: None,
+        outbound_event_reads: Vec::new(),
     };
     let encoded = encode_message_output(&output).expect("canonical ACMO must encode");
     assert_eq!(&encoded[..4], b"ACMO");
@@ -125,6 +128,8 @@ fn acbi_decode_and_acbo_encode_preserve_indexes_and_statuses() {
             topics: Vec::new(),
             fields_binary: encode_event_fields(&[]).unwrap(),
         }],
+        #[cfg(feature = "event-rings")]
+        outbound_event_reads: Vec::new(),
     };
     let encoded = encode_batch_output(&output).expect("canonical ACBO must encode");
     assert_eq!(&encoded[..4], b"ACBO");
@@ -240,6 +245,7 @@ fn internal_message(
     bytes
 }
 
+#[cfg(feature = "event-rings")]
 fn message_input(
     message: &[u8],
     source: AccountAddress,

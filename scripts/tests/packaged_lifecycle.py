@@ -236,7 +236,7 @@ class Journey:
 
         An internal deploy creates the account in the deploying contract's
         DApp, and the account id does not depend on the DApp
-        (avm-contracts.md "Deploy Address And dapp_id"): the address is the
+        (the deploy address rule): the address is the
         creator's DApp id and the account id of the deploy. The deploy refers
         to the published selection, without code bytes. The user, the owner of
         the creator, signs `method`: `wallet.send` sends the deploy and
@@ -273,7 +273,7 @@ class Journey:
         its DApp; returns the sender and the receiver.
 
         Each external deploy is the first contract of its own DApp
-        (avm-contracts.md "Deploy Address And dapp_id"): the publication
+        (the deploy address rule): the publication
         deploys put the codes into the Code Library, and the wallet, the first
         contract of the application's DApp, deploys the sender there, so the
         forward to the receiver stays a same-DApp route. As designed,
@@ -594,9 +594,9 @@ def run(bundle, evidence, incompatible_state=None, wrong_rustc=None, source=Fals
             "Fixed example owner differs from the public CLI-generated owner; upgrade rejection was verified."
         ],
         "internal_event_reads": {
-            "capability": "UNSUPPORTED_IN_REVIEWED_ABI",
-            "package_execution": "NOT_EXECUTED_THROUGH_PUBLIC_PACKAGE", "passed": None,
-            "reason": "Current guest OutboundIntent wire has no read-request field; external inputs forbid it. Source block-start visibility/burn/fallback and injection-rejection assertions remain mandatory. Packaged event coverage is emission/listing only.",
+            "capability": "DECLARED_ON_OUTBOUND_MESSAGES",
+            "package_execution": "NOT_EXECUTED_IN_PACKAGED_LIFECYCLE", "passed": None,
+            "reason": "Packaged lifecycle event coverage is emission/listing only. Declared reads run in examples/internal-event-reads/reads.sh (gate sdk-internal-event-reads); external inputs carry no reads.",
         },
     }, indent=2))
 

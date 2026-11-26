@@ -5,8 +5,9 @@ for example "1000 tokens moved from A to B". Events do not change contract
 state and other contracts do not receive them as messages. They are a log for
 off-chain readers: wallets, indexers and your own tests.
 
-This page shows how to declare and emit an event, which limits apply, and how
-to read events on the local stand. Reading events from a network is not
+This page shows how to declare and emit an event, which limits apply, how a
+contract reads the internal events of other accounts, and how to read events
+on the local stand. Reading events from a network with the SDK is not
 available in this release; see
 [What you can read from a network](network.md#what-you-can-read-from-a-network-today).
 
@@ -100,8 +101,9 @@ output
 - `input_index` is 0 for a message-isolated contract.
 - `kind`: use `EventKind::External` for an event that off-chain readers
   consume. `EventKind::Internal` additionally keeps the event in the emitting
-  account's internal event ring under its `event_class`; contracts built with
-  this SDK cannot request reads of that ring.
+  account's internal event ring under its `event_class`, where other
+  contracts can [read it](#read-internal-events-in-a-contract). It needs the
+  guest crate's feature [`event-rings`](#enable-internal-event-rings).
 - `topics` are short byte strings that identify what the event is about, for
   example the two holder addresses above.
 - Field values are `EventValue::Null`, `Bool`, `U64`, `I64`, `U128`, `I128`,
@@ -137,6 +139,102 @@ call with status 43 (`VM_ABI_OUTPUT_MISSING`). A call whose internal events
 would exceed the per-account limits fails with status 54
 (`VM_EVENT_LIMIT_EXCEEDED`). The failed call keeps none of its effects. See
 [statuses and errors](statuses-and-errors.md).
+
+## Enable internal event rings
+
+Internal event rings are an option of the guest crate: a contract need not
+write or read them. A contract that does enables the feature `event-rings` in
+its `Cargo.toml`, as the contract B and
+[internal event reads](../examples/internal-event-reads/README.md) examples do:
+
+```toml
+avm-contract-sdk = { path = "../../crates/avm-contract-sdk", features = ["event-rings"] }
+```
+
+The feature compiles `EventKind::Internal`, the `outbound_event_reads` field of
+`MessageOutput` and `BatchOutput` with `EventReadEntry`, and the reader
+`MessageInput::internal_event_reads` with `decode_internal_event_results` and
+`decode_event_fields`. Without it a contract carries no ring code and emits
+only external events; its input still holds the reads that its message
+declares and the `internal_event_results` field.
+
+## Read internal events in a contract
+
+A contract cannot search events while it runs. Instead, the sender of an
+internal message declares exact reads for that message. Each read names one
+ring: the source account's DApp id and account id and an `event_class`.
+Before the receiver's code runs, the runtime puts the kept events of each
+declared ring into the receiver's input. A read may name any account in any
+DApp.
+
+With the feature `event-rings`, declare the reads of an outbound message in
+`outbound_event_reads`:
+
+```rust
+use avm_contract_sdk::{EventReadEntry, InternalEventReadRequest};
+
+output.outbound_intents = vec![message_to_reader];
+output.outbound_event_reads = vec![EventReadEntry {
+    outbound_index: 0,
+    reads: vec![InternalEventReadRequest { source: emitter, event_class: 7 }],
+}];
+```
+
+- `outbound_index` names an entry of `outbound_intents`. Give the entries in
+  strictly ascending `outbound_index` order, at most one per message.
+- A message carries 1 to 128 reads. Give them in strictly ascending order of
+  the source DApp id, then the source account id, then `event_class` as a
+  number, so that no read repeats.
+- An output that breaks these rules is not written, which ends the call with
+  status 43 (`VM_ABI_OUTPUT_MISSING`). `MessageOutput::failure` cannot carry
+  reads.
+- Each read adds 72 bytes to the message, plus 4 bytes for a message with
+  reads. They count toward the outbound message size limits and are paid by
+  the message fee; reads have no other price.
+- Callbacks and refunds, which the runtime builds, and external messages
+  carry no reads.
+
+`BatchOutput` has the same `outbound_event_reads` field.
+
+The receiver reads the results with `MessageInput::internal_event_reads`:
+
+```rust
+use avm_contract_sdk::decode_event_fields;
+
+let Ok(reads) = input.internal_event_reads() else {
+    return MessageOutput::failure(WRONG_READS);
+};
+for (read, events) in &reads {
+    // `read` names the declared ring; `events` are its kept events, oldest first.
+    if let Some(newest) = events.last() {
+        let fields = decode_event_fields(newest.fields_binary);
+        // ...
+    }
+}
+```
+
+- The list has one entry per declared read, in the declared order. It is
+  empty for a message without reads.
+- Each entry holds the ring's kept events, at most the last 5 of its class,
+  oldest first, with their `tx_hash`, `lt`, `time`, `seq`, `event_name`,
+  `topics` and `fields_binary`. It is empty when the ring has no events.
+- `decode_event_fields` returns the fields that `encode_event_fields` wrote.
+- Reads see the state at the start of the receiver's block. Internal events
+  emitted earlier in the same block become visible in the next block.
+- The results enlarge the receiver's input: each event takes 64 bytes plus
+  its name, its topics with a 2-byte length each, and its fields. Size the
+  contract's arena for the largest input it accepts; see
+  [contract memory](contract-memory.md). Results above 262144 bytes fail the
+  message before the contract runs with status 42 (`VM_ABI_INPUT_TOO_LARGE`).
+
+The [internal event reads example](../examples/internal-event-reads/README.md)
+deploys an emitter, a caller and a reader in three DApps and checks the reads
+on the local stand.
+
+The local stand executes declared reads. On a network, a node executes them
+only when its runtime supports read declarations: a node without that support
+fails a call whose output declares reads with status 44
+(`VM_ABI_OUTPUT_MALFORMED`), and the messages it delivers carry no reads.
 
 ## The deploy event `avm.account.init`
 

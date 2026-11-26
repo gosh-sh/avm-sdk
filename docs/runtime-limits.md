@@ -1,6 +1,6 @@
 # Runtime limits, rent and deployment identity
 
-These are the **SDK 0.6.5 local stand** settings. Its FUEL caps are the network
+These are the **SDK 0.6.6 local stand** settings. Its FUEL caps are the network
 execution defaults. All of them are development configuration, not mainnet
 promises. The runtime configuration leaves
 launch values for these limits and rent prices unspecified (`TBD`). Obtain the
@@ -78,13 +78,15 @@ active accounts require `DataPatchList`. Use the input's
 `required_state_output_mode`; the threshold is not a 64-KiB total-state ceiling.
 Init requires `FullReplace`.
 
-`max_account_data_bytes = 1048576` bounds the resulting state data for both
+`max_account_data_bytes = 4194304` bounds the resulting state data for both
 output modes. A patch cannot evade that limit. Patch lists also have
 `max_account_patch_bytes = 262144` and `max_account_patch_ranges = 512`, with
-canonical sorted, nonoverlapping ranges and valid bounds. The complete input
-and message-output envelopes each have a **1048576-byte** cap, so envelope
-overhead can make the usable data size smaller than the state-data cap. Storage
-chunking does not enlarge contract-visible limits.
+canonical sorted, nonoverlapping ranges and valid bounds. A message input has a
+**1048576-byte** cap that does not count the account data it carries, so an
+account at its data limit stays callable; an `AccountBatch` input has a
+**6291456-byte** cap, account state included. The message-output envelope has
+a **1048576-byte** cap. Storage chunking does not enlarge contract-visible
+limits.
 
 Status **43**, `VM_ABI_OUTPUT_MISSING`, means the guest returned no ABI output.
 It is not a size-limit code. For example, SDK output construction can fail if the
@@ -124,7 +126,12 @@ Prior unpaid debt is also due. Rent is collected before WASM/FUEL. Unpaid
 attempts accumulate debt; the third consecutive unpaid attempt under this
 profile freezes the account before normal user WASM. Full payment clears the
 debt and unpaid count; unfreezing requires full due payment and normal
-transaction costs. There is no AVM rule granting a TVM-style 30-day grace period.
+transaction costs. Until then nothing in a frozen account changes. An internal
+message that does not unfreeze it fails before WASM with status 12
+(`VM_ACCOUNT_FROZEN`): it pays the fixed rejection fee of 3,000,000 FUEL
+(`pre_wasm_rejection_fee_fuel`) from its own value or reserve, and the rest of its value returns. The value of a callback or
+automatic refund to a frozen account burns, and an external message to it is
+not admitted. There is no AVM rule granting a TVM-style 30-day grace period.
 An untouched account has no transaction storage phase; cold-state sweeping
 would require a separately defined maintenance procedure.
 

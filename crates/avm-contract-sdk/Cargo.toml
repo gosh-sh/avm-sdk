@@ -7,4 +7,15 @@ license-file.workspace = true
 
 [lib]
 
+[features]
+# The mint surface of a system minter, the account that mints a currency.
+# Only a system minter enables it: an ordinary contract compiles without it and
+# builds to the same WASM.
+system-mint = []
+# The internal-event rings, the last events that each account keeps: internal
+# events, the reads that an outbound message declares and the reader of their
+# results. Only a contract that writes or reads rings enables it: an ordinary
+# contract compiles without it and carries no ring code.
+event-rings = []
+
 [dependencies]

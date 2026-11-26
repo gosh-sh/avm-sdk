@@ -10,4 +10,4 @@ license = "MIT"
 crate-type = ["cdylib"]
 
 [dependencies]
-avm-contract-sdk = { path = "../../crates/avm-contract-sdk" }
+avm-contract-sdk = { path = "../../crates/avm-contract-sdk", features = ["event-rings"] }

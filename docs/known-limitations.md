@@ -28,8 +28,10 @@ do instead. Each item links to the page with the details.
 - **The stand lists events as raw records.** `avm-local-stand events` prints
   every event of the stand as hex, without a filter by account or a decoder;
   see [read events on the local stand](events.md#read-events-on-the-local-stand).
-- **No reads of internal events.** Contracts built with this SDK cannot
-  request reads of another account's internal events.
+- **Declared internal event reads need node support.** A network node
+  executes the [reads that a contract declares](events.md#read-internal-events-in-a-contract)
+  only when its runtime supports read declarations; a node without that
+  support fails the declaring call with status 44.
 - **Deploy metadata is small.** A deploy's `salt`, `ui_name` and
   `deploy_meta` must fit 235 bytes together, because of the
   [`avm.account.init` event](events.md#the-deploy-event-avmaccountinit).
@@ -49,6 +51,13 @@ do instead. Each item links to the page with the details.
 - **No rent accessor in contracts.** The guest ABI does not expose an
   account's storage debt; use stand inspection during development; see
   [storage rent](runtime-limits.md#storage-rent).
+- **Minting is for the shellnet minter.** The guest crate's `system-mint`
+  feature builds a system minter, which mints only when the network
+  configuration designates its address, its code and the currency. It exists
+  for the shellnet SHELL minter; on other networks currency comes through the
+  bridge. Any other mint fails with status 59 (`VM_MINT_NOT_ALLOWED`). The
+  local stand has no designated minter yet, so a mint there fails with status
+  59 as well; fund stand accounts with `fund-user`.
 
 ## Local stand compared with a network
 

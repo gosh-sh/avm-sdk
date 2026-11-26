@@ -1,8 +1,8 @@
 """Bounded independent oracle for the six public SDK qualification journeys.
 
 Test code only. No production AVM crate, stand output encoder or trie is used.
-The primitive encodings come from canonical-encoding.md,
-addressing-and-account-state.md, code-library.md and event-log.md/.capnp.
+The primitive encodings come from the canonical encoding, the addressing
+and account state rules, the Code Library and the event log schema.
 This is neither a state backend nor a general transaction interpreter.
 """
 
@@ -44,7 +44,7 @@ def function_count(wasm):
 
 
 def publication_fee(code_len, functions):
-    """Code Library publication fee in SHELL of a code deploy, by gas-and-fees.md."""
+    """Code Library publication fee in SHELL of a code deploy, by the fee rules."""
     units = -(-code_len // 40_960)
     estimate = 159_904 * units + 136 * (functions - min(functions, 256 * units))
     return 1000 * -(-estimate // 159_904)
@@ -264,7 +264,7 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     six journeys, not learned from a candidate or a saved successful run.
 
     Each external deploy creates its own DApp at dapp_id == account_id
-    (avm-contracts.md "Deploy Address And dapp_id"). The five application
+    (the deploy address rule). The five application
     journeys also publish the wallet, the first contract of their DApp, which
     creates the sender there by an internal deploy. The four contract-b
     journeys also publish contract-a-v2; the wallet deploys it, and it deploys
@@ -306,7 +306,7 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     # The version journey deploys contract-a-v1 with the package owner as owner_id.
     owner_ids = [owner if version else user] + [user] * (len(names) - 1)
     # An ordinary external deploy creates its DApp originator: dapp_id ==
-    # account_id (avm-contracts.md "Deploy Address And dapp_id").
+    # account_id (the deploy address rule).
     account_ids = [h(b"AVM_ACCOUNT_ID\0\0" + package + owner_id + le(len(name), 2) + name.encode() + h(b""))
                    for name, package, owner_id in zip(names, packages, owner_ids)]
     addresses = [account_id + account_id for account_id in account_ids]
@@ -375,6 +375,9 @@ def expected_journey(bundle, label, identities, transcript, times, current):
         init_event(index, address, h(b"AVM_EXTERNAL_MESSAGE_ID" + wire), 5 if version and index else 2 * index + 2,
                    times[transcript_index])
 
+    # `lt` is the account's last_trans_lt: the created_lt of the last message
+    # its last transaction produced (an outbound message, callback or refund),
+    # else that transaction's LT.
     def account(address, selection, ecc0, shells, extra, data, lt, paid):
         currencies = {2: shells, **extra}
         if ecc0:
@@ -512,7 +515,8 @@ def expected_journey(bundle, label, identities, transcript, times, current):
     sender_shells = 1_000_000 - 10 - (39 + 3 * 20 + 104) * (2 if batch else 3) - 2 - (batch_reserve if batch else 1)
     if batch:
         receiver = le(65536, 4) + le(1, 8) + bytes(65528)
-        account(first, selections[0], 63, sender_shells, {7: 29}, bytes(sender) + user, lt + 1, deploys + 3)
+        # The forward at lt + 1 produced the delivery at lt + 2.
+        account(first, selections[0], 63, sender_shells, {7: 29}, bytes(sender) + user, lt + 2, deploys + 3)
         account(second_address, selections[receiver_index], 37, 1_000_000 - 10 - (39 + 20 + 65540), {7: 11},
                 receiver, lt + 3, deploys + 3)
     else:
@@ -532,7 +536,8 @@ def expected_journey(bundle, label, identities, transcript, times, current):
         account(first, selections[0], 100 if failure else 63, sender_shells,
                 {7: 40 if failure else 29}, bytes(sender) + user, lt + 5, deploys + 4)
         # The receiver keeps the value of its deploy less the two payouts and
-        # pays rent from its deploy to the forward.
+        # pays rent from its deploy to the forward. Its delivery at lt + 3
+        # produced the callback at lt + 4.
         account(second_address, selections[receiver_index], 35 if failure else 72,
-                1_000_000 - 10 - (39 + 3 * 20 + 128), {7: 11 if failure else 22}, receiver, lt + 3, deploys + 4)
+                1_000_000 - 10 - (39 + 3 * 20 + 128), {7: 11 if failure else 22}, receiver, lt + 4, deploys + 4)
     return expected

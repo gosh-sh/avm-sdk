@@ -61,7 +61,8 @@ On the local stand these reasons appear inside the error text, for example:
 
 ## Execution statuses
 
-These VM statuses come from a message that started executing. A failed
+These VM statuses come from a message that a block processed for its
+destination account. A failed
 execution keeps none of its effects. An external call that reached execution
 is still committed with its charge and its spent nonce. On the local stand,
 `call` exits with status 2 and prints `"error": "execution_failed"` and the
@@ -75,16 +76,19 @@ is still committed with its charge and its spent nonce. On the local stand,
 
 | Status | Name | Cause | What to do |
 |---|---|---|---|
+| 12 | `VM_ACCOUNT_FROZEN` | The destination account is frozen and the internal message does not unfreeze it. It fails before WASM, pays the fixed rejection fee of 3,000,000 FUEL and changes nothing in the account | Pay the account's due storage rent with a message that unfreezes it; see [storage rent](runtime-limits.md#storage-rent) |
 | 21 | `VM_CODE_DISABLED` | The code was built with `execution_mode = "account_batch"`, which the node does not run | Build the contract with `execution_mode = "message_isolated"` |
 | 30 | `VM_WASM_TRAP` | The WASM trapped, including a linear-memory stack overflow | Fix the panic or trap; size the stack from complete tests; see [contract memory](contract-memory.md) |
 | 31 | `VM_WASM_OUT_OF_FUEL` | The FUEL budget ran out | Raise `fuel_fee_shells` up to the message cap or do less work per call; see [runtime limits](runtime-limits.md#fuel-and-failure-diagnostics) |
 | 33 | `VM_WASM_STACK_LIMIT` | The WASM stack limit was exceeded, for example by deep recursion | Bound the recursion depth |
-| 43 | `VM_ABI_OUTPUT_MISSING` | The contract returned no output, for example because building it failed: a wrong state output mode, an event field list with unsorted or repeated names, or an output that does not fit the contract's arena | Check the required state output mode and the output construction result; see [contract memory](contract-memory.md) |
-| 44 | `VM_ABI_OUTPUT_MALFORMED` | The output is invalid, for example an event with an invalid or reserved name, or a deploy whose `avm.account.init` event exceeds 500 bytes | See [event limits](events.md#event-limits) |
+| 42 | `VM_ABI_INPUT_TOO_LARGE` | The contract input exceeds its cap: 1048576 bytes for a message input, without the account data it carries, or 6291456 bytes for an `AccountBatch` input, account state included | Send a smaller message body; see [runtime limits](runtime-limits.md#state-output-and-deploy-body-are-different-limits) |
+| 43 | `VM_ABI_OUTPUT_MISSING` | The contract returned no output, for example because building it failed: a wrong state output mode, an event field list with unsorted or repeated names, outbound event reads that break the [declaration rules](events.md#read-internal-events-in-a-contract), or an output that does not fit the contract's arena | Check the required state output mode and the output construction result; see [contract memory](contract-memory.md) |
+| 44 | `VM_ABI_OUTPUT_MALFORMED` | The output is invalid, for example an event with an invalid or reserved name, or a deploy whose `avm.account.init` event exceeds 500 bytes. A node whose runtime does not support declared internal event reads also returns it for an output that declares them | See [event limits](events.md#event-limits) and [read internal events in a contract](events.md#read-internal-events-in-a-contract) |
 | 45 | `VM_ABI_OUTPUT_TOO_LARGE` | The output is too large, for example an event above its limits, or an outbound message body or callback result above `max_body_size` | See [event limits](events.md#event-limits) and [runtime limits](runtime-limits.md#state-output-and-deploy-body-are-different-limits) |
 | 50 | `VM_STATE_TOO_LARGE` | The account state exceeds its size limit | See [runtime limits](runtime-limits.md#state-output-and-deploy-body-are-different-limits) |
 | 54 | `VM_EVENT_LIMIT_EXCEEDED` | The internal events of the call would exceed the account's limits | Use fewer `event_class` values with `EventKind::Internal`, or smaller internal events; see [event limits](events.md#event-limits) |
 | 56 | `VM_INSUFFICIENT_BALANCE` | The reserve does not cover the initial memory before execution, or compute FUEL plus the memory payment after it | Raise `fuel_fee_shells`; see [memory payment](fuel-and-fees.md#memory-payment) |
+| 59 | `VM_MINT_NOT_ALLOWED` | The output carries a mint intent that the network does not allow: from `init`, or for an account, code or currency that the network configuration does not designate | Only the shellnet SHELL minter mints; fund local stand accounts with `fund-user`; see [known limitations](known-limitations.md#execution) |
 
 Statuses of 1000 and above are your contract's own errors, declared in
 `[[abi.errors]]` of its `avm-contract.toml`; `avm-contract-build abi` lists

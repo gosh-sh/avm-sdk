@@ -210,7 +210,11 @@ fi
 
 # Real deploy-precheck failures must retain the parent's forwarding transition,
 # return its 17 SHELL, and never execute init or mutate the target. An ordinary
-# callback control cannot establish any of these assertions.
+# callback control cannot establish any of these assertions. The malformed
+# deploy is the captured body with a non-zero reserved field: the sender's
+# output accepts it as a deploy over committed code, and the receiver rejects
+# it. A body that starts with ACDP but lacks the full deploy header is not a
+# deploy failure: the sender's own call fails with status 44.
 for failure in active malformed wrong-address; do
   for request_callback in 00 01; do
     rejected="${work}/deploy-${failure}-${request_callback}.state"
@@ -221,7 +225,7 @@ for failure in active malformed wrong-address; do
       cp "${work}/deploy-00.state" "$rejected"
     else
       cp "$base" "$rejected"
-      if [[ "$failure" == malformed ]]; then body=41434450; fi
+      if [[ "$failure" == malformed ]]; then body="${deploy_body:0:12}0100${deploy_body:16}"; fi
       if [[ "$failure" == wrong-address ]]; then
         target="${parent%%:*}:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
       fi

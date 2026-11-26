@@ -43,6 +43,13 @@ internal-deploy callbacks and pre-init rejection notifications. It checks exact
 callback counts, transferred-SHELL refunds, unchanged receiver effects and
 replay using matching tools. See its [instructions](deploy-callback-repro/README.md).
 
+### `internal-event-reads`
+
+An emitter, a caller and a reader in three DApps. The caller declares reads of
+the emitter's internal event rings for the message it sends to the reader, and
+the reader checks the results in its input. See its
+[instructions](internal-event-reads/README.md).
+
 ### `contract-a-v1`
 
 A message-isolated sender and the first version in the upgrade pair. It:

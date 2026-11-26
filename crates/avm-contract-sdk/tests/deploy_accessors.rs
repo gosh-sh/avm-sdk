@@ -1,6 +1,6 @@
 use avm_contract_sdk::{decode_message_input, DecodeError};
 
-// Independent vectors from avm-contracts.md's 288-byte ACDP header. These
+// Independent vectors from the 288-byte ACDP deploy header. These
 // assertions exercise the guest convenience boundary, not host admission.
 fn envelope(inline: bool) -> Vec<u8> {
     let mut bytes = vec![0; 288];
@@ -94,7 +94,7 @@ fn constructor_accessors_borrow_only_the_requested_payload_for_both_callers() {
 
 #[test]
 fn code_deploy_init_reads_its_constructor_with_a_nonzero_function_count() {
-    // avm-contracts.md: body offset 286 is function_count, 0 when code_len == 0.
+    // Body offset 286 is function_count, 0 when code_len == 0.
     let mut body = envelope(true);
     body[286..288].copy_from_slice(&0x0102u16.to_le_bytes());
     let bytes = frame(&body, true, true);

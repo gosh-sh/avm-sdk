@@ -16,7 +16,7 @@ Production AVM runtime source remains in the private Acki Nacki repository.
 Every release records the exact source commit and SHA-256 hashes of all shipped
 files.
 
-SDK 0.6.5 runs Core-WASM V2 contracts on Wasmtime 48.0.8 and builds them with
+SDK 0.6.6 runs Core-WASM V2 contracts on Wasmtime 48.0.8 and builds them with
 guest Rust/Cargo 1.99.1. Follow the documentation included with the exact
 installed bundle. Native runtime tools have their separate Rust/Cargo 1.98.0
 build identity in the profile and provenance. Earlier releases retain their own
@@ -27,7 +27,7 @@ profiles and compilers.
 Requirements: Linux x86-64-v3, the binary's declared GNU libc version, Bash,
 Python 3.11+, `gh`, `jq`, and Rust/Cargo 1.99.1 with the wasm32 target.
 Use the tools, profile and documentation from the same bundle. These
-instructions require the matching SDK 0.6.5 Core-WASM V2 bundle; keep older
+instructions require the matching SDK 0.6.6 Core-WASM V2 bundle; keep older
 release tools and retained state together.
 
 Set `RELEASE_TAG` to the matching immutable published tag before downloading:
@@ -73,7 +73,9 @@ the page that answers your question.
 ## Release Process
 
 `avm-dev-<source-commit>-sdk-<sdk-commit>` releases are immutable snapshots of
-Acki Nacki `avm-dev` and this distribution repository.
+an Acki Nacki source commit and this distribution repository. The release
+notes name the runtime source that the tools are built from. The source
+commit in the tag can be a later commit that holds the same runtime source.
 The release archive contains the two binaries, the Wasmtime profile, SDK
 source, examples, documentation, checksums, and provenance metadata.
 

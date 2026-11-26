@@ -32,7 +32,8 @@ DApps, with a successful or rejecting receiver, a forward of the largest body
 the network allows (65,459 bytes; one byte more is rejected at ingress),
 deploy without a request,
 exactly one requested successful-deploy callback, an empty queue and replay.
-They also cover active-target, malformed and wrong-address pre-init rejections,
+They also cover active-target, malformed (a non-zero reserved field) and
+wrong-address pre-init rejections,
 with and without callbacks: status 63 when requested, unchanged target/registry
 and init effects, and returned transferred SHELL. These funded cases cover
 incurred fees independently of the transferred value. The example is a

@@ -1,0 +1,78 @@
+[descriptor]
+execution_mode = "message_isolated"
+state_schema_id = "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+# The last 32 bytes of the account data hold the owner key for external calls.
+owner_key_offset = 22
+
+# Explicit resources for this example's bounded local test corpus: an input
+# carries at most two read results of five events each.
+[build]
+stack_bytes = 16384
+arena_bytes = 262144
+max_memory_bytes = 1048576
+
+[abi]
+state_root_type_id = 1
+
+[[abi.types]]
+id = 1
+kind = "fixed_bytes"
+name = "reads_state"
+len = 54
+
+[[abi.types]]
+id = 2
+kind = "bytes"
+name = "params_set_args"
+
+[[abi.types]]
+id = 3
+kind = "bytes"
+name = "params_ask_args"
+
+[[abi.types]]
+id = 4
+kind = "bytes"
+name = "params_read_rings"
+
+[[abi.methods]]
+name = "params.set"
+input_type_id = 2
+
+[[abi.methods]]
+name = "params.ask"
+input_type_id = 3
+
+[[abi.methods]]
+name = "params.read"
+input_type_id = 4
+
+[[abi.errors]]
+status_code = 1600
+name = "invalid_state"
+message = "reads state is malformed"
+
+[[abi.errors]]
+status_code = 1601
+name = "invalid_args"
+message = "arguments do not match the method"
+
+[[abi.errors]]
+status_code = 1602
+name = "external_caller_required"
+message = "params.set and params.ask must be signed external messages"
+
+[[abi.errors]]
+status_code = 1603
+name = "internal_caller_required"
+message = "params.read must be an internal message"
+
+[[abi.errors]]
+status_code = 1604
+name = "wrong_reads"
+message = "the read results do not answer the declared rings"
+
+[[abi.errors]]
+status_code = 1605
+name = "unknown_method"
+message = "method is not handled by the reads contract"

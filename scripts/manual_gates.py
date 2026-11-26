@@ -234,6 +234,10 @@ def main():
         run("sdk-format", [guest["CARGO"], "fmt", "--", "--check"], sdk, environment=guest)
         run("sdk-clippy", [guest["CARGO"], "clippy", "--locked", "--offline", "--all-targets", "--", "-D", "warnings"], sdk, environment=guest)
         run("sdk-tests", [guest["CARGO"], "test", "--locked", "--offline", "--", "--test-threads=1"], sdk, tests=True, environment=guest)
+        # The features `event-rings` and `system-mint` compile code that the default
+        # build leaves out; their clippy and tests also run with all features.
+        run("sdk-clippy-all-features", [guest["CARGO"], "clippy", "--locked", "--offline", "--all-targets", "--all-features", "--", "-D", "warnings"], sdk, environment=guest)
+        run("sdk-tests-all-features", [guest["CARGO"], "test", "--locked", "--offline", "--all-features", "--", "--test-threads=1"], sdk, tests=True, environment=guest)
         for manifest in sorted((sdk / "examples").glob("*/Cargo.toml")):
             # These workspaces own full native, guest, optimizer and application
             # gates below; compiling a virtual root as one WASM package is invalid.
@@ -267,7 +271,9 @@ def main():
             test(package, [])
         test("avm-effect-materializer", ["--test", "zero_intent_checkpoint"])
         test("avm-contract-sdk", ["--test", "canonical_io"])
-        test("avm-contract-sdk", ["--lib"], ["output::writer_tests::" + case for case in "direct_message_output_writes_once_without_the_vec_growth_path ten_thousand_wallet_sized_outputs_remove_observed_vec_growth_and_copy batch_output_preserves_count_mode_and_failed_index_checks direct_message_sections_and_batch_match_the_public_serializer".split()])
+        test("avm-contract-sdk", ["--lib"], ["output::writer_tests::" + case for case in "direct_message_output_writes_once_without_the_vec_growth_path ten_thousand_wallet_sized_outputs_remove_observed_vec_growth_and_copy batch_output_preserves_count_mode_and_failed_index_checks".split()])
+        # This comparison also covers the outbound event reads, so it exists with the feature event-rings.
+        test("avm-contract-sdk", ["--lib", "--features", "event-rings"], ["output::writer_tests::direct_message_sections_and_batch_match_the_public_serializer"])
         # Safety tests of the SDK input-buffer unsafe exception, run in real WASM.
         test("avm-contract-build", ["--test", "sdk_input_wasm"], "input_buffer_reads_back_host_bytes_at_every_boundary_size_and_the_maximum a_nested_dispatch_is_refused_before_any_input_read input_view_is_in_place_and_bounded_by_the_live_allocation small_allocations_stay_static_and_larger_ones_take_the_heap dispatch_keeps_the_live_input_and_places_the_output_after_it batch_dispatch_writes_the_public_serializer_bytes direct_output_takes_only_its_reservation_from_the_guest_allocator".split())
         test("avm-contract-build", ["--test", "sdk_arena_memory"], ["arena_capacity_lifo_and_exact_free_bounds_hold_in_real_wasm"])
@@ -342,6 +348,9 @@ def main():
             run("sdk-deploy-callback-delivery", ["bash", str(sdk / "examples/deploy-callback-repro/repro.sh"),
                 "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
                 "--out", str(application_evidence / "deploy-callback-repro")], sdk, environment=guest)
+            run("sdk-internal-event-reads", ["bash", str(sdk / "examples/internal-event-reads/reads.sh"),
+                "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),
+                "--out", str(application_evidence / "internal-event-reads")], sdk, environment=guest)
             run("signature-verifier-application-checks", [sys.executable, "-B",
                 str(consumer_sdk / "examples/signature-verifier/scripts/check.py"),
                 "--builder", str(builder), "--stand", str(stand), "--profile", str(profile),

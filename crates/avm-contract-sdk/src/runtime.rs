@@ -21,6 +21,10 @@ use crate::output::{
     batch_output_len_for, message_output_len_for, write_batch_output, write_message_output,
     EncodeError, OutputWriter,
 };
+#[cfg(feature = "system-mint")]
+use crate::output::{mint_output_len_for, write_mint_output};
+#[cfg(feature = "system-mint")]
+use crate::MintContract;
 use crate::{BatchContract, Contract};
 
 /// Static bytes that serve small allocations without growing memory.
@@ -354,7 +358,38 @@ fn dispatch_message_inner<T: Contract, const N: usize>(
     arena.write_output(output_len, |writer| write_message_output(writer, &output))
 }
 
+#[cfg(feature = "system-mint")]
 #[doc(hidden)]
+/// `process_message` of a system minter ([`MintContract`]): the ordinary
+/// message dispatch, with the mint intent the contract returns.
+pub fn dispatch_mint_message<T: MintContract, const N: usize>(
+    arena: &GuestArena<N>,
+    input_ptr: u32,
+    input_len: u32,
+) -> u64 {
+    let Some(_dispatch) = Dispatch::enter() else {
+        return 0;
+    };
+    let (output, mints, output_len) = {
+        let mut state = arena.lock();
+        let Some(input_bytes) = live_range(&mut state, input_ptr, input_len) else {
+            return 0;
+        };
+        let Ok(input) = decode_message_input(input_bytes) else {
+            return 0;
+        };
+        if input.message.is_deploy() {
+            return 0;
+        }
+        let (output, mints) = T::process_mint_message(input);
+        let Ok(output_len) = mint_output_len_for(&input, &output, &mints) else {
+            return 0;
+        };
+        (output, mints, output_len)
+    };
+    arena.write_output(output_len, |writer| write_mint_output(writer, &output, &mints))
+}
+
 pub fn dispatch_batch<T: BatchContract, const N: usize>(
     arena: &GuestArena<N>,
     input_ptr: u32,

@@ -1,6 +1,11 @@
+#[cfg(feature = "event-rings")]
+use alloc::{string::String, vec::Vec};
+
 use crate::{
     AccountAddress, AvmAmount, CurrencyAmount, ExecutionContext, SelectedCodeId, StateOutputMode,
 };
+#[cfg(feature = "event-rings")]
+use crate::{EventField, EventValue};
 
 const INTERNAL_HEADER_LEN: usize = 176;
 const EXTERNAL_HEADER_LEN: usize = 192;
@@ -175,6 +180,32 @@ impl Iterator for InternalEventReadRequestIter<'_> {
 
 impl ExactSizeIterator for InternalEventReadRequestIter<'_> {}
 
+/// One event of an internal-event ring as the executor places it in the input
+/// for a read that the input message declares.
+#[cfg(feature = "event-rings")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReadableEvent<'a> {
+    pub tx_hash: [u8; 32],
+    pub lt: u64,
+    pub time: u32,
+    pub seq: u32,
+    pub event_class: u64,
+    pub event_name: &'a str,
+    pub topics: Vec<&'a [u8]>,
+    /// Canonical `AvmEventFieldList` bytes; `decode_event_fields` reads them.
+    pub fields_binary: &'a [u8],
+}
+
+/// The result of one internal-event read request: the index of the request
+/// and the events of its ring, oldest first and newest last. A key that holds
+/// no ring has no events.
+#[cfg(feature = "event-rings")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InternalEventReadResult<'a> {
+    pub request_index: u16,
+    pub events: Vec<ReadableEvent<'a>>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct InternalMessage<'a> {
     pub flags: u8,
@@ -343,6 +374,38 @@ impl<'a> DeployInput<'a> {
 }
 
 impl<'a> MessageInput<'a> {
+    /// The results of the internal-event reads that this message declares, in
+    /// declaration order: each exact requested key with the events of its
+    /// ring, oldest first and newest last. A message that declares no read has
+    /// none. Results that do not answer exactly the declared reads return
+    /// `InvalidLength` (another count) or `InvalidValue` (another order).
+    #[cfg(feature = "event-rings")]
+    pub fn internal_event_reads(
+        self,
+    ) -> Result<Vec<(InternalEventReadRequest, Vec<ReadableEvent<'a>>)>, DecodeError> {
+        let results = decode_internal_event_results(self.internal_event_results)?;
+        let requests = match self.message {
+            CanonicalMessage::Internal(message) => message.event_reads,
+            CanonicalMessage::External(_) => None,
+        };
+        if results.len() != requests.map_or(0, InternalEventReadRequests::len) {
+            return Err(DecodeError::InvalidLength);
+        }
+        requests
+            .into_iter()
+            .flat_map(InternalEventReadRequests::iter)
+            .zip(results)
+            .enumerate()
+            .map(|(index, (request, result))| {
+                if usize::from(result.request_index) == index {
+                    Ok((request, result.events))
+                } else {
+                    Err(DecodeError::InvalidValue)
+                }
+            })
+            .collect()
+    }
+
     /// Reads this init call's constructor envelope. Ordinary calls return
     /// `InvalidValue`; malformed or incomplete envelopes return a decode error.
     pub fn deploy(self) -> Result<DeployInput<'a>, DecodeError> {
@@ -574,6 +637,107 @@ pub fn decode_batch_input(bytes: &[u8]) -> Result<BatchInput<'_>, DecodeError> {
         message_count,
         internal_event_results,
     })
+}
+
+/// Reads an `InternalEventReadResults` frame, the results of the declared
+/// internal-event reads, as `MessageInput` and `BatchInput` carry it in
+/// `internal_event_results`. An empty slice has no results.
+#[cfg(feature = "event-rings")]
+pub fn decode_internal_event_results(
+    bytes: &[u8],
+) -> Result<Vec<InternalEventReadResult<'_>>, DecodeError> {
+    if bytes.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut reader = Reader::new(bytes);
+    let result_count = reader.u16()?;
+    require_zero(reader.take(2)?)?;
+    // Each result takes at least its 4-byte header.
+    let mut results = Vec::with_capacity(usize::from(result_count).min(bytes.len() / 4));
+    for _ in 0..result_count {
+        let request_index = reader.u16()?;
+        let event_count = reader.u8()?;
+        require_zero(reader.take(1)?)?;
+        let mut events = Vec::with_capacity(usize::from(event_count));
+        for _ in 0..event_count {
+            events.push(read_readable_event(&mut reader)?);
+        }
+        results.push(InternalEventReadResult { request_index, events });
+    }
+    reader.finish()?;
+    Ok(results)
+}
+
+#[cfg(feature = "event-rings")]
+fn read_readable_event<'a>(reader: &mut Reader<'a>) -> Result<ReadableEvent<'a>, DecodeError> {
+    let tx_hash = reader.array()?;
+    let lt = reader.u64()?;
+    let time = reader.u32()?;
+    let seq = reader.u32()?;
+    let event_class = reader.u64()?;
+    let name_len = usize::from(reader.u16()?);
+    let topic_count = reader.u16()?;
+    let fields_len = to_usize(reader.u32()?)?;
+    let event_name =
+        core::str::from_utf8(reader.take(name_len)?).map_err(|_| DecodeError::InvalidValue)?;
+    let mut topics = Vec::new();
+    for _ in 0..topic_count {
+        let topic_len = usize::from(reader.u16()?);
+        topics.push(reader.take(topic_len)?);
+    }
+    let fields_binary = reader.take(fields_len)?;
+    Ok(ReadableEvent { tx_hash, lt, time, seq, event_class, event_name, topics, fields_binary })
+}
+
+/// Reads a canonical `AvmEventFieldList`, the fields of an event intent,
+/// such as `ReadableEvent::fields_binary`; the inverse of
+/// `encode_event_fields`. Field names must be strictly ascending.
+#[cfg(feature = "event-rings")]
+pub fn decode_event_fields(bytes: &[u8]) -> Result<Vec<EventField>, DecodeError> {
+    let mut reader = Reader::new(bytes);
+    let count = reader.u16()?;
+    require_zero(reader.take(2)?)?;
+    let mut fields = Vec::new();
+    let mut previous_name: Option<&[u8]> = None;
+    for _ in 0..count {
+        let name_len = usize::from(reader.u16()?);
+        let kind = reader.u8()?;
+        let value_len = usize::from(reader.u16()?);
+        let name = reader.take(name_len)?;
+        let value = reader.take(value_len)?;
+        let name = core::str::from_utf8(name).map_err(|_| DecodeError::InvalidValue)?;
+        if previous_name.is_some_and(|previous| previous >= name.as_bytes()) {
+            return Err(DecodeError::Unsorted);
+        }
+        previous_name = Some(name.as_bytes());
+        let value = match kind {
+            0 if value.is_empty() => EventValue::Null,
+            1 if matches!(value, [0] | [1]) => EventValue::Bool(value == [1]),
+            2 => EventValue::U64(u64::from_le_bytes(event_value(value)?)),
+            3 => EventValue::I64(i64::from_le_bytes(event_value(value)?)),
+            4 => EventValue::U128(u128::from_le_bytes(event_value(value)?)),
+            5 => EventValue::I128(i128::from_le_bytes(event_value(value)?)),
+            6 => EventValue::Text(String::from(
+                core::str::from_utf8(value).map_err(|_| DecodeError::InvalidValue)?,
+            )),
+            7 => EventValue::Data(value.to_vec()),
+            8 => EventValue::Address(AccountAddress {
+                dapp_id: event_value(value.get(..32).ok_or(DecodeError::InvalidValue)?)?,
+                account_id: event_value(value.get(32..).ok_or(DecodeError::InvalidValue)?)?,
+            }),
+            0 | 1 => return Err(DecodeError::InvalidValue),
+            _ => return Err(DecodeError::UnknownTag),
+        };
+        fields.push(EventField { name: String::from(name), value });
+    }
+    reader.finish()?;
+    Ok(fields)
+}
+
+/// A fixed-size event field value; another size is `InvalidValue`.
+#[cfg(feature = "event-rings")]
+fn event_value<const N: usize>(value: &[u8]) -> Result<[u8; N], DecodeError> {
+    value.try_into().map_err(|_| DecodeError::InvalidValue)
 }
 
 fn decode_canonical_message(bytes: &[u8]) -> Result<CanonicalMessage<'_>, DecodeError> {
