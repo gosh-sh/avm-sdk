@@ -1,3 +1,20 @@
+# AVM SDK 0.6.7
+
+- Attribute network messages to a Block Manager: `network-deploy` and `network-call` take `--bm-endpoint <url>`, read that Block Manager's current attribution token with `GET /v2/avm/bm_token` and send it with the message. The network counts each attributed message that executes successfully and pays its fee toward that Block Manager's reward. Without the option a message is not attributed, as before. See [Block Manager attribution](network.md#block-manager-attribution).
+- Document shellnet, the public test network: the node API for sends and message status, the Block Manager for attribution, account reads and events, the network id and the two system minters, NACKL (ECC id 1) and SHELL (ECC id 2), with their accounts. See [Shellnet](network.md#shellnet).
+- Get test SHELL on shellnet: anyone calls the SHELL minter's `shellnet.mint` with any key, and it sends the requested SHELL to any address, also one without a contract. The minter's ABI ships as `examples/wallet/shellnet-shell-minter.acab`. See [get test SHELL](network.md#get-test-shell).
+- Read AVM accounts and events on shellnet from its Block Manager: `GET /v2/account` returns the account's balances, state, code hash and data in a documented layout, and the GraphQL query `blockchain { avm_events }` returns the events of finalized blocks with filters and paging. The wallet example's `shellnet_read.py` decodes both. See [read accounts and events](network.md#read-accounts-and-events).
+- `network-deploy` with `--bm-endpoint` confirms the deploy: after the message is `consumed` it reads the account from the Block Manager every 2 seconds and reports `confirmation` `active`, `refused` (the account stayed unchanged for 60 seconds, for example a deploy of code that is already published, `VM_CODE_ALREADY_EXISTS`) or `not_active` (not active after 600 seconds). The command exits with status 2 unless the deploy is confirmed `active`. Before, it reported `consumed` and exited 0 also for a deploy the network refused. See [network deploy](network.md#step-4-deploy).
+- Add the wallet example's `shellnet-quickstart.sh`: mint, deploy, call and read on shellnet in one script. See [quickstart](network.md#quickstart-mint-deploy-call-read).
+- The network commands accept only an `http://host:port` URL: give the port also for port 80, for example `http://shellnet.ackinacki.org:80`.
+- The bundled profile's `memory_page_price`, `memory_class_maxima_bytes`, `signals_based_traps` and `pooling_linear_memory_keep_resident` remain provisional development values; changing them changes the profile identity.
+
+## Compatibility
+
+- The bundled tools and profile match the runtime source `58523257008f5986f6ccb7fc78ecb119eb2cdf8c`. Against the SDK 0.6.6 runtime source `9df1f812f0ba20fcecf9b2eca460a1fd33ce5d85`, the bundled tools change only by `--bm-endpoint` and the deploy confirmation; the guest crate, the profile and the runtime `Cargo.lock` are unchanged, so the profile identity and local stand state of SDK 0.6.6 stay valid, and contracts built with SDK 0.6.6 keep their WASM and code hash.
+- `--bm-endpoint` needs a Block Manager that serves `GET /v2/avm/bm_token`.
+- The guest crate remains version `0.1.1`; guest builds require Rust/Cargo 1.99.1 and native tools use 1.98.0. Linux x86-64-v3 and Python 3.11+ are required. Examples are educational; this release does not establish production-network or performance acceptance.
+
 # AVM SDK 0.6.6
 
 - Internal event rings are now the guest crate's feature `event-rings`: a contract need not write or read them. `EventKind::Internal`, the read declarations and the reader of their results exist only with it, so a contract that writes internal events or declares reads enables it (`features = ["event-rings"]`) or no longer compiles: a breaking change of the guest crate, which keeps version `0.1.1`. A contract without it carries no ring code; external events need no feature. See [enable internal event rings](events.md#enable-internal-event-rings).

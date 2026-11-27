@@ -14,7 +14,7 @@ avm-contract-build build --manifest-path <Cargo.toml>
 
 The contract directory must contain `avm-contract.toml` and its Cargo workspace
 must have a reviewed `Cargo.lock`. Rust/Cargo 1.99.1 is enforced. Successful output is
-written to `target/avm` below that directory. The SDK 0.6.6 builder enables
+written to `target/avm` below that directory. The SDK 0.6.7 builder enables
 `+wide-arithmetic`; its receipt records the exact guest compiler, Cargo and
 target flags. The native host compiler in the release profile is a separate
 identity, Rust/Cargo 1.98.0.
@@ -111,12 +111,12 @@ network node. They keep no local state and print one JSON object:
 
 ```text
 avm-local-stand network-call --endpoint <url> [--token-file <path>]
-  --wasmtime-profile <path> [--network-id <hex>] --key <path>
+  --wasmtime-profile <path> [--network-id <hex>] [--bm-endpoint <url>] --key <path>
   --address <dapp_id:account_id> --acab <path> --method <name>
   --args-json <json> --fuel-fee-shells <n> [--nonce <n>]
   [--created-at <s>] [--expire-at <s>]
 avm-local-stand network-deploy --endpoint <url> [--token-file <path>]
-  --wasmtime-profile <path> [--network-id <hex>] --key <path>
+  --wasmtime-profile <path> [--network-id <hex>] [--bm-endpoint <url>] --key <path>
   --wasm <path> --acab <path> --descriptor <path>
   (--package-owner-key <path> | --committed) --salt-hex <hex>
   --init-json <json> [--owner-id <hex>] --fuel-fee-shells <n>
@@ -125,10 +125,19 @@ avm-local-stand network-status --endpoint <url> [--token-file <path>]
   --message-hash <hex>
 ```
 
-- `--endpoint` is the node's HTTP API base URL, for example
-  `http://10.0.0.1:8600`; the commands use plain HTTP. `--token-file` holds
+- `--endpoint` is the node's HTTP API base URL with its port, for example
+  `http://10.0.0.1:8600`; the commands use plain HTTP and accept only an
+  `http://host:port` URL. On shellnet it is `http://94.156.178.12:8602`; see
+  [Shellnet](network.md#shellnet). `--token-file` holds
   the API token that the node may require; it is sent as
   `Authorization: Bearer <token>`.
+- `--bm-endpoint` is a Block Manager's HTTP base URL with its port, for
+  example `http://10.0.0.2:8600`; on shellnet
+  `http://shellnet.ackinacki.org:80`. The command reads the BM's current attribution token
+  with `GET /v2/avm/bm_token` and sends it with the message in
+  `bm_auth_token`; it fails without sending when the BM gives no token. The
+  API token of `--token-file` is not sent to the BM. See
+  [Block Manager attribution](network.md#block-manager-attribution).
 - `--key` and `--package-owner-key` name an ed25519 key file: the 32-byte
   secret seed as 64 hex digits, or a JSON file
   `{"public": "<hex>", "secret": "<hex>"}`.
@@ -136,7 +145,9 @@ avm-local-stand network-status --endpoint <url> [--token-file <path>]
   bundle and the `--wasmtime-profile`. `--network-id` replaces its network id
   for a network that uses another one; the id is part of every signature.
 - `network-call` encodes the method arguments with the contract's ACAB and
-  signs the call with `--key`, which must be the destination's owner key. The
+  signs the call with `--key`, which must be the destination's owner key;
+  only a designated minter with an open call, such as the shellnet
+  [SHELL minter](network.md#get-test-shell), takes any key. The
   nonce defaults to the current Unix time in milliseconds: a message is
   accepted only with a nonce above the last one accepted for the destination
   and key, so pass `--nonce` to send several calls in the same millisecond or
@@ -164,10 +175,18 @@ number of `posts` and `polls`. `status` is `consumed`, `not_final`, `failed`
 or `refused`; [message statuses and common errors](statuses-and-errors.md#network-message-statuses)
 explains each value and what to do.
 
-The command exits with status 0 only for `consumed`, and `network-deploy
---quote-address` with 0 after building the deploy. `network-status` makes one
+With `--bm-endpoint`, `network-deploy` also confirms the deploy: it reads the
+account with the Block Manager's `GET /v2/account` before the send and every
+2 seconds after `consumed`, and adds `confirmation` with `status` `active`,
+`refused` (the account stayed unchanged for 60 seconds; `error` names the
+likely cause) or `not_active` (not active after 600 seconds); see
+[network deploy](network.md#step-4-deploy).
+
+The command exits with status 0 only for `consumed` with, for a confirmed
+deploy, `confirmation.status` `active`, and `network-deploy --quote-address`
+with 0 after building the deploy; otherwise with status 2. `network-status` makes one
 status read with the same fields. Only the node that queued a message knows
-its status, for 10 minutes. These commands read nothing else from a network;
+its status, for 10 minutes. Apart from the account reads of a confirmed deploy, these commands read nothing else from a network;
 see [what you can read from a network](network.md#what-you-can-read-from-a-network-today).
 
 ## Additional tooling
