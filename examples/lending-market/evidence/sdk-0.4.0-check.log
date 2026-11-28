@@ -1,0 +1,214 @@
+identifier rule reproduces 18/18 official identifiers: PASS
+manifests and ids.rs match the ABI description: PASS
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+Warning: can't set `wrap_comments = false`, unstable features are only available in nightly channel.
+Warning: can't set `format_code_in_doc_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `normalize_comments = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_matchers = true`, unstable features are only available in nightly channel.
+Warning: can't set `format_macro_bodies = true`, unstable features are only available in nightly channel.
+Warning: can't set `imports_granularity = Item`, unstable features are only available in nightly channel.
+Warning: can't set `group_imports = StdExternalCrate`, unstable features are only available in nightly channel.
+Warning: can't set `reorder_impl_items = true`, unstable features are only available in nightly channel.
+Warning: can't set `unstable_features = true`, unstable features are only available in nightly channel.
+    Checking avm-contract-sdk v0.1.1 (/workspace/scratch/ab2464b21643/avm-sdk/crates/avm-contract-sdk)
+    Checking avm-lending-market v0.1.0 (/workspace/scratch/ab2464b21643/avm-sdk/examples/lending-market/contracts/lending)
+    Checking avm-lending-payee v0.1.0 (/workspace/scratch/ab2464b21643/avm-sdk/examples/lending-market/contracts/payee)
+    Checking avm-lending-tests v0.1.0 (/workspace/scratch/ab2464b21643/avm-sdk/examples/lending-market/tests)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.75s
+    Checking avm-contract-sdk v0.1.1 (/workspace/scratch/ab2464b21643/avm-sdk/crates/avm-contract-sdk)
+warning: unstable feature specified for `-Ctarget-feature`: `wide-arithmetic`
+  |
+  = note: this feature is not stably supported; its behavior can change in the future
+
+warning: `avm-contract-sdk` (lib) generated 1 warning
+    Checking avm-lending-market v0.1.0 (/workspace/scratch/ab2464b21643/avm-sdk/examples/lending-market/contracts/lending)
+    Checking avm-lending-payee v0.1.0 (/workspace/scratch/ab2464b21643/avm-sdk/examples/lending-market/contracts/payee)
+warning: `avm-lending-payee` (lib) generated 1 warning (1 duplicate)
+warning: `avm-lending-market` (lib) generated 1 warning (1 duplicate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.13s
+   Compiling avm-contract-sdk v0.1.1 (/workspace/scratch/ab2464b21643/avm-sdk/crates/avm-contract-sdk)
+   Compiling avm-lending-payee v0.1.0 (/workspace/scratch/ab2464b21643/avm-sdk/examples/lending-market/contracts/payee)
+   Compiling avm-lending-market v0.1.0 (/workspace/scratch/ab2464b21643/avm-sdk/examples/lending-market/contracts/lending)
+   Compiling avm-lending-tests v0.1.0 (/workspace/scratch/ab2464b21643/avm-sdk/examples/lending-market/tests)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.58s
+     Running unittests src/lib.rs (target/debug/deps/avm_lending_market-a0650926ad025add)
+
+running 5 tests
+test math::tests::mul_wide_matches_known_products ... ok
+test math::tests::rates_are_monotonic_and_bounded ... ok
+test math::tests::the_index_grows_linearly_in_time_and_never_shrinks ... ok
+test math::tests::division_inverts_multiplication ... ok
+test math::tests::floor_and_ceil_agree_with_native_arithmetic_when_it_fits ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (target/debug/deps/avm_lending_payee-a7212b0ba84f41e0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/avm_lending_tests-9bcfb5d8bffce4d5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fuzz.rs (target/debug/deps/fuzz-8a801c25386541f0)
+
+running 1 test
+test random_operations_preserve_every_invariant ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.28s
+
+     Running tests/integration.rs (target/debug/deps/integration-faac7ac572ac6277)
+
+running 8 tests
+test a_forged_echo_cannot_hold_a_slot_hostage ... ok
+test a_bounce_does_not_hide_a_position_that_lost_its_account_slot ... ok
+test a_withdrawal_is_delivered_echoed_and_settled_end_to_end ... ok
+test a_rejecting_payee_bounces_the_value_back_into_the_ledger ... ok
+test successive_withdrawals_use_distinct_receipts_and_replays_are_refused ... ok
+test callbacks_are_checked_against_the_pending_payout ... ok
+test the_payee_enforces_who_may_call_it_and_what_it_accepts ... ok
+test a_reused_cause_hash_cannot_settle_a_later_payout ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lending.rs (target/debug/deps/lending-ccc377de6578bd60)
+
+running 33 tests
+test a_late_supplier_buys_in_at_the_higher_share_price ... ok
+test a_second_payout_to_the_same_recipient_waits_for_the_first ... ok
+test a_market_that_lost_funds_refuses_to_run ... ok
+test a_healthy_position_cannot_be_liquidated_an_unhealthy_one_can ... ok
+test a_missing_or_stale_price_blocks_risky_actions ... ok
+test borrowing_is_limited_by_the_cash_in_the_market ... ok
+test collateral_can_leave_only_while_the_position_stays_within_ltv ... ok
+test borrowing_stops_at_the_loan_to_value_limit ... ok
+test accounts_are_capped_and_empty_ones_are_dropped ... ok
+test deploys_with_a_clean_state_and_one_event ... ok
+test deposits_credit_the_ledger_and_reject_foreign_value ... ok
+test bad_debt_is_absorbed_by_reserves_first_then_by_suppliers ... ok
+test corrupt_state_is_rejected_on_every_call ... ok
+test deployment_rejects_bad_configs_and_wrong_deployers ... ok
+test interest_follows_the_utilisation_curve ... ok
+test liquidation_takes_everything_when_collateral_cannot_cover_the_bonus ... ok
+test every_state_the_contract_returns_decodes_back_to_itself ... ok
+test new_rates_do_not_apply_retroactively ... ok
+test shell_tops_up_fuel_and_only_shell ... ok
+test only_the_admin_collects_reserves_and_only_when_there_are_some ... ok
+test redemption_cannot_drain_cash_that_is_lent_out ... ok
+test repaying_is_capped_at_the_debt_and_needs_funds ... ok
+test parameters_are_admin_only_and_bounded ... ok
+test supplying_mints_shares_one_to_one_at_the_start ... ok
+test pausing_stops_new_risk_but_never_exits ... ok
+test the_manifest_declares_the_real_state_size ... ok
+test the_rate_steepens_above_the_kink ... ok
+test the_price_can_only_move_so_far_per_update_and_only_by_the_admin ... ok
+test suppliers_earn_the_interest_and_the_cycle_closes_exactly ... ok
+test write_off_charges_reserves_the_change_in_aggregate_debt ... ok
+test write_off_needs_a_dead_position ... ok
+test withdrawals_are_validated_before_anything_moves ... ok
+test write_off_returns_unliquidatable_collateral_to_the_borrower ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests avm_lending_market
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests avm_lending_payee
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests avm_lending_tests
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
