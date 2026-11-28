@@ -47,3 +47,10 @@ returns `0:100` with status `1704`, a send of a 65,442-byte body (one byte
 more is rejected at ingress), malformed arguments (`1702`), a send from
 an internal caller (`1701`), a key rotation, a keyless wallet and the replay.
 `AVM_WALLET_WORK` optionally retains the journey.
+
+To run the wallet on shellnet, run `bash examples/wallet/shellnet-quickstart.sh`
+with the same tools: it gets test SHELL from the shellnet SHELL minter,
+deploys the wallet over its published code, sends 100 SHELL to itself with a callback and reads the
+balance and the `wallet.callback` event back from the Block Manager with
+`shellnet_read.py`. `AVM_SHELLNET_WORK` keeps its keys and outputs; see
+[Shellnet](../../docs/network.md#shellnet).

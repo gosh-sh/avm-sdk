@@ -7,9 +7,9 @@ off-chain readers: wallets, indexers and your own tests.
 
 This page shows how to declare and emit an event, which limits apply, how a
 contract reads the internal events of other accounts, and how to read events
-on the local stand. Reading events from a network with the SDK is not
-available in this release; see
-[What you can read from a network](network.md#what-you-can-read-from-a-network-today).
+on the local stand. On shellnet the Block Manager serves the events of
+finalized blocks; see
+[Read accounts and events](network.md#read-accounts-and-events).
 
 ## Declare the event in the ABI
 
@@ -312,9 +312,10 @@ successful transfer.
 ## Events on a network
 
 On a network, the events of a message are recorded in the block that
-executes it. This release has no command and no node API to read them: the
-`network-call` and `network-deploy` results report the message status only,
-and the node's GraphQL service does not index AVM accounts, messages or
-events. Test event output on the local stand, and use the message status to
-check that a call was consumed; see
-[What you can read from a network](network.md#what-you-can-read-from-a-network-today).
+executes it. The `network-call` and `network-deploy` results report the
+message status only. On shellnet the Block Manager indexes the AVM events of
+finalized blocks and serves them in the GraphQL query
+`blockchain { avm_events }`, with filters by source account, event name,
+class, kind and time and with paging; see
+[Read accounts and events](network.md#read-accounts-and-events). Test event
+output on the local stand first.

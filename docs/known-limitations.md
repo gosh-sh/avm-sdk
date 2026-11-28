@@ -5,25 +5,29 @@ do instead. Each item links to the page with the details.
 
 ## Reading from a network
 
-- **No network reads of accounts or events.** The SDK sends deploys and calls
-  to a network and reads the status of a message you sent. It has no command
-  to read an account's state, balance or events from a node. Check state and
-  events on the local stand; see
-  [what you can read from a network](network.md#what-you-can-read-from-a-network-today).
+- **Network reads come from the Block Manager.** The `avm-local-stand`
+  network commands send deploys and calls and read the status of a message
+  you sent; they do not read accounts or events. On shellnet read them from
+  the Block Manager's `/v2/account` and GraphQL `blockchain { avm_events }`,
+  for example with the wallet example's `shellnet_read.py`; see
+  [read accounts and events](network.md#read-accounts-and-events).
 - **Message status is short-lived.** Only the node that queued a message
   knows its status, for 10 minutes; see
   [network message statuses](statuses-and-errors.md#network-message-statuses).
 - **`consumed` is not final.** The block that consumed a message can still be
   discarded before it is final.
-- **No AVM data in GraphQL.** The node's GraphQL service does not index AVM
-  accounts, messages or events.
-- **Plain HTTP only.** The network commands talk to the node's HTTP API over
-  plain HTTP; see the [CLI reference](cli-reference.md#network-client).
+- **GraphQL serves AVM events only.** The Block Manager's GraphQL service
+  indexes AVM events, not AVM accounts or messages.
+- **Plain HTTP only.** HTTPS is not supported yet. The network commands talk
+  to the node's HTTP API and the Block Manager over plain HTTP, and the URL
+  must name the port, for
+  example `http://shellnet.ackinacki.org:80`; see the
+  [CLI reference](cli-reference.md#network-client).
 
 ## Events
 
-- **Events on a network cannot be read with the SDK.** They are recorded in
-  blocks, but no command or node API of this release returns them; see
+- **Network events are read through GraphQL.** No `avm-local-stand` command
+  returns them; on shellnet query the Block Manager; see
   [events on a network](events.md#events-on-a-network).
 - **The stand lists events as raw records.** `avm-local-stand events` prints
   every event of the stand as hex, without a filter by account or a decoder;
@@ -54,7 +58,7 @@ do instead. Each item links to the page with the details.
 - **Minting is for the shellnet minter.** The guest crate's `system-mint`
   feature builds a system minter, which mints only when the network
   configuration designates its address, its code and the currency. It exists
-  for the shellnet SHELL minter; on other networks currency comes through the
+  for the shellnet minters; on other networks currency comes through the
   bridge. Any other mint fails with status 59 (`VM_MINT_NOT_ALLOWED`). The
   local stand has no designated minter yet, so a mint there fails with status
   59 as well; fund stand accounts with `fund-user`.
